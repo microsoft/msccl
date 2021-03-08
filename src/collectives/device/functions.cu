@@ -61,7 +61,8 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNCS2A(Reduce), \
   NCCL_FUNCS2B(AllGather), \
   NCCL_FUNCS2A(ReduceScatter), \
-  NCCL_FUNCS2A(AllReduce) }
+  NCCL_FUNCS2A(AllReduce), \
+  NCCL_FUNCS2B(AllToAll) }
 
 // Must be consistent with the ncclFuncSet enum
 __device__ ncclKern_t ncclFuncs[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
@@ -74,7 +75,8 @@ __device__ ncclKern_t ncclFuncs[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCC
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2A(AllReduce)
+  NCCL_FUNCS2A(AllReduce),
+  NCCL_FUNCS2B(AllToAll)
 #endif
 };
 

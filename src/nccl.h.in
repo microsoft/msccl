@@ -221,6 +221,21 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
 /*
+ * All-To-All
+ *
+ * Each device sends and recieves a distinct sendcount values from every other GPUs into recvbuff,
+ * receiving data from rank i at offset i*sendcount.
+ * Assumes sendcount is equal to recvcount between each pair of GPUs, which means that sendbuff and recvbuff
+ * should have a size of at least nranks*sendcount elements.
+ *
+ * In-place operations is not permitted.
+ */
+ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount,
+    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+ncclResult_t pncclncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount,
+    ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
+
+/*
  * Send
  *
  * Send data from sendbuff to rank peer.
