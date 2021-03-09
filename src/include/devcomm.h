@@ -11,8 +11,8 @@
 #include "align.h"
 #include <stdint.h>
 
-#define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv} ncclFunc_t;
+#define NCCL_NUM_FUNCTIONS 6 // SendRecv not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
@@ -29,7 +29,6 @@ extern const char* ncclProtoStr[NCCL_NUM_PROTOCOLS];
 
 #define NCCL_MAX_OPS 2048
 #define NCCL_STEPS 8
-
 union ncclLLFifoLine {
   /* Flags have to be *after* data, because otherwise, an incomplete receive
      from the network may receive the flag but not the data.

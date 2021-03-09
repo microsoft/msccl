@@ -112,6 +112,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     int nInterSteps = coll == ncclFuncAllReduce ? 2*(nNodes-1) :
       coll == ncclFuncReduceScatter || coll == ncclFuncAllGather ? nNodes-1 :
       nNodes;
+    // Skipping on SCKL algorithms here since SCKL tune the algorithm in the synthesizer.
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
       if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;

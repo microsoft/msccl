@@ -9,7 +9,7 @@ dir=$1
 
 targets="GENOBJS := \\\\\n"
 
-for base in sendrecv all_reduce all_gather broadcast reduce reduce_scatter; do
+for base in sendrecv all_reduce all_gather broadcast reduce reduce_scatter all_to_all; do
   opn=0
   for op in sum prod min max; do
     dtn=0

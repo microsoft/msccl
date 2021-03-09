@@ -57,6 +57,7 @@
   DECL2(AllGather, Sum) \
   DECL(ReduceScatter) \
   DECL(AllReduce) \
+  DECL2(AllToAll, Sum) \
   DECL5(SendRecv, RING, SIMPLE, Sum, int8_t) \
 
 DECL_ALL
@@ -72,6 +73,8 @@ DECL_ALL
 #define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
+#define ALLTOALL_SLICESTEPS (NCCL_STEPS/4)
+#define ALLTOALL_CHUNKSTEPS (NCCL_STEPS/2)
 #define SENDRECV_SLICEFACTOR 4
 
 #endif

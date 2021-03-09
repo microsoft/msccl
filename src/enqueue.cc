@@ -60,7 +60,8 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2A(Reduce),
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
-  NCCL_FUNCS2A(AllReduce)
+  NCCL_FUNCS2A(AllReduce),
+  NCCL_FUNCS2B(AllToAll)
 };
 
 /*****************************************************************************/
@@ -328,6 +329,8 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
+    case ncclFuncAllToAll:
+      info->pattern = ncclPatternRing; break; // To be change by SCKL
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
