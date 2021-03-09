@@ -8,8 +8,8 @@
 #include "primitives.h"
 #include "collectives.h"
 
-template<class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
+template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       const int tid = threadIdx.x;
@@ -24,60 +24,62 @@ class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T,
       const int nranks = comm->nRanks;
       const ssize_t loopSize = nChannels*(ssize_t)chunkSize;
       const ssize_t size = args->coll.count;
+      printf("This is an empty function! %d %d %d %d\n", (int) size, tid, bid, (int) sizeof(T));
+      return;
 
       // Compute pointers
-      const T * __restrict__ thisInput = (const T*)args->sendbuff;
-      T * __restrict__ thisOutput = (T*)args->recvbuff;
+      // const T * __restrict__ thisInput = (const T*)args->sendbuff;
+      // T * __restrict__ thisOutput = (T*)args->recvbuff;
 
-      ncclPrimitives<UNROLL, ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS, T, 1, 1, 1, FUNC>
-        prims(tid, nthreads, &ring->prev, &ring->next, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
+      // ncclPrimitives<UNROLL, ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS, T, 1, 1, 1, FUNC>
+      //   prims(tid, nthreads, &ring->prev, &ring->next, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
 
-      for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
-        int realChunkSize = min(chunkSize, DIVUP(size-gridOffset,nChannels));
-        ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-        ssize_t chunkOffset = gridOffset + bid*realChunkSize;
+      // for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
+      //   int realChunkSize = min(chunkSize, DIVUP(size-gridOffset,nChannels));
+      //   ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
+      //   ssize_t chunkOffset = gridOffset + bid*realChunkSize;
 
-        /////////////// begin AllGather steps ///////////////
-        ssize_t offset;
-        int nelem = min(realChunkSize, size-chunkOffset);
-        int rankDest;
+      //   /////////////// begin AllGather steps ///////////////
+      //   ssize_t offset;
+      //   int nelem = min(realChunkSize, size-chunkOffset);
+      //   int rankDest;
 
-        // step 0: push data to next GPU
-        rankDest = ring->devUserRanks[0];
-        offset = chunkOffset + rankDest * size;
+      //   // step 0: push data to next GPU
+      //   rankDest = ring->devUserRanks[0];
+      //   offset = chunkOffset + rankDest * size;
 
-        if (thisInput + chunkOffset == thisOutput + offset) { // In place
-          prims.directSend(thisInput+chunkOffset, offset, nelem);
-        } else {
-          prims.directCopySend(thisInput+chunkOffset, thisOutput+offset, offset, nelem);
-        }
+      //   if (thisInput + chunkOffset == thisOutput + offset) { // In place
+      //     prims.directSend(thisInput+chunkOffset, offset, nelem);
+      //   } else {
+      //     prims.directCopySend(thisInput+chunkOffset, thisOutput+offset, offset, nelem);
+      //   }
 
-        // k-2 steps: copy to next GPU
-        for (int j=1; j<nranks-1; ++j) {
-          rankDest = ring->devUserRanks[nranks-j];
-          offset = chunkOffset + rankDest * size;
+      //   // k-2 steps: copy to next GPU
+      //   for (int j=1; j<nranks-1; ++j) {
+      //     rankDest = ring->devUserRanks[nranks-j];
+      //     offset = chunkOffset + rankDest * size;
 
-          prims.directRecvCopySend(thisOutput+offset, offset, nelem);
-        }
+      //     prims.directRecvCopySend(thisOutput+offset, offset, nelem);
+      //   }
 
-        // Make final copy from buffer to dest.
-        rankDest = ring->devUserRanks[1];
-        offset = chunkOffset + rankDest * size;
+      //   // Make final copy from buffer to dest.
+      //   rankDest = ring->devUserRanks[1];
+      //   offset = chunkOffset + rankDest * size;
 
-        // Final wait/copy.
-        prims.directRecv(thisOutput+offset, offset, nelem);
-      }
+      //   // Final wait/copy.
+      //   prims.directRecv(thisOutput+offset, offset, nelem);
+      // }
     }
 };
 
-template<int PROTO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_TREE, PROTO, FUNC, T, UNROLL> {
-  public:
-    __device__ void run(struct ncclWorkElem* args) {}
-};
+// template<int PROTO, class FUNC, typename T, int UNROLL>
+// class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_TREE, PROTO, FUNC, T, UNROLL> {
+//   public:
+//     __device__ void run(struct ncclWorkElem* args) {}
+// };
 
-template<int PROTO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_COLLNET, PROTO, FUNC, T, UNROLL> {
-  public:
-    __device__ void run(struct ncclWorkElem* args) {}
-};
+// template<int PROTO, class FUNC, typename T, int UNROLL>
+// class ncclFunction<ncclFuncAllToAll, NCCL_ALGO_COLLNET, PROTO, FUNC, T, UNROLL> {
+//   public:
+//     __device__ void run(struct ncclWorkElem* args) {}
+// };
