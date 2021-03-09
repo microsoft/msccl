@@ -26,7 +26,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const ssize_t size = args->coll.count;
 
 
-      Compute pointers
+      // Compute pointers
       const T * __restrict__ thisInput = (const T*)args->sendbuff;
       T * __restrict__ thisOutput = (T*)args->recvbuff;
       printf("This is an empty function! %d %d %d %d\n", (int) size, tid, bid, (int) sizeof(T));
