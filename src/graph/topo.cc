@@ -607,6 +607,51 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
   return ncclSuccess;
 }
 
+ncclResult_t scklAddPeer(struct scklGraph* graph){
+
+}
+
+ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
+  char* str = getenv("SCKL_XML_FILE");
+  if (str){
+    INFO(NCCL_ENV, "SCKL_XML_FILE set by environment to %s", str);
+    struct ncclXml* xml;
+    NCCLCHECK(ncclCalloc(&xml, 1));
+    NCCLCHECK(scklTopoGetXmlGraphFromFile(str, xml));
+    int rank = comm->rank;
+
+    struct ncclXmlNode* topNode;
+    NCCLCHECK(xmlFindTag(xml, "system", &topNode));
+    for (int s=0; s<topNode->nSubs; s++) {
+      struct ncclXmlNode* node = topNode->subs[s];
+      if (strcmp(node->name, "gpu") == 0){
+        int id;
+        NCCLCHECK(xmlGetAttrInt(node, "id", &id));
+        if (id == rank){
+          int nSendPeers = 0;
+          int nRecvPeers = 0;
+          for (int p=0; p<node->nSubs; p++) {
+            struct ncclXmlNode* peer = node->subs[p];
+            if (strcmp(peer->name, "recv") == 0){
+              int peerId;
+              NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
+              // SCKL generates the same scklGraph for all channels for now. This will change in the future
+              for (int c=0; c<comm->nChannels; c++){
+                comm->channels[c].graph.recv[nRecvPeers] = peerId;
+              }
+            }
+          }
+          nRecvPeers++;
+        }
+      }
+    }
+    
+    free(xml);
+  }
+  return ncclSuccess;
+}
+
+
 /****************************/
 /* External query functions */
 /****************************/

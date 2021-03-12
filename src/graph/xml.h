@@ -1,3 +1,4 @@
+
 /*************************************************************************
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
@@ -42,6 +43,7 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
 ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml);
 #define NCCL_GRAPH_XML_VERSION 1
 ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+ncclResult_t scklTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
 
 /* Auto-detect functions */
 ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode);

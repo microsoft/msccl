@@ -116,6 +116,12 @@ struct ncclRing {
   int* devUserRanks;
 };
 
+#define SCKL_MAX_NUM_CONN 16
+
+struct scklGraph {
+  int recv[SCKL_MAX_NUM_CONN];
+  int send[SCKL_MAX_NUM_CONN];
+};
 
 #define NCCL_MAX_TREE_ARITY 3
 struct ncclTree {
@@ -177,6 +183,7 @@ struct ncclChannel {
       struct ncclRing ring;
       struct ncclTree tree;
       struct ncclTree collTree;
+      struct scklGraph graph;
 
       int id;
 
