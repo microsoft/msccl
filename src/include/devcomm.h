@@ -119,6 +119,8 @@ struct ncclRing {
 #define SCKL_MAX_NUM_CONN 16
 
 struct scklGraph {
+  int nRecvPeers;
+  int nSendPeers;
   int recv[SCKL_MAX_NUM_CONN];
   int send[SCKL_MAX_NUM_CONN];
 };

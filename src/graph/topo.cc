@@ -620,6 +620,11 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
     NCCLCHECK(scklTopoGetXmlGraphFromFile(str, xml));
     int rank = comm->rank;
 
+    for (int c=0; c<comm->nChannels; c++){
+      comm->channels[c].graph.nRecvPeers = 0;
+      comm->channels[c].graph.nSendPeers = 0;
+    }
+    
     struct ncclXmlNode* topNode;
     NCCLCHECK(xmlFindTag(xml, "system", &topNode));
     for (int s=0; s<topNode->nSubs; s++) {
@@ -628,24 +633,32 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
         int id;
         NCCLCHECK(xmlGetAttrInt(node, "id", &id));
         if (id == rank){
-          int nSendPeers = 0;
-          int nRecvPeers = 0;
           for (int p=0; p<node->nSubs; p++) {
-            struct ncclXmlNode* peer = node->subs[p];
-            if (strcmp(peer->name, "recv") == 0){
+            struct ncclXmlNode* typeOfComm = node->subs[p];
+            bool isRecv = false;
+            bool isSend = false;
+            if (strcmp(typeOfComm->name, "recv") == 0){
+              isRecv = true;
+            } else if (strcmp(typeOfComm->name, "send") == 0){
+              isSend = true;
+            }
+            for (int p=0; p<node->nSubs; p++) {
+              struct ncclXmlNode* peer = node->subs[p];
               int peerId;
               NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
               // SCKL generates the same scklGraph for all channels for now. This will change in the future
               for (int c=0; c<comm->nChannels; c++){
-                comm->channels[c].graph.recv[nRecvPeers] = peerId;
+                if (isRecv) {
+                  comm->channels[c].graph.recv[comm->channels[c].graph.nRecvPeers++] = peerId;
+                } else if (isSend){
+                  comm->channels[c].graph.send[comm->channels[c].graph.nSendPeers++] = peerId;
+                }
               }
             }
           }
-          nRecvPeers++;
         }
       }
     }
-    
     free(xml);
   }
   return ncclSuccess;

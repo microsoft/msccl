@@ -823,23 +823,16 @@ ncclResult_t scklTopoXmlConnLoad(FILE* file, struct ncclXml* xmlGraph, struct nc
 }
 
 ncclResult_t scklTopoXmlGraphLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  int id;
-  NCCLCHECK(xmlGetAttrInt(head, "id", &id));
-  struct xmlHandler handlers[] = { { "recv", scklTopoXmlConnLoad }, { "send", scklTopoXmlConnLoad } };
+  const char* type;
+  NCCLCHECK(xmlGetAttrStr(head, "type", &type));
+  struct xmlHandler handlers[] = { { "conn", scklTopoXmlConnLoad } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
-ncclResult_t scklTopoXmlSystemLoad(const char* xmlGraphFile, struct ncclXml* xml) {
-  FILE* file = fopen(xmlGraphFile, "r");
-  if (file == NULL) {
-    WARN("Could not open XML SCKL graph file %s : %s", xmlGraphFile, strerror(errno));
-    return ncclSystemError;
-  }
+ncclResult_t scklTopoXmlSystemLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
   struct xmlHandler handlers[] = { { "gpu", scklTopoXmlGraphLoad } };
-  xml->maxIndex = 0;
-  NCCLCHECK(xmlLoadSub(file, xml, NULL, handlers, 1));
-  fclose(file);
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
