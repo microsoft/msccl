@@ -815,16 +815,16 @@ ncclResult_t scklTopoXmlPeerLoad(FILE* file, struct ncclXml* xml, struct ncclXml
 }
 
 ncclResult_t scklTopoXmlConnLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  int id;
-  NCCLCHECK(xmlGetAttrInt(head, "id", &id));
+  const char* type;
+  NCCLCHECK(xmlGetAttrStr(head, "type", &type));
   struct xmlHandler handlers[] = { { "peer", scklTopoXmlPeerLoad } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
 ncclResult_t scklTopoXmlGraphLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  const char* type;
-  NCCLCHECK(xmlGetAttrStr(head, "type", &type));
+  int id;
+  NCCLCHECK(xmlGetAttrInt(head, "id", &id));
   struct xmlHandler handlers[] = { { "conn", scklTopoXmlConnLoad } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;

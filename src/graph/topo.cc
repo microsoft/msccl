@@ -607,10 +607,6 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
   return ncclSuccess;
 }
 
-ncclResult_t scklAddPeer(struct scklGraph* graph){
-
-}
-
 ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
   char* str = getenv("SCKL_XML_FILE");
   if (str){
@@ -635,23 +631,28 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
         if (id == rank){
           for (int p=0; p<node->nSubs; p++) {
             struct ncclXmlNode* typeOfComm = node->subs[p];
-            bool isRecv = false;
-            bool isSend = false;
-            if (strcmp(typeOfComm->name, "recv") == 0){
-              isRecv = true;
-            } else if (strcmp(typeOfComm->name, "send") == 0){
-              isSend = true;
-            }
-            for (int p=0; p<node->nSubs; p++) {
-              struct ncclXmlNode* peer = node->subs[p];
-              int peerId;
-              NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
-              // SCKL generates the same scklGraph for all channels for now. This will change in the future
-              for (int c=0; c<comm->nChannels; c++){
-                if (isRecv) {
-                  comm->channels[c].graph.recv[comm->channels[c].graph.nRecvPeers++] = peerId;
-                } else if (isSend){
-                  comm->channels[c].graph.send[comm->channels[c].graph.nSendPeers++] = peerId;
+            if (strcmp(typeOfComm->name, "conn") == 0){
+              const char* type;
+              NCCLCHECK(xmlGetAttrStr(typeOfComm, "type", &type));
+
+              bool isRecv = false;
+              bool isSend = false;
+              if (strcmp(type, "recv") == 0){
+                isRecv = true;
+              } else if (strcmp(type, "send") == 0){
+                isSend = true;
+              }
+              for (int p=0; p<typeOfComm->nSubs; p++) {
+                struct ncclXmlNode* peer = typeOfComm->subs[p];
+                int peerId;
+                NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
+                // SCKL generates the same scklGraph for all channels for now. This will change in the future
+                for (int c=0; c<comm->nChannels; c++){
+                  if (isRecv) {
+                    comm->channels[c].graph.recv[comm->channels[c].graph.nRecvPeers++] = peerId;
+                  } else if (isSend){
+                    comm->channels[c].graph.send[comm->channels[c].graph.nSendPeers++] = peerId;
+                  }
                 }
               }
             }
