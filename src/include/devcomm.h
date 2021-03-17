@@ -185,7 +185,7 @@ struct ncclChannel {
       struct ncclRing ring;
       struct ncclTree tree;
       struct ncclTree collTree;
-      struct scklGraph graph;
+      struct scklGraph sGraph;
 
       int id;
 

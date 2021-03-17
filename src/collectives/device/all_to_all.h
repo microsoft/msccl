@@ -18,7 +18,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nChannels = args->coll.nChannels;
       struct ncclDevComm* comm = args->comm;
       struct ncclChannel* channel = comm->channels+blockIdx.x;
-      struct scklGraph* graph = &channel->graph;
+      struct scklGraph* graph = &channel->sGraph;
       const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS);
       const int chunkSize = stepSize * ALLTOALL_CHUNKSTEPS;
       const int nranks = comm->nRanks;

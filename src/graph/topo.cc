@@ -617,8 +617,8 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
     int rank = comm->rank;
 
     for (int c=0; c<comm->nChannels; c++){
-      comm->channels[c].graph.nRecvPeers = 0;
-      comm->channels[c].graph.nSendPeers = 0;
+      comm->channels[c].sGraph.nRecvPeers = 0;
+      comm->channels[c].sGraph.nSendPeers = 0;
     }
     
     struct ncclXmlNode* topNode;
@@ -649,9 +649,9 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
                 // SCKL generates the same scklGraph for all channels for now. This will change in the future
                 for (int c=0; c<comm->nChannels; c++){
                   if (isRecv) {
-                    comm->channels[c].graph.recv[comm->channels[c].graph.nRecvPeers++] = peerId;
+                    comm->channels[c].sGraph.recv[comm->channels[c].sGraph.nRecvPeers++] = peerId;
                   } else if (isSend){
-                    comm->channels[c].graph.send[comm->channels[c].graph.nSendPeers++] = peerId;
+                    comm->channels[c].sGraph.send[comm->channels[c].sGraph.nSendPeers++] = peerId;
                   }
                 }
               }
