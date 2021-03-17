@@ -823,7 +823,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected all trees");
 
-
+  // NetSharedBuffers needs to be set for this to work across nodes.
   NCCLCHECK(scklGetTopoFromXMLAndSetChannels(comm));
   // Connect SCKL graph
   for (int c=0; c<comm->nChannels; c++) {
