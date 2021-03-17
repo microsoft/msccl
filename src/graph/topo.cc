@@ -607,6 +607,73 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
   return ncclSuccess;
 }
 
+ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
+  char* str = getenv("SCKL_XML_FILE");
+  if (str){
+    INFO(NCCL_ENV, "SCKL_XML_FILE set by environment to %s", str);
+    struct ncclXml* xml;
+    NCCLCHECK(ncclCalloc(&xml, 1));
+    NCCLCHECK(scklTopoGetXmlGraphFromFile(str, xml));
+    int rank = comm->rank;
+
+    for (int c=0; c<comm->nChannels; c++){
+      comm->channels[c].sGraph.nRecvPeers = 0;
+      comm->channels[c].sGraph.nSendPeers = 0;
+    }
+    
+    struct ncclXmlNode* topNode;
+    NCCLCHECK(xmlFindTag(xml, "system", &topNode));
+    for (int s=0; s<topNode->nSubs; s++) {
+      struct ncclXmlNode* node = topNode->subs[s];
+      if (strcmp(node->name, "gpu") == 0){
+        int id;
+        NCCLCHECK(xmlGetAttrInt(node, "id", &id));
+        if (id == rank){
+          for (int p=0; p<node->nSubs; p++) {
+            struct ncclXmlNode* typeOfComm = node->subs[p];
+            if (strcmp(typeOfComm->name, "conn") == 0){
+              const char* type;
+              NCCLCHECK(xmlGetAttrStr(typeOfComm, "type", &type));
+
+              bool isRecv = false;
+              bool isSend = false;
+              if (strcmp(type, "recv") == 0){
+                isRecv = true;
+              } else if (strcmp(type, "send") == 0){
+                isSend = true;
+              }
+              for (int p=0; p<typeOfComm->nSubs; p++) {
+                struct ncclXmlNode* peer = typeOfComm->subs[p];
+                int peerId;
+                NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
+                // SCKL generates the same scklGraph for all channels for now. This will change in the future
+                for (int c=0; c<comm->nChannels; c++){
+                  if (isRecv) {
+                    if (comm->channels[c].sGraph.nRecvPeers < SCKL_MAX_NUM_CONN){
+                      comm->channels[c].sGraph.recv[comm->channels[c].sGraph.nRecvPeers++] = peerId;
+                    } else {
+                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored. This may cause deadlock in initialization.", rank, c, peerId);
+                    }                    
+                  } else if (isSend){
+                    if (comm->channels[c].sGraph.nSendPeers < SCKL_MAX_NUM_CONN){
+                      comm->channels[c].sGraph.send[comm->channels[c].sGraph.nSendPeers++] = peerId;
+                    } else {
+                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored.  This may cause deadlock in initialization.", rank, c, peerId);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    free(xml);
+  }
+  return ncclSuccess;
+}
+
+
 /****************************/
 /* External query functions */
 /****************************/

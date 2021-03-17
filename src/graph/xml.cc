@@ -805,3 +805,46 @@ ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXm
   fclose(file);
   return ncclSuccess;
 }
+
+ncclResult_t scklTopoXmlPeerLoad(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+  int id;
+  NCCLCHECK(xmlGetAttrInt(head, "id", &id));
+  struct xmlHandler handlers[] = { };
+  NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scklTopoXmlConnLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  const char* type;
+  NCCLCHECK(xmlGetAttrStr(head, "type", &type));
+  struct xmlHandler handlers[] = { { "peer", scklTopoXmlPeerLoad } };
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scklTopoXmlGraphLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  int id;
+  NCCLCHECK(xmlGetAttrInt(head, "id", &id));
+  struct xmlHandler handlers[] = { { "conn", scklTopoXmlConnLoad } };
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scklTopoXmlSystemLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  struct xmlHandler handlers[] = { { "gpu", scklTopoXmlGraphLoad } };
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scklTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml) {
+  FILE* file = fopen(xmlGraphFile, "r");
+  if (file == NULL) {
+    WARN("Could not open XML SCKL graph file %s : %s", xmlGraphFile, strerror(errno));
+    return ncclSystemError;
+  }
+  struct xmlHandler handlers[] = { { "system", scklTopoXmlSystemLoad } };
+  xml->maxIndex = 0;
+  NCCLCHECK(xmlLoadSub(file, xml, NULL, handlers, 1));
+  fclose(file);
+  return ncclSuccess;
+}

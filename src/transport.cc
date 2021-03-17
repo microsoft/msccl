@@ -67,7 +67,6 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     uint32_t recvMask = comm->connectRecv[recvPeer];
     uint32_t sendMask = comm->connectSend[sendPeer];
-
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
     for (int c=0; c<MAXCHANNELS; c++) {

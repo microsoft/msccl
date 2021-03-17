@@ -18,18 +18,24 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nChannels = args->coll.nChannels;
       struct ncclDevComm* comm = args->comm;
       struct ncclChannel* channel = comm->channels+blockIdx.x;
-      struct ncclRing* ring = &channel->ring;
+      struct scklGraph* sGraph = &channel->sGraph;
       const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS);
       const int chunkSize = stepSize * ALLTOALL_CHUNKSTEPS;
       const int nranks = comm->nRanks;
       const ssize_t loopSize = nChannels*(ssize_t)chunkSize;
       const ssize_t size = args->coll.count;
-
-
+      return;
       // Compute pointers
       const T * __restrict__ thisInput = (const T*)args->sendbuff;
       T * __restrict__ thisOutput = (T*)args->recvbuff;
-      printf("This is an empty function! %d %d %d %d\n", (int) size, tid, bid, (int) sizeof(T));
+      ncclPrimitives<UNROLL, ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS, T, 3, 3, 1, FUNC>
+        prims(tid, nthreads, sGraph->recv, sGraph->send, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
+      if (tid == 0 && bid == 0){
+        printf("connected to %d %d %d\n", sGraph->send[0], sGraph->send[1], sGraph->send[2]);
+      }
+      int testSize = min(chunkSize, (int)size/nChannels/nranks);
+      prims.directSend(thisInput, 0, testSize);
+      prims.directRecv(thisOutput, 0, testSize);
       return;
     }
 };
