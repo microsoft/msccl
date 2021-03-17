@@ -649,9 +649,17 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
                 // SCKL generates the same scklGraph for all channels for now. This will change in the future
                 for (int c=0; c<comm->nChannels; c++){
                   if (isRecv) {
-                    comm->channels[c].sGraph.recv[comm->channels[c].sGraph.nRecvPeers++] = peerId;
+                    if (comm->channels[c].sGraph.nRecvPeers < SCKL_MAX_NUM_CONN){
+                      comm->channels[c].sGraph.recv[comm->channels[c].sGraph.nRecvPeers++] = peerId;
+                    } else {
+                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored. This may cause deadlock in initialization.", rank, c, peerId);
+                    }                    
                   } else if (isSend){
-                    comm->channels[c].sGraph.send[comm->channels[c].sGraph.nSendPeers++] = peerId;
+                    if (comm->channels[c].sGraph.nSendPeers < SCKL_MAX_NUM_CONN){
+                      comm->channels[c].sGraph.send[comm->channels[c].sGraph.nSendPeers++] = peerId;
+                    } else {
+                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored.  This may cause deadlock in initialization.", rank, c, peerId);
+                    }
                   }
                 }
               }

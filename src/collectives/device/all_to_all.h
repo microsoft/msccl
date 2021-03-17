@@ -24,7 +24,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nranks = comm->nRanks;
       const ssize_t loopSize = nChannels*(ssize_t)chunkSize;
       const ssize_t size = args->coll.count;
-
+      return;
       // Compute pointers
       const T * __restrict__ thisInput = (const T*)args->sendbuff;
       T * __restrict__ thisOutput = (T*)args->recvbuff;
