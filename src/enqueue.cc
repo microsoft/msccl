@@ -319,6 +319,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
 }
 
 static ncclResult_t getPatternInfo(struct ncclInfo* info) {
+
   switch (info->coll) {
     case ncclFuncBroadcast:
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeDown : ncclPatternPipelineFrom; break;
@@ -330,7 +331,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
-      info->pattern = ncclPatternRing; break; // To be change by SCKL
+      info->pattern = ncclPatternSckl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -352,6 +353,8 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
+    case ncclPatternSckl:
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->nRanks; // SCKL needs a different number of steps per channel. It is set porperly ncclSaveKernel.
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -377,8 +380,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL)) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL)) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize

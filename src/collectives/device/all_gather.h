@@ -206,3 +206,8 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_COLLNET, PROTO, FUNC, T, UNROLL>
     __device__ void run(struct ncclWorkElem* args) {}
 };
 
+template<int PROTO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, PROTO, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {}
+};

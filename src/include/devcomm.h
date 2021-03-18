@@ -15,10 +15,11 @@
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
-#define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
+#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
 #define NCCL_ALGO_COLLNET 2
+#define NCCL_ALGO_SCKL 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
@@ -118,11 +119,16 @@ struct ncclRing {
 
 #define SCKL_MAX_NUM_CONN 16
 
-struct scklGraph {
+struct scklConn {
+  int peer;
+  int nChunks;
+};
+
+struct scklAlgoState {
   int nRecvPeers;
   int nSendPeers;
-  int recv[SCKL_MAX_NUM_CONN];
-  int send[SCKL_MAX_NUM_CONN];
+  struct scklConn recv[SCKL_MAX_NUM_CONN];
+  struct scklConn send[SCKL_MAX_NUM_CONN];
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -185,7 +191,7 @@ struct ncclChannel {
       struct ncclRing ring;
       struct ncclTree tree;
       struct ncclTree collTree;
-      struct scklGraph sGraph;
+      struct scklAlgoState sGraph;
 
       int id;
 
