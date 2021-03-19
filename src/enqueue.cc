@@ -17,7 +17,8 @@
 #define NCCL_FUNC4(func, redop, type) \
   (void*)NCCL_FUNC5(func, TREE,    redop, type), \
   (void*)NCCL_FUNC5(func, RING,    redop, type), \
-  (void*)NCCL_FUNC5(func, COLLNET, redop, type)
+  (void*)NCCL_FUNC5(func, COLLNET, redop, type), \
+  (void*)NCCL_FUNC5(func, SCKL, redop, type)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(func, redop) \
@@ -354,7 +355,8 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternSckl:
-      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->nRanks; // SCKL needs a different number of steps per channel. It is set porperly ncclSaveKernel.
+      // SCKL needs a different number of steps per channel. It is set porperly ncclSaveKernel.
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->nRanks; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -380,8 +382,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL)) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL)) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL))) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL))) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize

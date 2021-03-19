@@ -219,11 +219,11 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     NCCLCHECK(SaveProxy(proxySend, tree->down[0], args));
     NCCLCHECK(SaveProxy(proxyRecv, tree->up, args));
   }
-  if (patter == ncclPatternSckl){
+  if (pattern == ncclPatternSckl){
     // SCKL graph
     struct scklAlgoState* sGraph = &args->channel->sGraph;
-    for (int i=0; i<sGraph->nRecvPeers; i++) NCCLCHECK(SaveProxy(proxyRecv, sGraph->recv[i].peer, args));
-    for (int i=0; i<sGraph->nSendPeers; i++) NCCLCHECK(SaveProxy(proxySend, sGraph->send[i].peer, args));
+    for (int i=0; i<sGraph->nRecvPeers; i++) NCCLCHECK(SaveProxy(proxyRecv, sGraph->recv[i], args));
+    for (int i=0; i<sGraph->nSendPeers; i++) NCCLCHECK(SaveProxy(proxySend, sGraph->send[i], args));
   }
   return ncclSuccess;
 }

@@ -651,8 +651,8 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
                   if (isRecv) {
                     if (comm->channels[c].sGraph.nRecvPeers < SCKL_MAX_NUM_CONN){
                       int index = comm->channels[c].sGraph.nRecvPeers;
-                      comm->channels[c].sGraph.recv[index].peer = peerId;
-                      comm->channels[c].sGraph.recv[index].nChunks = 1;
+                      comm->channels[c].sGraph.recv[index] = peerId;
+                      // comm->channels[c].sGraph.recv[index].nChunks = 1;
                       comm->channels[c].sGraph.nRecvPeers++;
                     } else {
                       WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored. This may cause deadlock in initialization.", rank, c, peerId);
@@ -660,9 +660,9 @@ ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
                   } else if (isSend){
                     if (comm->channels[c].sGraph.nSendPeers < SCKL_MAX_NUM_CONN){
                       int index = comm->channels[c].sGraph.nSendPeers;
-                      comm->channels[c].sGraph.send[index].peer = peerId;
-                      comm->channels[c].sGraph.send[index].nChunks = 1;
-                      comm->channels[c].sGraph.nSendPeers++
+                      comm->channels[c].sGraph.send[index] = peerId;
+                      // comm->channels[c].sGraph.send[index].nChunks = 1;
+                      comm->channels[c].sGraph.nSendPeers++;
                     } else {
                       WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored.  This may cause deadlock in initialization.", rank, c, peerId);
                     }

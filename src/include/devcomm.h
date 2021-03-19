@@ -119,16 +119,18 @@ struct ncclRing {
 
 #define SCKL_MAX_NUM_CONN 16
 
-struct scklConn {
-  int peer;
-  int nChunks;
-};
+// struct scklConn {
+//   int peer;
+//   int nChunks;
+// };
 
 struct scklAlgoState {
   int nRecvPeers;
   int nSendPeers;
-  struct scklConn recv[SCKL_MAX_NUM_CONN];
-  struct scklConn send[SCKL_MAX_NUM_CONN];
+  int recv[SCKL_MAX_NUM_CONN];
+  int send[SCKL_MAX_NUM_CONN];
+  // struct scklConn recv[SCKL_MAX_NUM_CONN];
+  // struct scklConn send[SCKL_MAX_NUM_CONN];
 };
 
 #define NCCL_MAX_TREE_ARITY 3
