@@ -18,7 +18,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nChannels = args->coll.nChannels;
       struct ncclDevComm* comm = args->comm;
       struct ncclChannel* channel = comm->channels+blockIdx.x;
-      struct scklAlgoState* sGraph = &channel->sGraph;
+      // struct scklAlgoState* sGraph = &channel->sGraph;
       const int stepSize = comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS);
       const int chunkSize = stepSize * ALLTOALL_CHUNKSTEPS;
       const int nranks = comm->nRanks;
@@ -28,14 +28,14 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       // return;
       const T * __restrict__ thisInput = (const T*)args->sendbuff;
       T * __restrict__ thisOutput = (T*)args->recvbuff;
-      ncclPrimitives<UNROLL, ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS, T, 3, 3, 1, FUNC>
-        prims(tid, nthreads, sGraph->recv, sGraph->send, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
-      if (tid == 0 && bid == 0){
-        printf("connected to %d %d %d\n", sGraph->send[0], sGraph->send[1], sGraph->send[2]);
-      }
-      int testSize = min(chunkSize, (int)size/nChannels/nranks);
-      prims.directSend(thisInput, 0, testSize);
-      prims.directRecv(thisOutput, 0, testSize);
+      // ncclPrimitives<UNROLL, ALLGATHER_CHUNKSTEPS/ALLGATHER_SLICESTEPS, ALLGATHER_SLICESTEPS, T, 3, 3, 1, FUNC>
+      //   prims(tid, nthreads, sGraph->recv, sGraph->send, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
+      // if (tid == 0 && bid == 0){
+      //   printf("connected to %d %d %d\n", sGraph->send[0], sGraph->send[1], sGraph->send[2]);
+      // }
+      // int testSize = min(chunkSize, (int)size/nChannels/nranks);
+      // prims.directSend(thisInput, 0, testSize);
+      // prims.directRecv(thisOutput, 0, testSize);
       return;
     }
 };

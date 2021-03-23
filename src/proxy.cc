@@ -189,7 +189,7 @@ static ncclResult_t SaveProxy(int type, int peer, struct ncclProxyArgs* args) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks) {
+ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct scklAlgorithm* scklAlgo) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
     struct ncclRing* ring = &args->channel->ring;
     if (NeedProxy(proxyRecv, pattern, root, ring, nranks)) NCCLCHECK(SaveProxy(proxyRecv, ring->prev, args));
@@ -220,10 +220,15 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     NCCLCHECK(SaveProxy(proxyRecv, tree->up, args));
   }
   if (pattern == ncclPatternSckl){
-    // SCKL graph
-    struct scklAlgoState* sGraph = &args->channel->sGraph;
-    for (int i=0; i<sGraph->nRecvPeers; i++) NCCLCHECK(SaveProxy(proxyRecv, sGraph->recv[i], args));
-    for (int i=0; i<sGraph->nSendPeers; i++) NCCLCHECK(SaveProxy(proxySend, sGraph->send[i], args));
+    // nsteps is adjusted here for SCKL algo
+    for (int i=0; i<scklAlgo->nrecvPeers; i++){
+      args->nsteps = scklAlgo->nchunksForRecvPeer[i] * args->nLoops * args->chunkSteps;
+      NCCLCHECK(SaveProxy(proxyRecv, scklAlgo->recvPeers[i], args));
+    }
+    for (int i=0; i<scklAlgo->nrecvPeers; i++){
+      args->nsteps = scklAlgo->nchunksForSendPeer[i] * args->nLoops * args->chunkSteps;
+      NCCLCHECK(SaveProxy(proxySend, scklAlgo->sendPeers[i], args));
+    }
   }
   return ncclSuccess;
 }

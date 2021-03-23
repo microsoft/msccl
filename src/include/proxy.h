@@ -23,6 +23,7 @@ struct ncclProxyArgs {
   int sliceSteps;
   int chunkSteps;
   int nsteps;
+  int nLoops; // SCKL uses this to calculate number of proxies
   uint64_t opCount;
   int protocol;
   int segment; // Only for profiling
@@ -79,7 +80,7 @@ enum proxyMode {
   proxyTo = 2
 };
 
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks);
+ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct scklAlgorithm* scklAlgo);
 ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel, int segment);
 ncclResult_t ncclProxyStart(struct ncclComm* comm);
 ncclResult_t ncclProxyCreate(struct ncclComm* comm);

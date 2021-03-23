@@ -133,9 +133,20 @@ struct scklThreadBlock {
 
 // gpuId is the one that is in comm->rank
 struct scklAlgorithm {
+  // number of chunks per gpu
+  int nChunks;
+  // number of threadblocks
   int nBlocks;
   // rbid is used as an index into this array
   struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS];
+  // these two arrays can be inferred from scklTB. they are created to use NCCL API easily
+  int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int nsendPeers;
+  int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int nrecvPeers;
+
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -209,6 +220,8 @@ struct ncclChannel {
       struct ncclWork* workFifo;
       int workCount;
       uint64_t workFifoTail; // Only used by CPU
+      // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
+      uint16_t scklActiveThreadBlocks[(SCKL_MAX_NUM_THREAD_BLOCKS-1)*NCCL_MAX_OPS];
     };
     int data[0x80];
   };

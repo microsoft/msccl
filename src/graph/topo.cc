@@ -616,11 +616,14 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
     NCCLCHECK(scklGetXmlAlgoFromFile(str, xml));
     int rank = comm->rank;
 
-    struct scklAglorithm* scklAlgo = &comm->scklAlgo;
+    struct scklAlgorithm* scklAlgo = &comm->scklAlgo;
     // zeroing out all entries.
     memset(scklAlgo, 0, sizeof(struct scklAlgorithm));
     struct ncclXmlNode* topNode;
     NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
+    int nchunks;
+    NCCLCHECK(xmlGetAttrInt(topNode, "nchunks", &nchunks));
+    scklAlgo->nChunks = nchunks;
     for (int s=0; s<topNode->nSubs; s++) {
       struct ncclXmlNode* node = topNode->subs[s];
       if (strcmp(node->name, "gpu") == 0){
@@ -645,7 +648,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 return ncclInternalError;
               }              
               scklAlgo->nBlocks = std::max(comm->scklAlgo.nBlocks, rbid+1);
-              struct scklThreadBlock* sTB = scklAlgo->scklTB[rbid];
+              struct scklThreadBlock* sTB = &scklAlgo->scklTB[rbid];
               sTB->nsteps = 0;
               sTB->peer = peer;
               if (strcmp(type, "send") == 0){
@@ -656,7 +659,11 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 WARN("type of transfer is not supported: %s", type);
                 return ncclInternalError;
               }
-              
+              // setting all transfers to -1 so that the ones not set are passed during runtime.
+              for (int st=0; st<SCKL_MAX_NUM_STEPS; st++){
+                sTB->transfers[st] = -1;
+              }
+              int ntransfers = 0;
               for (int st=0; st<threadblockNode->nSubs; st++) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
@@ -671,9 +678,20 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                     WARN("step must be positive: step %d", s);
                     return ncclInternalError;
                   }
-                  sTB->nsteps = std::max(sTB->nsteps, s+1);
+                  sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
                   sTB->transfers[s] = chunkId;
+                  ntransfers++;
                 }
+              }
+              // setting the summary of the sckl aglorithm
+              if (sTB->type == SCKL_SEND){
+                scklAlgo->sendPeers[scklAlgo->nsendPeers] = peer;
+                scklAlgo->nchunksForSendPeer[scklAlgo->nsendPeers] = ntransfers;
+                scklAlgo->nsendPeers++;
+              } else if (sTB->type == SCKL_RECV){
+                scklAlgo->recvPeers[scklAlgo->nrecvPeers] = peer;
+                scklAlgo->nchunksForRecvPeer[scklAlgo->nrecvPeers] = ntransfers;
+                scklAlgo->nrecvPeers++;
               }
             }
           }

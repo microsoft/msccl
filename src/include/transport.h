@@ -55,7 +55,6 @@ struct ncclTransport {
 };
 
 ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int nsend, int* peerSend);
-ncclResult_t scklTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel);
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph);
 
 #endif

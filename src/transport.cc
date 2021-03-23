@@ -51,30 +51,6 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* 
   return ncclSuccess;
 }
 
-// SCKL needs to traverse the algorithm to find the peers
-ncclResult_t scklTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel) {
-  uint32_t mask = 1 << channel->id;
-  struct scklAlgorithm* scklAlgo = &comm->scklAlgo;
-  int nrecv = 0;
-  int nsend = 0;
-  for (int i=0; i<scklAlgo->nBlocks; i++){
-    int peer = scklAlgo->scklTB[i].peer;
-    int type = scklAlgo->scklTB[i].type; // 0 for send, 1 for recv
-    if (peer == -1 || peer >= comm->nRanks || peer == comm->rank) continue;
-    if (type == SCKL_SEND){
-      if (channel->peers[peer].send.connected) continue;
-      comm->connectSend[peer] |= mask;
-      nsend++;
-    } else if (type == SCKL_RECV) {
-      if (channel->peers[peer].recv.connected) continue;
-      comm->connectRecv[peer] |= mask;
-      nrecv++;
-    }
-  }
-  TRACE(NCCL_INIT, "sckl nsend %d nrecv %d", nsend, nrecv);
-  return ncclSuccess;
-}
-
 void dumpData(struct ncclConnect* data, int ndata) {
   for (int n=0; n<ndata; n++) {
     printf("[%d] ", n);
