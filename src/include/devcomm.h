@@ -117,20 +117,25 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCKL_MAX_NUM_CONN 16
+#define SCKL_MAX_NUM_STEPS 16
+#define SCKL_MAX_NUM_THREAD_BLOCKS 16
 
-// struct scklConn {
-//   int peer;
-//   int nChunks;
-// };
+#define SCKL_SEND 0
+#define SCKL_RECV 1
 
-struct scklAlgoState {
-  int nRecvPeers;
-  int nSendPeers;
-  int recv[SCKL_MAX_NUM_CONN];
-  int send[SCKL_MAX_NUM_CONN];
-  // struct scklConn recv[SCKL_MAX_NUM_CONN];
-  // struct scklConn send[SCKL_MAX_NUM_CONN];
+struct scklThreadBlock {
+  uint8_t peer;
+  uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
+  uint8_t nsteps;
+  // step is used to index into this array. transfers[step] is the chunkId to transfer.
+  uint16_t transfers[SCKL_MAX_NUM_STEPS];
+};
+
+// gpuId is the one that is in comm->rank
+struct scklAlgorithm {
+  int nBlocks;
+  // rbid is used as an index into this array
+  struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS];
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -193,7 +198,6 @@ struct ncclChannel {
       struct ncclRing ring;
       struct ncclTree tree;
       struct ncclTree collTree;
-      struct scklAlgoState sGraph;
 
       int id;
 

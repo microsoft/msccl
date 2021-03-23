@@ -607,66 +607,72 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
   return ncclSuccess;
 }
 
-ncclResult_t scklGetTopoFromXMLAndSetChannels(struct ncclComm* comm) {
+ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   char* str = getenv("SCKL_XML_FILE");
   if (str){
     INFO(NCCL_ENV, "SCKL_XML_FILE set by environment to %s", str);
     struct ncclXml* xml;
     NCCLCHECK(ncclCalloc(&xml, 1));
-    NCCLCHECK(scklTopoGetXmlGraphFromFile(str, xml));
+    NCCLCHECK(scklGetXmlAlgoFromFile(str, xml));
     int rank = comm->rank;
 
-    for (int c=0; c<comm->nChannels; c++){
-      comm->channels[c].sGraph.nRecvPeers = 0;
-      comm->channels[c].sGraph.nSendPeers = 0;
-    }
-    
+    struct scklAglorithm* scklAlgo = &comm->scklAlgo;
+    // zeroing out all entries.
+    memset(scklAlgo, 0, sizeof(struct scklAlgorithm));
     struct ncclXmlNode* topNode;
-    NCCLCHECK(xmlFindTag(xml, "system", &topNode));
+    NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
     for (int s=0; s<topNode->nSubs; s++) {
       struct ncclXmlNode* node = topNode->subs[s];
       if (strcmp(node->name, "gpu") == 0){
         int id;
         NCCLCHECK(xmlGetAttrInt(node, "id", &id));
         if (id == rank){
-          for (int p=0; p<node->nSubs; p++) {
-            struct ncclXmlNode* typeOfComm = node->subs[p];
-            if (strcmp(typeOfComm->name, "conn") == 0){
+          scklAlgo->nBlocks = 0;
+          for (int t=0; t<node->nSubs; t++) {
+            struct ncclXmlNode* threadblockNode = node->subs[t];
+            if (strcmp(threadblockNode->name, "threadblock") == 0){
+              int rbid, peer;
               const char* type;
-              NCCLCHECK(xmlGetAttrStr(typeOfComm, "type", &type));
-
-              bool isRecv = false;
-              bool isSend = false;
-              if (strcmp(type, "recv") == 0){
-                isRecv = true;
-              } else if (strcmp(type, "send") == 0){
-                isSend = true;
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "rbid", &rbid));
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "peer", &peer));
+              NCCLCHECK(xmlGetAttrStr(threadblockNode, "type", &type));
+              if (rbid >= SCKL_MAX_NUM_THREAD_BLOCKS){
+                WARN("Too many thread blocks are requested. Max thread blocks: %d, requested: %d", SCKL_MAX_NUM_THREAD_BLOCKS, rbid+1);
+                return ncclInternalError;
               }
-              for (int p=0; p<typeOfComm->nSubs; p++) {
-                struct ncclXmlNode* peer = typeOfComm->subs[p];
-                int peerId;
-                NCCLCHECK(xmlGetAttrInt(peer, "id", &peerId));
-                // SCKL generates the same scklAlgoState for all channels for now. This will change in the future
-                for (int c=0; c<comm->nChannels; c++){
-                  if (isRecv) {
-                    if (comm->channels[c].sGraph.nRecvPeers < SCKL_MAX_NUM_CONN){
-                      int index = comm->channels[c].sGraph.nRecvPeers;
-                      comm->channels[c].sGraph.recv[index] = peerId;
-                      // comm->channels[c].sGraph.recv[index].nChunks = 1;
-                      comm->channels[c].sGraph.nRecvPeers++;
-                    } else {
-                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored. This may cause deadlock in initialization.", rank, c, peerId);
-                    }                    
-                  } else if (isSend){
-                    if (comm->channels[c].sGraph.nSendPeers < SCKL_MAX_NUM_CONN){
-                      int index = comm->channels[c].sGraph.nSendPeers;
-                      comm->channels[c].sGraph.send[index] = peerId;
-                      // comm->channels[c].sGraph.send[index].nChunks = 1;
-                      comm->channels[c].sGraph.nSendPeers++;
-                    } else {
-                      WARN("Too many recv connections for device %d channel %d -- connection to %d is ignored.  This may cause deadlock in initialization.", rank, c, peerId);
-                    }
+              if (rbid < 0){
+                WARN("rbid must be positive. rbid: %d", rbid);
+                return ncclInternalError;
+              }              
+              scklAlgo->nBlocks = std::max(comm->scklAlgo.nBlocks, rbid+1);
+              struct scklThreadBlock* sTB = scklAlgo->scklTB[rbid];
+              sTB->nsteps = 0;
+              sTB->peer = peer;
+              if (strcmp(type, "send") == 0){
+                sTB->type = SCKL_SEND;
+              } else if (strcmp(type, "recv") == 0) {
+                sTB->type = SCKL_RECV;
+              } else {
+                WARN("type of transfer is not supported: %s", type);
+                return ncclInternalError;
+              }
+              
+              for (int st=0; st<threadblockNode->nSubs; st++) {
+                struct ncclXmlNode* stepNode = threadblockNode->subs[st];
+                if (strcmp(stepNode->name, "step") == 0){
+                  int s, chunkId;
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "chunkId", &chunkId));
+                  if (s >= SCKL_MAX_NUM_STEPS){
+                    WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
+                    return ncclInternalError;
                   }
+                  if (s < 0){
+                    WARN("step must be positive: step %d", s);
+                    return ncclInternalError;
+                  }
+                  sTB->nsteps = std::max(sTB->nsteps, s+1);
+                  sTB->transfers[s] = chunkId;
                 }
               }
             }
