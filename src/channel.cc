@@ -29,6 +29,7 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelid) {
 
   // SCKL active blocks allocation
   NCCLCHECK(ncclCudaHostCalloc(&channel->scklActiveThreadBlocks, (SCKL_MAX_NUM_THREAD_BLOCKS-1)*NCCL_MAX_OPS));
+  NCCLCHECK(ncclCudaHostCalloc(&channel->scklNumBlocksPerChannel, 1));
   return ncclSuccess;
 }
 
@@ -38,6 +39,7 @@ ncclResult_t freeChannel(struct ncclChannel* channel, int nRanks) {
   NCCLCHECK(ncclCudaHostFree(channel->workFifo));
 
   NCCLCHECK(ncclCudaHostFree(channel->scklActiveThreadBlocks));
+  NCCLCHECK(ncclCudaHostFree(channel->scklNumBlocksPerChannel));
 
   // Free Ring index to rank tables
   free(channel->ring.userRanks);

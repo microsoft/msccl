@@ -117,20 +117,23 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     // Skipping on SCKL algorithms here since SCKL tune the algorithm in the synthesizer.
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
-      if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
-      if (a == NCCL_ALGO_SCKL){
-        // Only sckl alltoall functions is implemented
-        if (coll == ncclFuncAllToAll){
-          // SCKL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
-          // Setting the bandwidth and latency values to 1.0 (some arbitrary value) so that they don't get skipped by ncclTopoGetAlgoTime
-          for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+      if (coll == ncclFuncAllToAll || a == NCCL_ALGO_SCKL) {
+        // Only sckl alltoall functions with simple protocol is implemented
+        // SCKL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
+        for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+          if (coll == ncclFuncAllToAll && a == NCCL_ALGO_SCKL && p == NCCL_PROTO_SIMPLE){
+            // Setting the bandwidth and latency values to 1.0 (some arbitrary value) so that they don't get skipped by ncclTopoGetAlgoTime
             comm->bandwidths[coll][a][p] = 1.0;
             comm->latencies[coll][a][p] = 1.0;
+          } else {
+            comm->bandwidths[coll][a][p] = 0.0; // This will make sure that sckl is not selected for any other scenario
+            comm->latencies[coll][a][p] = 0.0;
           }
-        } else {
-          continue; 
         }
+        continue;
       }
+
+      if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float speed = nNodes <= 2 || a == NCCL_ALGO_COLLNET ? graphs[a]->speedIntra : graphs[a]->speedInter;
@@ -197,7 +200,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   if (comm->collNetSupport == 0) {
     algoEnable[NCCL_ALGO_COLLNET] = 0;
     // If user has hard set NCCL_ALGO=COLLNET, ignore it
-    if (algoEnable[NCCL_ALGO_RING] == 0 && algoEnable[NCCL_ALGO_TREE] == 0) {
+    if (algoEnable[NCCL_ALGO_RING] == 0 && algoEnable[NCCL_ALGO_TREE] == 0 && algoEnable[NCCL_ALGO_SCKL] == 0) {
       algoEnable[NCCL_ALGO_RING] = algoEnable[NCCL_ALGO_TREE] = algoEnable[NCCL_ALGO_SCKL] = 1;
       if (comm->rank == 0) WARN("CollNet is not supported or fails to initialize, ignoring NCCL_ALGO=COLLNET");
     }

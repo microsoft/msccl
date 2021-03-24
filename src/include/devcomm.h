@@ -18,8 +18,8 @@ extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
-#define NCCL_ALGO_COLLNET 2
-#define NCCL_ALGO_SCKL 3
+#define NCCL_ALGO_SCKL 2
+#define NCCL_ALGO_COLLNET 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
@@ -222,7 +222,8 @@ struct ncclChannel {
       uint64_t workFifoTail; // Only used by CPU
       // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
       uint16_t* scklActiveThreadBlocks;
-      int scklNumBlocksPerChannel;
+      // this will be allocated on the host and mapped on the device
+      int* scklNumBlocksPerChannel;
     };
     int data[0x80];
   };

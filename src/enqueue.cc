@@ -104,7 +104,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
   e->active = 1;
   // SCKL replicates active for other thread blocks
-  for (int i = 0; i < channel->scklNumBlocksPerChannel-1; i++){
+  for (int i = 0; i < *channel->scklNumBlocksPerChannel-1; i++){
     channel->scklActiveThreadBlocks[i*NCCL_MAX_OPS + opIndex] = 1;
   }  
   e->index = opIndex;
@@ -119,9 +119,6 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   for (int c=0; c<comm->p2pnChannels; c++) {
     if (comm->channels[c].workCount) params->gridDim.x = c+1;
   }
-  // SCKL for now we are assuming scklNumBlocksPerChannel is the same for each channel.
-  // multiply the number of threadblocks by scklNumBlocksPerChannel
-  params->gridDim.x *= comm->channels[0].scklNumBlocksPerChannel;
 
   // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
   for (int c=0; c<params->gridDim.x; c++) {
@@ -136,10 +133,15 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
     }
     int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
     channel->workFifo[channelTailIndex].elems[0].active = 2;
-    for (int i = 0; i < channel->scklNumBlocksPerChannel-1; i++){
+    for (int i = 0; i < *channel->scklNumBlocksPerChannel-1; i++){
       channel->scklActiveThreadBlocks[i*NCCL_MAX_OPS + channelTailIndex] = 2;
     }    
   }
+
+  // This is the first time SCKL disassociates bids and channels
+  // SCKL for now we are assuming scklNumBlocksPerChannel is the same for each channel.
+  // multiply the number of threadblocks by scklNumBlocksPerChannel
+  params->gridDim.x *= *comm->channels[0].scklNumBlocksPerChannel;
 
   // Find the first operation, choose the kernel accordingly and pass it
   // as the first argument.
@@ -485,7 +487,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-    channel->scklNumBlocksPerChannel = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.nBlocks : 1;
+    *channel->scklNumBlocksPerChannel = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.nBlocks : 1;
     // Proxy
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
@@ -625,7 +627,7 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
   info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
   // sckl does not generate p2p kernels.
-  channel->scklNumBlocksPerChannel = 1;
+  *channel->scklNumBlocksPerChannel = 1;
 
   return ncclSuccess;
 }

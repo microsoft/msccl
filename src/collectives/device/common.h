@@ -9,6 +9,7 @@
 
 #include "collectives.h"
 #include "devcomm.h"
+#include <stdio.h>
 
 
 #if __CUDA_ARCH__ >= 800
@@ -82,17 +83,21 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 
   struct ncclDevComm* comm = first.comm;
   // in SCKL, if there are different number of threadblocks per channel, this needs to change.
-  int scklNumBlocksPerChannel = comm->channels[0].scklNumBlocksPerChannel;
+  int scklNumBlocksPerChannel = *comm->channels[0].scklNumBlocksPerChannel;
   struct ncclChannel* channel = comm->channels + (bid / scklNumBlocksPerChannel);
   struct ncclWorkElem* w = NULL;
   uint16_t index = first.index;
 
+  int myRank = channel->ring.devUserRanks[0];
   /* To optimize for latency, (only) the first operation is passed as argument.*/
   if (bid < scklNumBlocksPerChannel && first.funcIndex != FUNC_INDEX_P2P) w = &first;
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
       load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, bid, scklNumBlocksPerChannel);
+    }
+    if (tid == 0){
+      printf("bid = %d index = %d\n", bid, index);
     }
     if (tid < w->nThreads) {
       if (w->funcIndex == FINDEX) {
