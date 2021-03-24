@@ -81,7 +81,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
 
   struct ncclDevComm* comm = first.comm;
-  int scklNumBlocksPerChannel = first.comm->scklAlgo.nBlocks;
+  int scklNumBlocksPerChannel = gridDim.x / first.coll.nChannels;
   struct ncclChannel* channel = comm->channels + (bid / scklNumBlocksPerChannel);
   struct ncclWorkElem* w = NULL;
   uint16_t index = first.index;
