@@ -81,14 +81,14 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
 
   struct ncclDevComm* comm = first.comm;
-  int scklNumBlocksPerChannel = gridDim.x / first.coll.nChannels;
+  // in SCKL, if there are different number of threadblocks per channel, this needs to change.
+  int scklNumBlocksPerChannel = comm->channels[0].scklNumBlocksPerChannel;
   struct ncclChannel* channel = comm->channels + (bid / scklNumBlocksPerChannel);
   struct ncclWorkElem* w = NULL;
   uint16_t index = first.index;
 
   /* To optimize for latency, (only) the first operation is passed as argument.*/
   if (bid < scklNumBlocksPerChannel && first.funcIndex != FUNC_INDEX_P2P) w = &first;
-  int myRank = channel->ring.devUserRanks[0];
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
@@ -102,10 +102,10 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
       }
     }
     int bidWithinChannel = (bid % scklNumBlocksPerChannel);
-    if ((w == &first && w->active == 2) || ((bidWithinChannel == 0) && w->active == 2) || ((bidWithinChannel > 0) && channel->activeBlocksPerChannel[(bidWithinChannel-1) * NCCL_MAX_OPS + index] == 2)) {
+    if ((w == &first && w->active == 2) || ((bidWithinChannel == 0) && w->active == 2) || ((bidWithinChannel > 0) && channel->scklActiveThreadBlocks[(bidWithinChannel-1) * NCCL_MAX_OPS + index] == 2)) {
       __syncthreads();
       if (w != &first && tid == 0 && bidWithinChannel > 0){
-        channel->activeBlocksPerChannel[(bidWithinChannel-1) * NCCL_MAX_OPS + index] = 0;
+        channel->scklActiveThreadBlocks[(bidWithinChannel-1) * NCCL_MAX_OPS + index] = 0;
       }
       return;
     }

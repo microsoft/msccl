@@ -221,7 +221,8 @@ struct ncclChannel {
       int workCount;
       uint64_t workFifoTail; // Only used by CPU
       // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
-      uint16_t scklActiveThreadBlocks[(SCKL_MAX_NUM_THREAD_BLOCKS-1)*NCCL_MAX_OPS];
+      uint16_t* scklActiveThreadBlocks;
+      int scklNumBlocksPerChannel;
     };
     int data[0x80];
   };

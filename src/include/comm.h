@@ -18,8 +18,6 @@ struct cudaLaunchParams {
   void **args;
   size_t sharedMem;
   cudaStream_t stream;
-  // SCKL requires multiple thread blocks per channel. By default it is set to 1 for NCCL functions
-  int scklNumBlocksPerChannel;
 };
 #endif
 
