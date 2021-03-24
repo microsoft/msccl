@@ -475,6 +475,8 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   NCCLCHECK(computeColl(info, &work, &proxyArgs));
 
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
+  // sckl needs multiple thread blocks per channel
+  info->comm->myParams->scklNumBlocksPerChannel = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.nBlocks : 1;
 
   int nChannels = work.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
@@ -621,6 +623,8 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
   NCCLCHECK(saveP2pOp(info, w, segment));
   info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
+  // sckl does not generate p2p kernels.
+  info->comm->myParams->scklNumBlocksPerChannel = 1;
 
   return ncclSuccess;
 }
