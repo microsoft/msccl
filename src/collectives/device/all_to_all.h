@@ -49,6 +49,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         ssize_t chunkOffset = gridOffset + channelId*realChunkSize;
         ssize_t offset;
         int nelem = min(realChunkSize, sizePerChunk-chunkOffset);
+
         for (int i = 0; i < sckltb->nsteps; i++){
           offset = chunkOffset + sckltb->transfers[i] * sizePerChunk;
           if (sckltb->type == SCKL_SEND){
