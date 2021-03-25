@@ -42,14 +42,12 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 1, 1, 1, FUNC>
         prims(tid, nthreads, &recvPeer, &sendPeer, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
 
-
       for (ssize_t gridOffset = 0; gridOffset < sizePerChunk; gridOffset += loopSize) {
         int realChunkSize = min(chunkSize, DIVUP(sizePerChunk-gridOffset,nChannels));
         ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
         ssize_t chunkOffset = gridOffset + channelId*realChunkSize;
         ssize_t offset;
         int nelem = min(realChunkSize, sizePerChunk-chunkOffset);
-
         for (int i = 0; i < sckltb->nsteps; i++){
           offset = chunkOffset + sckltb->transfers[i] * sizePerChunk;
           if (sckltb->type == SCKL_SEND){
