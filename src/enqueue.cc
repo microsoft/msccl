@@ -480,6 +480,15 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       CUDACHECK(cudaMemcpyAsync(info->recvbuff, info->sendbuff, info->nBytes, cudaMemcpyDeviceToDevice, info->stream));
     return ncclSuccess;
   }
+  if (info->coll == ncclFuncAllToAll){
+    if (info->sendbuff == info->recvbuff){
+      WARN("Alltoall needs separate receive and send buffers.");
+      return ncclInvalidArgument;
+    }
+    size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
+    size_t rankOffset = info->comm->rank * nBytesPerRank;
+    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
+  }
 
   struct ncclWorkElem work;
   struct ncclProxyArgs proxyArgs;

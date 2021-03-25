@@ -667,9 +667,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               for (int st=0; st<threadblockNode->nSubs; st++) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
-                  int s, chunkId;
+                  int s, addr;
                   NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
-                  NCCLCHECK(xmlGetAttrInt(stepNode, "chunkId", &chunkId));
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "addr", &addr));
                   if (s >= SCKL_MAX_NUM_STEPS){
                     WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
                     return ncclInternalError;
@@ -679,7 +679,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                     return ncclInternalError;
                   }
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
-                  sTB->transfers[s] = chunkId;
+                  sTB->transfers[s] = addr;
                   ntransfers++;
                 }
               }

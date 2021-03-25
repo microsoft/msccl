@@ -127,7 +127,7 @@ struct scklThreadBlock {
   uint8_t peer;
   uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
   uint8_t nsteps;
-  // step is used to index into this array. transfers[step] is the chunkId to transfer.
+  // step is used to index into this array. transfers[step] is the addr to transfer.
   uint16_t transfers[SCKL_MAX_NUM_STEPS];
 };
 

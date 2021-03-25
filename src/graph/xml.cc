@@ -807,28 +807,17 @@ ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXm
 }
 
 ncclResult_t scklAlgoXmlStep(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
-  // int s, chunkId;
-  // NCCLCHECK(xmlGetAttrInt(head, "s", &s));
-  // NCCLCHECK(xmlGetAttrInt(head, "chunkId", &chunkId));
-  struct xmlHandler handlers[] = { };
-  NCCLCHECK(xmlLoadSub(file, xml, head, handlers, 1));
+  NCCLCHECK(xmlLoadSub(file, xml, head, NULL, 1));
   return ncclSuccess;
 }
 
 ncclResult_t scklAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  // int rbid, peer;
-  // const char* type;
-  // NCCLCHECK(xmlGetAttrInt(head, "rbid", &rbid));
-  // NCCLCHECK(xmlGetAttrInt(head, "peer", &peer));
-  // NCCLCHECK(xmlGetAttrStr(head, "type", &type));
   struct xmlHandler handlers[] = { { "step", scklAlgoXmlStep } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
 ncclResult_t scklAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  // int id;
-  // NCCLCHECK(xmlGetAttrInt(head, "id", &id));
   struct xmlHandler handlers[] = { { "threadblock", scklAlgoXmlthreadblock } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
@@ -836,9 +825,6 @@ ncclResult_t scklAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXml
 
 ncclResult_t scklAlgoXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
   struct xmlHandler handlers[] = { { "gpu", scklAlgoXmlGpu } };
-  // int nchunks;
-  // NCCLCHECK(xmlGetAttrInt(head, "nchunks", &nchunks));
-
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }

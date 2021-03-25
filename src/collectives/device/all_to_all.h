@@ -39,6 +39,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       int m1 = -1;
       int recvPeer = (sckltb->type == SCKL_RECV) ? sckltb->peer : m1;
       int sendPeer = (sckltb->type == SCKL_SEND) ? sckltb->peer : m1;
+
       ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 1, 1, 1, FUNC>
         prims(tid, nthreads, &recvPeer, &sendPeer, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
 
