@@ -17,7 +17,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int bid = blockIdx.x;
       const int nChannels = args->coll.nChannels;
       struct ncclDevComm* comm = args->comm;
-      const int scklNumBlocksPerChannel = *comm->channels[0].scklNumBlocksPerChannel;
+      const int scklNumBlocksPerChannel = args->scklNumBlocksPerChannel;
       const int channelId = bid/scklNumBlocksPerChannel;
       struct ncclChannel* channel = comm->channels+channelId;
       // relative bid to a channel
@@ -52,17 +52,9 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         for (int i = 0; i < sckltb->nsteps; i++){
           offset = chunkOffset + sckltb->transfers[i] * sizePerChunk;
           if (sckltb->type == SCKL_SEND){
-            if (tid == 0)
-              printf("SSS sending myRank %d recvPeer = %d sendPeer = %d bid = %d nSteps = %d nelem = %d\n", myRank, recvPeer, sendPeer, bid, sckltb->nsteps, nelem);
             prims.directSend(thisInput + offset, offset, nelem);
-            if (tid == 0)
-              printf("EEE sending myRank %d recvPeer = %d sendPeer = %d bid = %d nSteps = %d nelem = %d\n", myRank, recvPeer, sendPeer, bid, sckltb->nsteps, nelem);
-          } else if (sckltb->type == SCKL_SEND) {
-            if (tid == 0)
-              printf("SSS receiving myRank %d recvPeer = %d sendPeer = %d bid = %d nSteps = %d nelem = %d\n", myRank, recvPeer, sendPeer, bid, sckltb->nsteps, nelem);
+          } else if (sckltb->type == SCKL_RECV) {
             prims.directRecv(thisOutput + offset, offset, nelem);
-            if (tid == 0)
-              printf("EEE receiving myRank %d recvPeer = %d sendPeer = %d bid = %d nSteps = %d nelem = %d\n", myRank, recvPeer, sendPeer, bid, sckltb->nsteps, nelem);
           }
         }
       }

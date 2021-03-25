@@ -639,8 +639,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "rbid", &rbid));
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "peer", &peer));
               NCCLCHECK(xmlGetAttrStr(threadblockNode, "type", &type));
-              if (rbid >= SCKL_MAX_NUM_THREAD_BLOCKS){
-                WARN("Too many thread blocks are requested. Max thread blocks: %d, requested: %d", SCKL_MAX_NUM_THREAD_BLOCKS, rbid+1);
+              if (rbid >= SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("Too many thread blocks are requested. Max thread blocks: %d, requested: %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL, rbid+1);
                 return ncclInternalError;
               }
               if (rbid < 0){

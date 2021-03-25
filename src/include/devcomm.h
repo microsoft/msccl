@@ -118,7 +118,7 @@ struct ncclRing {
 };
 
 #define SCKL_MAX_NUM_STEPS 16
-#define SCKL_MAX_NUM_THREAD_BLOCKS 16
+#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 16
 
 #define SCKL_SEND 0
 #define SCKL_RECV 1
@@ -138,13 +138,13 @@ struct scklAlgorithm {
   // number of threadblocks
   int nBlocks;
   // rbid is used as an index into this array
-  struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS];
+  struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // these two arrays can be inferred from scklTB. they are created to use NCCL API easily
-  int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS];
-  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nsendPeers;
-  int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS];
-  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS];
+  int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nrecvPeers;
 
 };
@@ -175,7 +175,9 @@ struct ncclWorkElem {
   uint16_t nThreads;
   uint16_t funcIndex;
   uint16_t index;
-  uint16_t active;
+  // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
+  uint16_t active[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  uint16_t scklNumBlocksPerChannel;
 
   const void * sendbuff;
   void * recvbuff;
@@ -195,13 +197,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[4];
+    uint64_t align[8];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x10*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {
@@ -220,10 +222,6 @@ struct ncclChannel {
       struct ncclWork* workFifo;
       int workCount;
       uint64_t workFifoTail; // Only used by CPU
-      // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
-      uint16_t* scklActiveThreadBlocks;
-      // this will be allocated on the host and mapped on the device
-      int* scklNumBlocksPerChannel;
     };
     int data[0x80];
   };
