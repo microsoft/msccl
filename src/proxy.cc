@@ -223,12 +223,10 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     // nsteps is adjusted here for SCKL algo
     for (int i=0; i<scklAlgo->nrecvPeers; i++){
       args->nsteps = scklAlgo->nchunksForRecvPeer[i] * args->nLoops * args->chunkSteps;
-      printf("QQQ %d %d %d | %d\n", scklAlgo->nchunksForRecvPeer[i], args->nLoops, args->chunkSteps, scklAlgo->recvPeers[i]);
       NCCLCHECK(SaveProxy(proxyRecv, scklAlgo->recvPeers[i], args));
     }
     for (int i=0; i<scklAlgo->nsendPeers; i++){
       args->nsteps = scklAlgo->nchunksForSendPeer[i] * args->nLoops * args->chunkSteps;
-      printf("TTT %d %d %d | %d\n", scklAlgo->nchunksForSendPeer[i], args->nLoops, args->chunkSteps, scklAlgo->sendPeers[i]);
       NCCLCHECK(SaveProxy(proxySend, scklAlgo->sendPeers[i], args));
     }
   }
@@ -439,7 +437,6 @@ ncclResult_t ncclProxySharedBuffersInit(struct ncclComm* comm, int cuda, int* si
   char* buff;
   int* used;
   *size = 2*comm->p2pnChannels*state->slotSize*state->nslots;
-
   if (cuda && state->cudaBuff[0] == NULL) {
     NCCLCHECK(ncclCudaCalloc(&buff, *size));
     NCCLCHECK(ncclCalloc(&used, 2*comm->p2pnChannels*state->nslots));

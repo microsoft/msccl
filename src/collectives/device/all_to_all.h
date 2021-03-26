@@ -50,19 +50,11 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         ssize_t offset;
         int nelem = min(realChunkSize, sizePerChunk-chunkOffset);
         for (int i = 0; i < sckltb->nsteps; i++){
-          offset = 0;//chunkOffset + sckltb->transfers[i] * sizePerChunk;
+          offset = chunkOffset + sckltb->transfers[i] * sizePerChunk;
           if (sckltb->type == SCKL_SEND){
-            if (tid == 0)
-              printf("SSS sending %d %d | %d\n", bid, sendPeer, (int)gridDim.x);
             prims.directSend(thisInput + offset, offset, nelem);
-            if (tid == 0)
-              printf("EEE sending %d %d | %d\n", bid, sendPeer, (int)gridDim.x);
           } else if (sckltb->type == SCKL_RECV) {
-            if (tid == 0)
-              printf("SSS receiving %d %d | %d\n", bid, recvPeer, (int)gridDim.x);
             prims.directRecv(thisOutput + offset, offset, nelem);
-            if (tid == 0)
-              printf("EEE receiving %d %d | %d\n", bid, recvPeer, (int)gridDim.x);
           }
         }
       }
