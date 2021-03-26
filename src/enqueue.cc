@@ -459,7 +459,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
 
   TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
       proxyArgs->opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
-      nLoops, proxyArgs->nsteps, info->comm);
+      proxyArgs->nLoops, proxyArgs->nsteps, info->comm);
   return ncclSuccess;
 }
 

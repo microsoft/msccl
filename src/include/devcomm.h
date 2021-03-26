@@ -118,7 +118,7 @@ struct ncclRing {
 };
 
 #define SCKL_MAX_NUM_STEPS 16
-#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 16
+#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
 #define SCKL_SEND 0
 #define SCKL_RECV 1
@@ -197,7 +197,7 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[8];
+    uint64_t align[4];
   };
 };
 struct ncclWork {
