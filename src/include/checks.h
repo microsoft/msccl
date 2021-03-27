@@ -56,6 +56,7 @@
   ncclResult_t res = call; \
   if (res != ncclSuccess) { \
     /* Print the back trace*/ \
+    printf("FAILURE %s %d\n", __FILE__, __LINE__); \
     if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
     return res; \
   } \
