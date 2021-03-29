@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "ibvwrap.h"
+#include <thread>
 
 #define USE_RDMA_WRITE 1
 #define MAXNAMESIZE 64
@@ -664,6 +665,7 @@ ncclResult_t ncclIbIsend(void* sendComm, void* data, int size, void* mhandle, vo
   if (size > slot->size || slot->size < 0 || slot->addr == 0 || slot->rkey == 0 || slot->seq != comm->fifoHead) {
     WARN("NET/IB : collective mismatch error local size %d remote %d addr %lx rkey %x seq %x/%x",
         size, slot->size, slot->addr, slot->rkey, slot->seq, comm->fifoHead);
+    std::this_thread::sleep_for(std::chrono::seconds{3600});
     return ncclInternalError;
   }
   int useAr = 0;
