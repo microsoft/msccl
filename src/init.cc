@@ -173,6 +173,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
+  if (comm->rank == 0)
+    std::this_thread::sleep_for(std::chrono::seconds{15});
+  else 
+    std::this_thread::sleep_for(std::chrono::seconds{3600});
   for (int channel=0; channel<MAXCHANNELS; channel++)
     NCCLCHECK(freeChannel(comm->channels+channel, comm->nRanks));
 
@@ -868,7 +872,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, comm->scklAlgo.nrecvPeers, comm->scklAlgo.recvPeers, comm->scklAlgo.nsendPeers, comm->scklAlgo.sendPeers), ret, affinity_restore);
   }
   // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
-  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph), ret, affinity_restore);
+  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected SCKL algorithm");  
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));

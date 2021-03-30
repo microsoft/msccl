@@ -98,7 +98,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   struct ncclWork* w = channel->workFifo+opIndex;
   struct ncclWorkElem* e = w->elems;
   // SCKL replicates active, make sure all of them are 0
-  for (int i=0; i<SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL; i++){
+  for (int i=0; i<e->scklNumBlocksPerChannel; i++){
     volatile uint16_t* activePtr = (volatile uint16_t*)&e->active[i];
     while (activePtr[0] != 0) sched_yield();
   }
@@ -492,6 +492,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   }
 
   struct ncclWorkElem work;
+  // memset(&work, 0, sizeof(struct ncclWorkElem)); // setting all elements to 0 so that active (sckl) array is also 0 all the way.
   struct ncclProxyArgs proxyArgs;
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &work, &proxyArgs));

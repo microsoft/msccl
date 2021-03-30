@@ -53,6 +53,8 @@
   } \
 } while(true)
 
+// #define DEBUG
+
 #ifdef DEBUG
 // Propagate errors up
 #define NCCLCHECK(call) do { \
