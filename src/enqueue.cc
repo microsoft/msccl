@@ -260,6 +260,12 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   // launch and the ncclProxyStart call could cause a deadlock.
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
+
+  // try to find how many extra threadblocks were allocated for SCKL and adjust gridDim.x
+  int channelTailIndex = ((comm->channels[0].workFifoTail-1)%NCCL_MAX_OPS);
+  int scklNumBlocksPerChannel = comm->channels[0].workFifo[channelTailIndex].elems[0].scklNumBlocksPerChannel;
+  params->gridDim.x /= scklNumBlocksPerChannel;
+
   uint64_t max = 0ULL;
   for (int r=0; r<params->gridDim.x; r++) {
     struct ncclChannel* channel = comm->channels+r;

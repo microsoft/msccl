@@ -173,10 +173,6 @@ static ncclResult_t commFree(ncclComm_t comm) {
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
-  if (comm->rank == 0)
-    std::this_thread::sleep_for(std::chrono::seconds{15});
-  else 
-    std::this_thread::sleep_for(std::chrono::seconds{3600});
   for (int channel=0; channel<MAXCHANNELS; channel++)
     NCCLCHECK(freeChannel(comm->channels+channel, comm->nRanks));
 
