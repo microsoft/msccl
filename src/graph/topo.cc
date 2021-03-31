@@ -611,10 +611,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   char* str = getenv("SCKL_XML_FILE");
   if (str){
     INFO(NCCL_ENV, "SCKL_XML_FILE set by environment to %s", str);
-    struct ncclXml xml_alloc;
-    struct ncclXml* xml = &xml_alloc;
+    struct ncclXml* xml;
 
-    // NCCLCHECK(ncclCalloc(&xml, 1));
+    NCCLCHECK(ncclCalloc(&xml, 1));
     NCCLCHECK(scklGetXmlAlgoFromFile(str, xml));
     int rank = comm->rank;
 
