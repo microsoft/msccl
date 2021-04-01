@@ -17,7 +17,8 @@
 #define NCCL_FUNC4(func, redop, type) \
   (void*)NCCL_FUNC5(func, TREE,    redop, type), \
   (void*)NCCL_FUNC5(func, RING,    redop, type), \
-  (void*)NCCL_FUNC5(func, COLLNET, redop, type)
+  (void*)NCCL_FUNC5(func, COLLNET, redop, type), \
+  (void*)NCCL_FUNC5(func, SCKL, redop, type)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(func, redop) \
@@ -96,12 +97,18 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   int opIndex = channel->workFifoTail%NCCL_MAX_OPS;
   struct ncclWork* w = channel->workFifo+opIndex;
   struct ncclWorkElem* e = w->elems;
-  volatile uint8_t* activePtr = (volatile uint8_t*)&e->active;
-  while (activePtr[0] != 0) sched_yield();
+  // SCKL replicates active, make sure all of them are 0
+  for (int i=0; i<e->scklNumBlocksPerChannel; i++){
+    volatile uint16_t* activePtr = (volatile uint16_t*)&e->active[i];
+    while (activePtr[0] != 0) sched_yield();
+  }
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
-  e->active = 1;
+
+  for (int i=0; i<base->scklNumBlocksPerChannel; i++){
+    e->active[i] = 1;
+  }
   e->index = opIndex;
   channel->workFifoTail++;
   channel->workCount++;
@@ -116,6 +123,8 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   }
 
   // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
+  // SCKL: this needs to be set properly as different work items can have different scklNumBlocksPerChannel
+  int scklNumBlocksPerChannel = 1;
   for (int c=0; c<params->gridDim.x; c++) {
     struct ncclChannel* channel = comm->channels+c;
     if (channel->workCount == 0) {
@@ -126,8 +135,17 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       e->funcIndex = FUNC_INDEX_P2P;
       e->p2p.nThreads = 0;
     }
-    channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].elems[0].active = 2;
+    int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
+    scklNumBlocksPerChannel = channel->workFifo[channelTailIndex].elems[0].scklNumBlocksPerChannel;
+    for (int i=0; i<channel->workFifo[channelTailIndex].elems[0].scklNumBlocksPerChannel; i++) {
+      channel->workFifo[channelTailIndex].elems[0].active[i] = 2;
+    }
   }
+
+  // This is the first time SCKL disassociates bids and channels
+  // SCKL for now we are assuming scklNumBlocksPerChannel is the same for each channel.
+  // multiply the number of threadblocks by scklNumBlocksPerChannel
+  params->gridDim.x *= scklNumBlocksPerChannel;
 
   // Find the first operation, choose the kernel accordingly and pass it
   // as the first argument.
@@ -136,7 +154,10 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   struct ncclWorkElem* elem = work->elems;
   memcpy(&comm->args, elem, sizeof(struct ncclWorkElem));
   // As we inline the first coll directly, we can free it immediately.
-  if (elem->funcIndex != FUNC_INDEX_P2P) elem->active = 0;
+  if (elem->funcIndex != FUNC_INDEX_P2P){
+    for (int i=0; i<elem->scklNumBlocksPerChannel; i++)
+      elem->active[i] = 0;
+  }
 
   params->func = ncclKerns[elem->funcIndex];
   return ncclSuccess;
@@ -239,6 +260,12 @@ ncclResult_t ncclBarrierEnqueueWait(ncclComm_t comm) {
   // launch and the ncclProxyStart call could cause a deadlock.
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
+
+  // try to find how many extra threadblocks were allocated for SCKL and adjust gridDim.x
+  int channelTailIndex = ((comm->channels[0].workFifoTail-1)%NCCL_MAX_OPS);
+  int scklNumBlocksPerChannel = comm->channels[0].workFifo[channelTailIndex].elems[0].scklNumBlocksPerChannel;
+  params->gridDim.x /= scklNumBlocksPerChannel;
+
   uint64_t max = 0ULL;
   for (int r=0; r<params->gridDim.x; r++) {
     struct ncclChannel* channel = comm->channels+r;
@@ -319,6 +346,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
 }
 
 static ncclResult_t getPatternInfo(struct ncclInfo* info) {
+
   switch (info->coll) {
     case ncclFuncBroadcast:
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeDown : ncclPatternPipelineFrom; break;
@@ -330,7 +358,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
-      info->pattern = ncclPatternRing; break; // To be change by SCKL
+      info->pattern = ncclPatternSckl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -352,6 +380,9 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
+    case ncclPatternSckl:
+      // SCKL needs a specific number of steps per loop for each connection. it is set properly in ncclProxySaveColl
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->nRanks * info->comm->scklAlgo.nChunks; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -377,8 +408,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_RING) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL))) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCKL))) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize
@@ -419,8 +450,9 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-  int nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
-  proxyArgs->nsteps = info->nstepsPerLoop * nLoops * chunkSteps;
+  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
+  // nstepsPerloop for sckl is incorrect and will be adjusted in ncclProxySaveColl
+  proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
   proxyArgs->protocol = info->protocol;
@@ -433,7 +465,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
 
   TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
       proxyArgs->opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
-      nLoops, proxyArgs->nsteps, info->comm);
+      proxyArgs->nLoops, proxyArgs->nsteps, info->comm);
   return ncclSuccess;
 }
 
@@ -454,8 +486,19 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       CUDACHECK(cudaMemcpyAsync(info->recvbuff, info->sendbuff, info->nBytes, cudaMemcpyDeviceToDevice, info->stream));
     return ncclSuccess;
   }
+  // Alltoall needs a local copy and it has no allocated channel/threadblock. the corresponding chunk is transferred here
+  if (info->coll == ncclFuncAllToAll){
+    if (info->sendbuff == info->recvbuff){
+      WARN("Alltoall needs separate receive and send buffers.");
+      return ncclInvalidArgument;
+    }
+    size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
+    size_t rankOffset = info->comm->rank * nBytesPerRank;
+    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
+  }
 
   struct ncclWorkElem work;
+  // memset(&work, 0, sizeof(struct ncclWorkElem)); // setting all elements to 0 so that active (sckl) array is also 0 all the way.
   struct ncclProxyArgs proxyArgs;
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &work, &proxyArgs));
@@ -468,7 +511,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-
+    work.scklNumBlocksPerChannel = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.nBlocks : 1;
     // Proxy
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
@@ -476,7 +519,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
 
-    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks));
+    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scklAlgo));
 
     info->comm->myParams->gridDim.x++;
     work.coll.bid = bid % nChannels;
@@ -503,6 +546,7 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
+      // SCKL needs to adjust nChannels in the future
       info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
     }
@@ -607,6 +651,8 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
   NCCLCHECK(saveP2pOp(info, w, segment));
   info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
+  // sckl does not generate p2p kernels.
+  w->elems[0].scklNumBlocksPerChannel = 1;
 
   return ncclSuccess;
 }

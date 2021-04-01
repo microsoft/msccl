@@ -15,10 +15,11 @@
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
-#define NCCL_NUM_ALGORITHMS 3 // Tree/Ring/CollNet
+#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
-#define NCCL_ALGO_COLLNET 2
+#define NCCL_ALGO_SCKL 2
+#define NCCL_ALGO_COLLNET 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
 #define NCCL_NUM_PROTOCOLS 3 // Simple/LL/LL128
@@ -116,13 +117,36 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCKL_MAX_NUM_CONN 16
+#define SCKL_MAX_NUM_STEPS 16
+#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 128
 
-struct scklGraph {
-  int nRecvPeers;
-  int nSendPeers;
-  int recv[SCKL_MAX_NUM_CONN];
-  int send[SCKL_MAX_NUM_CONN];
+#define SCKL_SEND 0
+#define SCKL_RECV 1
+
+struct scklThreadBlock {
+  uint8_t peer;
+  uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
+  uint8_t nsteps;
+  // step is used to index into this array. transfers[step] is the addr to transfer.
+  uint16_t transfers[SCKL_MAX_NUM_STEPS];
+};
+
+// gpuId is the one that is in comm->rank
+struct scklAlgorithm {
+  // number of chunks per gpu
+  int nChunks;
+  // number of threadblocks
+  int nBlocks;
+  // rbid is used as an index into this array
+  struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // these two arrays can be inferred from scklTB. they are created to use NCCL API easily
+  int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nsendPeers;
+  int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nrecvPeers;
+
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -151,7 +175,9 @@ struct ncclWorkElem {
   uint16_t nThreads;
   uint16_t funcIndex;
   uint16_t index;
-  uint16_t active;
+  // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
+  uint16_t active[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  uint16_t scklNumBlocksPerChannel;
 
   const void * sendbuff;
   void * recvbuff;
@@ -171,13 +197,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[4];
+    uint64_t align[28];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x10*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x80*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {
@@ -185,7 +211,6 @@ struct ncclChannel {
       struct ncclRing ring;
       struct ncclTree tree;
       struct ncclTree collTree;
-      struct scklGraph sGraph;
 
       int id;
 
@@ -207,6 +232,7 @@ struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
+  struct scklAlgorithm scklAlgo;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;

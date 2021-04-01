@@ -49,8 +49,8 @@ ncclResult_t ArgsCheck(struct ncclInfo* info) {
     info->count = info->nBytes;
     info->datatype = ncclInt8;
   }
-  // SCKL TODO: check if ncclAllToAll needs to be involved
-  if (info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) info->nBytes *= info->comm->nRanks; // count is per rank
+  
+  if (info->coll == ncclFuncAllToAll || info->coll == ncclFuncAllGather || info->coll == ncclFuncReduceScatter) info->nBytes *= info->comm->nRanks; // count is per rank
 
   if (info->op < 0 || info->op >= ncclNumOps) {
     WARN("%s : invalid reduction operation %d", info->opName, info->op);

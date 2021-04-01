@@ -38,7 +38,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll" };
-const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet" };
+const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "CollNet", "SCKL" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
 NCCL_PARAM(GroupCudaStream, "GROUP_CUDA_STREAM", NCCL_GROUP_CUDA_STREAM);
@@ -273,6 +273,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
+  // SCKL algo is copied to the device side
+  comm->hostDevComm.scklAlgo = comm->scklAlgo;
+  
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
@@ -823,18 +826,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected all trees");
 
-  // NetSharedBuffers needs to be set for this to work across nodes.
-  NCCLCHECK(scklGetTopoFromXMLAndSetChannels(comm));
-  // Connect SCKL graph
-  for (int c=0; c<comm->nChannels; c++) {
-    struct ncclChannel* channel = comm->channels+c;
-    if (comm->nRanks == 1) continue;
-    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, channel->sGraph.nRecvPeers, channel->sGraph.recv, channel->sGraph.nSendPeers, channel->sGraph.send), ret, affinity_restore);
-  }
-  // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
-  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-  INFO(NCCL_INIT, "Connected SCKL graph");  
-
   // Check if we can setup CollNet
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
@@ -862,11 +853,23 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
   free(rings);
 
-  // Compute time models for algorithm and protocol combinations
+  // Compute time models for algorithm and protocol combinations.
   NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
 
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
+
+  // NetSharedBuffers needs to be set for this to work across nodes.
+  NCCLCHECK(scklGetAlgoFromXMLAndSetComm(comm));
+  // Connect SCKL graph
+  for (int c=0; c<comm->nChannels; c++) {
+    struct ncclChannel* channel = comm->channels+c;
+    if (comm->nRanks == 1) continue;
+    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, comm->scklAlgo.nrecvPeers, comm->scklAlgo.recvPeers, comm->scklAlgo.nsendPeers, comm->scklAlgo.sendPeers), ret, affinity_restore);
+  }
+  // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
+  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
+  INFO(NCCL_INIT, "Connected SCKL algorithm");  
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));
 

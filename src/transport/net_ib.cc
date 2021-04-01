@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "ibvwrap.h"
+#include <thread>
 
 #define USE_RDMA_WRITE 1
 #define MAXNAMESIZE 64

@@ -602,3 +602,9 @@ class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_COLLNET, NCCL_PROTO_LL128, FUNC,
   public:
 __device__ void run(struct ncclWorkElem* args) { }
 };
+
+template<int PROTO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllReduce, NCCL_ALGO_SCKL, PROTO, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {}
+};

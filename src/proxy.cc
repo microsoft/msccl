@@ -189,7 +189,7 @@ static ncclResult_t SaveProxy(int type, int peer, struct ncclProxyArgs* args) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks) {
+ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct scklAlgorithm* scklAlgo) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
     struct ncclRing* ring = &args->channel->ring;
     if (NeedProxy(proxyRecv, pattern, root, ring, nranks)) NCCLCHECK(SaveProxy(proxyRecv, ring->prev, args));
@@ -218,6 +218,17 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     struct ncclTree* tree = &args->channel->collTree;
     NCCLCHECK(SaveProxy(proxySend, tree->down[0], args));
     NCCLCHECK(SaveProxy(proxyRecv, tree->up, args));
+  }
+  if (pattern == ncclPatternSckl){
+    // nsteps is adjusted here for SCKL algo
+    for (int i=0; i<scklAlgo->nrecvPeers; i++){
+      args->nsteps = scklAlgo->nchunksForRecvPeer[i] * args->nLoops * args->chunkSteps;
+      NCCLCHECK(SaveProxy(proxyRecv, scklAlgo->recvPeers[i], args));
+    }
+    for (int i=0; i<scklAlgo->nsendPeers; i++){
+      args->nsteps = scklAlgo->nchunksForSendPeer[i] * args->nLoops * args->chunkSteps;
+      NCCLCHECK(SaveProxy(proxySend, scklAlgo->sendPeers[i], args));
+    }
   }
   return ncclSuccess;
 }
@@ -426,7 +437,6 @@ ncclResult_t ncclProxySharedBuffersInit(struct ncclComm* comm, int cuda, int* si
   char* buff;
   int* used;
   *size = 2*comm->p2pnChannels*state->slotSize*state->nslots;
-
   if (cuda && state->cudaBuff[0] == NULL) {
     NCCLCHECK(ncclCudaCalloc(&buff, *size));
     NCCLCHECK(ncclCalloc(&used, 2*comm->p2pnChannels*state->nslots));

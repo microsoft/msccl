@@ -10,7 +10,6 @@
 #include "collectives.h"
 #include "devcomm.h"
 
-
 #if __CUDA_ARCH__ >= 800
 #define COLL_UNROLL 8
 #define NCCL_MAX_DEV_ARITY (NCCL_MAX_TREE_ARITY-1)  // Using balanced tree instead of split tree
@@ -41,13 +40,13 @@ static __device__ void load_parallel(void* dst, void* src, size_t size, int tid)
   int* s = (int*)src;
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
 }
-static __device__ void load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm) {
+static __device__ void load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm, int rbid) {
   __syncthreads();
   load_parallel(localWork, hostWork, sizeof(struct ncclWork), tid);
   // Check whether the last operation was aborted and make sure all threads exit
   int abort = tid == 0 ? *(comm->abortFlag) : 0;
   exitIfAbortBarrier(abort);
-  if (tid == 0) hostWork->elems[0].active = 0;
+  if (tid == 0) hostWork->elems[0].active[rbid] = 0;
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
@@ -80,17 +79,22 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   auto f = ncclFunction<FUNCTION, ALGO, PROTO, REDOP, T, UNROLL>();
 
   struct ncclDevComm* comm = first.comm;
-  struct ncclChannel* channel = comm->channels+bid;
+  // SCKL: this needs to be changed such that a mixture of SCKL and NCCL can be handled
+  const int scklNumBlocksPerChannel = first.scklNumBlocksPerChannel;
+
+  int channelId = bid / scklNumBlocksPerChannel;
+  int rbid = bid % scklNumBlocksPerChannel;
+  struct ncclChannel* channel = comm->channels+channelId;
   struct ncclWorkElem* w = NULL;
   uint16_t index = first.index;
 
   /* To optimize for latency, (only) the first operation is passed as argument.*/
-  if (bid == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
+  if (channelId == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
 
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
-      load_coll(&shmem.localWork, channel->workFifo+index, tid, comm);
+      load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, rbid);
     }
     if (tid < w->nThreads) {
       if (w->funcIndex == FINDEX) {
@@ -100,7 +104,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
       }
     }
     index = (index+1) % NCCL_MAX_OPS;
-    if (w->active == 2) {
+    if (w->active[rbid] == 2) {
       return;
     }
     w = NULL;
@@ -134,6 +138,7 @@ __device__ void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkEl
 #define IMPL_COLL3(func, redop, type, ncclType) \
   IMPL_COLL4(func, TREE,    redop, type, ncclType) \
   IMPL_COLL4(func, RING,    redop, type, ncclType) \
+  IMPL_COLL4(func, SCKL,    redop, type, ncclType) \
   IMPL_COLL4(func, COLLNET, redop, type, ncclType)
 
 #if NCCL_TYPE == 0
