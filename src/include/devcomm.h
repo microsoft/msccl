@@ -120,6 +120,16 @@ struct ncclRing {
 #define SCKL_MAX_NUM_STEPS 16
 #define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 128
 
+#define SCKL_THIS_INPUT 0
+#define SCKL_THIS_OUTPUT 1
+
+struct scklTransfer {
+  uint16_t offset;
+  uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  int8_t dependence; // -1 if not dependent on any threadblock
+  int8_t dependenceStep;
+};
+
 #define SCKL_SEND 0
 #define SCKL_RECV 1
 
@@ -127,8 +137,9 @@ struct scklThreadBlock {
   uint8_t peer;
   uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
   uint8_t nsteps;
+  uint8_t channelId; // not going to be used for this version. just setting it up for the next version
   // step is used to index into this array. transfers[step] is the addr to transfer.
-  uint16_t transfers[SCKL_MAX_NUM_STEPS];
+  struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
 };
 
 // gpuId is the one that is in comm->rank
@@ -232,6 +243,7 @@ struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
+  uint64_t* scklFlags; // these are used to serialize between thread blocks
   struct scklAlgorithm scklAlgo;
 
   // Flag to ask NCCL kernels to abort

@@ -171,6 +171,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
+  CUDACHECK(cudaFree(comm->hostDevComm.scklFlags));
   CUDACHECK(cudaFree(comm->devComm));
 
   for (int channel=0; channel<MAXCHANNELS; channel++)
@@ -267,6 +268,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   // Duplicate the channels on the device
   NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.channels, comm->p2pnChannels));
   NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.channels, comm->channels, comm->p2pnChannels));
+
+  // allocate enough sckl flags to control inter threadblock dependences
+  NCCLCHECK(ncclCudaCalloc(&comm->hostDevComm.scklFlags, comm->p2pnChannels * SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL));
 
   // Copy userRanks and peers
   for (int r=0; r<comm->p2pnChannels; r++) {

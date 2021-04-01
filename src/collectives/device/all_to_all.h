@@ -32,6 +32,8 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nChunks = scklAlgo->nChunks;
       // assume that size is divisible by nchunks
       const ssize_t sizePerChunk = size/nChunks;
+      const int workIndex = args->index+1; // sckl flags all start out with 0. 
+      volatile uint64_t* scklFlags = comm->scklFlags;
       // Compute pointers
       const T * __restrict__ thisInput = (const T*)args->sendbuff;
       T * __restrict__ thisOutput = (T*)args->recvbuff;
@@ -50,11 +52,25 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         ssize_t offset;
         int nelem = min(realChunkSize, sizePerChunk-chunkOffset);
         for (int i = 0; i < sckltb->nsteps; i++){
-          offset = chunkOffset + sckltb->transfers[i] * sizePerChunk;
+          struct scklTransfer* sckltran = &sckltb->transfers[i];
+          offset = chunkOffset + sckltran->offset * sizePerChunk;
           if (sckltb->type == SCKL_SEND){
+            int8_t dependence = sckltran->dependence;
+            int8_t dependenceStep = sckltran->dependenceStep;
+            if (dependence >= 0){
+              if (tid == 0){
+                uint64_t readFlag = *(scklFlags + dependence);
+                while (readFlag / SCKL_MAX_NUM_STEPS != workIndex || (readFlag % SCKL_MAX_NUM_STEPS) < dependenceStep) readFlag = *(scklFlags + dependence);
+              }
+              __syncthreads();
+            }
             prims.directSend(thisInput + offset, offset, nelem);
           } else if (sckltb->type == SCKL_RECV) {
             prims.directRecv(thisOutput + offset, offset, nelem);
+            if (tid == 0){
+              uint64_t curFlag = workIndex * SCKL_MAX_NUM_STEPS + i;
+              scklFlags[bid] = curFlag;
+            }
           }
         }
       }
