@@ -9,7 +9,6 @@
 
 #include "collectives.h"
 #include "devcomm.h"
-#include <stdio.h>
 
 #if __CUDA_ARCH__ >= 800
 #define COLL_UNROLL 8
@@ -139,7 +138,7 @@ __device__ void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkEl
 #define IMPL_COLL3(func, redop, type, ncclType) \
   IMPL_COLL4(func, TREE,    redop, type, ncclType) \
   IMPL_COLL4(func, RING,    redop, type, ncclType) \
-  IMPL_COLL4(func, SCKL, redop, type, ncclType) \
+  IMPL_COLL4(func, SCKL,    redop, type, ncclType) \
   IMPL_COLL4(func, COLLNET, redop, type, ncclType)
 
 #if NCCL_TYPE == 0

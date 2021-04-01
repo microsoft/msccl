@@ -19,7 +19,7 @@ __device__ struct ncclShmemData* ncclShmem;
   NCCL_FUNC5(func, TREE,    redop, type), \
   NCCL_FUNC5(func, RING,    redop, type), \
   NCCL_FUNC5(func, COLLNET, redop, type), \
-  NCCL_FUNC5(func, SCKL, redop, type)
+  NCCL_FUNC5(func, SCKL,    redop, type)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(func, redop) \
