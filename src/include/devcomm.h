@@ -124,7 +124,7 @@ struct ncclRing {
 #define SCKL_THIS_OUTPUT 1
 
 struct scklTransfer {
-  uint16_t offset;
+  int16_t offset;
   uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
   int8_t dependence; // -1 if not dependent on any threadblock
   int8_t dependenceStep;

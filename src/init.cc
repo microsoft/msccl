@@ -873,7 +873,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   }
   // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-  INFO(NCCL_INIT, "Connected SCKL algorithm");  
+  INFO(NCCL_INIT, "Connected SCKL algorithm");
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));
 
