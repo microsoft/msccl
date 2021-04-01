@@ -43,8 +43,10 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nChunks = scklAlgo->nChunks;
       // assume that size is divisible by nchunks
       const ssize_t sizePerChunk = size/nChunks;
-      const int workIndex = args->index+1; // sckl flags all start out with 0. 
-      volatile uint64_t* scklFlags = comm->scklFlags;
+      // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
+      // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
+      const int workIndex = args->index+1;
+      volatile struct scklFlag* scklFlags = comm->scklFlags;
       // Compute pointers
       T * thisInput = (T*)args->sendbuff;
       T * thisOutput = (T*)args->recvbuff;
@@ -67,16 +69,16 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
           offset = chunkOffset + sckltran->offset * sizePerChunk;
           T* thisbuffer = (sckltran->buffer == SCKL_THIS_INPUT) ? thisInput : thisOutput;
           if (sckltb->type == SCKL_SEND){
-            int8_t dependence = sckltran->dependence;
-            int8_t dependenceStep = sckltran->dependenceStep;
-            if (dependence >= 0){
+            int8_t dependentBid = sckltran->dependentRbid + scklNumBlocksPerChannel * channelId;
+            int8_t dependentStep = sckltran->dependentStep;
+            if (sckltran->dependentRbid >= 0){
               if (tid == 0){
                 uint64_t readFlag;
                 int readGlobalIterStep;
                 int readWorkIndex;
-                int gaolGlobalIterStep = GLOBALITERSTEP(iter, dependenceStep);
+                int gaolGlobalIterStep = GLOBALITERSTEP(iter, dependentStep);
                 do {
-                  readFlag = *(scklFlags + dependence);
+                  readFlag = (scklFlags + dependentBid)->flag;
                   GETFLAGITEMS(readGlobalIterStep, readWorkIndex, readFlag);
                 } while (readWorkIndex != workIndex || readGlobalIterStep < gaolGlobalIterStep);
               }
@@ -88,7 +90,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
             if (tid == 0){
               uint64_t curFlag;
               SETFLAG(iter, i, workIndex, curFlag);
-              scklFlags[bid] = curFlag;
+              scklFlags[bid].flag = curFlag;
             }
           }
         }

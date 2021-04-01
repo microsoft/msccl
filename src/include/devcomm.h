@@ -126,8 +126,8 @@ struct ncclRing {
 struct scklTransfer {
   int16_t offset;
   uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
-  int8_t dependence; // -1 if not dependent on any threadblock
-  int8_t dependenceStep;
+  int8_t dependentRbid; // -1 if not dependent on any threadblock
+  int8_t dependentStep;
 };
 
 #define SCKL_SEND 0
@@ -239,11 +239,16 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
+struct scklFlag {
+  uint64_t flag;
+  uint64_t align[3]; // To avoid false sharing
+};
+
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  uint64_t* scklFlags; // these are used to serialize between thread blocks
+  struct scklFlag* scklFlags; // these are used to serialize between thread blocks
   struct scklAlgorithm scklAlgo;
 
   // Flag to ask NCCL kernels to abort

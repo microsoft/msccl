@@ -686,8 +686,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   NCCLCHECK(xmlGetAttrStr(stepNode, "buffer", &buffer));
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
                   sTB->transfers[s].offset = offset;
-                  sTB->transfers[s].dependence = depend_bid;
-                  sTB->transfers[s].dependenceStep = depend_step;
+                  sTB->transfers[s].dependentRbid = depend_bid;
+                  sTB->transfers[s].dependentStep = depend_step;
                   if (strcmp(buffer, "input") == 0){
                     sTB->transfers[s].buffer = SCKL_THIS_INPUT;
                   } else if (strcmp(buffer, "output") == 0) {
