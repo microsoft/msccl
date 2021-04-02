@@ -549,7 +549,7 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
       if (hasScklAlgo && info->algorithm != NCCL_ALGO_SCKL){
-        WARN("SCKL algorithms can be used asynchronously only when all are the same algorithm.");
+        WARN("SCKL algorithms can only be used asynchronously with other SCKL algorithm.");
         return ncclInvalidUsage;
       }
       // SCKL needs to adjust nChannels in the future

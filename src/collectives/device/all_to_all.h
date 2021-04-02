@@ -79,6 +79,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
           } else if (sckltb->type == SCKL_RECV) {
             prims.directRecv(thisbuffer + offset, offset, nelem);
             if (tid == 0){
+              __threadfence();
               uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
               scklFlags[bid].flag = curFlag;
             }
