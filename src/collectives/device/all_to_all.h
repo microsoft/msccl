@@ -8,16 +8,14 @@
 #include "primitives.h"
 #include "collectives.h"
 
-template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
-  private:
-
 #define SCKL_MAX_ITER 65536
 
 // flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
    SCKL_MAX_ITER*SCKL_MAX_NUM_STEPS*__WORKINDEX__ + (__GRIDOFFSET_ITER__ * SCKL_MAX_NUM_STEPS + __STEP__)
 
+template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       const int tid = threadIdx.x;
