@@ -120,6 +120,16 @@ struct ncclRing {
 #define SCKL_MAX_NUM_STEPS 16
 #define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 128
 
+#define SCKL_INPUT_BUFFER 0
+#define SCKL_OUTPUT_BUFFER 1
+
+struct scklTransfer {
+  int16_t offset;
+  uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  int8_t dependentRbid; // -1 if not dependent on any threadblock
+  int8_t dependentStep;
+};
+
 #define SCKL_SEND 0
 #define SCKL_RECV 1
 
@@ -127,8 +137,9 @@ struct scklThreadBlock {
   uint8_t peer;
   uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
   uint8_t nsteps;
+  uint8_t channelId; // not going to be used for this version. just setting it up for the next version
   // step is used to index into this array. transfers[step] is the addr to transfer.
-  uint16_t transfers[SCKL_MAX_NUM_STEPS];
+  struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
 };
 
 // gpuId is the one that is in comm->rank
@@ -228,10 +239,17 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
+struct scklFlag {
+  uint64_t flag;
+  uint64_t align[3]; // To avoid false sharing
+};
+
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
+  // allocate enough sckl flags to synchronize across thread blocks
+  struct scklFlag scklFlags[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS]; 
   struct scklAlgorithm scklAlgo;
 
   // Flag to ask NCCL kernels to abort

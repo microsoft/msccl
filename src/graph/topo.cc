@@ -635,11 +635,12 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
           for (int t=0; t<node->nSubs; t++) {
             struct ncclXmlNode* threadblockNode = node->subs[t];
             if (strcmp(threadblockNode->name, "threadblock") == 0){
-              int rbid, peer;
+              int rbid, peer, channelId;
               const char* type;
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "rbid", &rbid));
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "peer", &peer));
               NCCLCHECK(xmlGetAttrStr(threadblockNode, "type", &type));
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
               if (rbid >= SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
                 WARN("Too many thread blocks are requested. Max thread blocks: %d, requested: %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL, rbid+1);
                 return ncclInternalError;
@@ -662,15 +663,15 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               }
               // setting all transfers to -1 so that the ones not set are passed during runtime.
               for (int st=0; st<SCKL_MAX_NUM_STEPS; st++){
-                sTB->transfers[st] = -1;
+                sTB->transfers[st].offset = -1;
               }
               int ntransfers = 0;
               for (int st=0; st<threadblockNode->nSubs; st++) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
-                  int s, addr;
+                  int s, offset, depend_bid, depend_step;
+                  const char* buffer;
                   NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
-                  NCCLCHECK(xmlGetAttrInt(stepNode, "addr", &addr));
                   if (s >= SCKL_MAX_NUM_STEPS){
                     WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
                     return ncclInternalError;
@@ -679,8 +680,22 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                     WARN("step must be positive: step %d", s);
                     return ncclInternalError;
                   }
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "offset", &offset));
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "depend_bid", &depend_bid));
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "depend_step", &depend_step));
+                  NCCLCHECK(xmlGetAttrStr(stepNode, "buffer", &buffer));
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
-                  sTB->transfers[s] = addr;
+                  sTB->transfers[s].offset = offset;
+                  sTB->transfers[s].dependentRbid = depend_bid;
+                  sTB->transfers[s].dependentStep = depend_step;
+                  if (strcmp(buffer, "input") == 0){
+                    sTB->transfers[s].buffer = SCKL_INPUT_BUFFER;
+                  } else if (strcmp(buffer, "output") == 0) {
+                    sTB->transfers[s].buffer = SCKL_OUTPUT_BUFFER;
+                  } else {
+                    WARN("type of buffer is not supported: %s", buffer);
+                    return ncclInternalError;
+                  }
                   ntransfers++;
                 }
               }
@@ -699,7 +714,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
         }
       }
     }
-    // free(xml);
+    free(xml);
   }
   return ncclSuccess;
 }

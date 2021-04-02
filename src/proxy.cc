@@ -229,6 +229,11 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
       args->nsteps = scklAlgo->nchunksForSendPeer[i] * args->nLoops * args->chunkSteps;
       NCCLCHECK(SaveProxy(proxySend, scklAlgo->sendPeers[i], args));
     }
+
+    if (args->connector && args->connector->conn.shared != 0){
+      WARN("SCKL needs NET_SHARED_BUFFERS set to 0");
+      return ncclInvalidArgument;
+    }
   }
   return ncclSuccess;
 }
