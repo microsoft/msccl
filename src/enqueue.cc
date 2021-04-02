@@ -544,8 +544,14 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     size_t channelSize = NCCL_AGG_CHANNEL_SIZE * comm->nRanks;  // scale channel size based on nranks as latency increases
     // Reduce the per-channel size if we cannot fully utilize the channels
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
+    // making sure whether all are SCKL algorithms or none at all.
+    int hasScklAlgo = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCKL);
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
+      if (hasScklAlgo && info->algorithm != NCCL_ALGO_SCKL){
+        WARN("SCKL algorithms can be used asynchronously only when all are the same algorithm.");
+        return ncclInvalidUsage;
+      }
       // SCKL needs to adjust nChannels in the future
       info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));

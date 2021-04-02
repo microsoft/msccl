@@ -120,8 +120,8 @@ struct ncclRing {
 #define SCKL_MAX_NUM_STEPS 16
 #define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 128
 
-#define SCKL_THIS_INPUT 0
-#define SCKL_THIS_OUTPUT 1
+#define SCKL_INPUT_BUFFER 0
+#define SCKL_OUTPUT_BUFFER 1
 
 struct scklTransfer {
   int16_t offset;
@@ -248,7 +248,8 @@ struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  struct scklFlag* scklFlags; // these are used to serialize between thread blocks
+  // allocate enough sckl flags to synchronize across thread blocks
+  struct scklFlag scklFlags[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS]; 
   struct scklAlgorithm scklAlgo;
 
   // Flag to ask NCCL kernels to abort

@@ -90,19 +90,27 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 
   /* To optimize for latency, (only) the first operation is passed as argument.*/
   if (channelId == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
-
+  int wrappedAround = 0;
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
       load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, rbid);
     }
     if (tid < w->nThreads) {
+      // SCKL uses w->index as an indicator for the progress this threadblock has made. in case index wraps around due to overflow, w->index is increament so that the progress invariant is still true
+      if (wrappedAround){
+        if (tid == 0) {
+          w->index += NCCL_MAX_OPS;
+        }
+      }
+      
       if (w->funcIndex == FINDEX) {
         f.run(w);
       } else {
         ncclFuncs[w->funcIndex](w);
       }
     }
+    if (index == NCCL_MAX_OPS-1) wrappedAround = 1;
     index = (index+1) % NCCL_MAX_OPS;
     if (w->active[rbid] == 2) {
       return;

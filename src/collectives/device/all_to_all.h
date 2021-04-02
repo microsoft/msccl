@@ -12,14 +12,11 @@ template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
   private:
 
-#define GLOBALITERSTEP(GLOBALITER,STEP) \
-  (GLOBALITER * SCKL_MAX_NUM_STEPS + STEP)
+#define SCKL_MAX_ITER 65536
 
-#define SETFLAG(GLOBALITER,STEP,WORKINDEX,FLAG) \
-  FLAG = NCCL_MAX_OPS * GLOBALITERSTEP(GLOBALITER,STEP) + WORKINDEX
-#define GETFLAGITEMS(GLOBALITERSTEP,WORKINDEX,FLAG) \
-  WORKINDEX = FLAG % NCCL_MAX_OPS; \
-  GLOBALITERSTEP = FLAG / NCCL_MAX_OPS
+// flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
+#define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
+   SCKL_MAX_ITER*SCKL_MAX_NUM_STEPS*__WORKINDEX__ + (__GRIDOFFSET_ITER__ * SCKL_MAX_NUM_STEPS + __STEP__)
 
   public:
     __device__ void run(struct ncclWorkElem* args) {
@@ -67,20 +64,14 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
           struct scklTransfer* sckltran = &sckltb->transfers[i];
           if (sckltran->offset == -1) continue;
           offset = chunkOffset + sckltran->offset * sizePerChunk;
-          T* thisbuffer = (sckltran->buffer == SCKL_THIS_INPUT) ? thisInput : thisOutput;
+          T* thisbuffer = (sckltran->buffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           if (sckltb->type == SCKL_SEND){
             int8_t dependentBid = sckltran->dependentRbid + scklNumBlocksPerChannel * channelId;
             int8_t dependentStep = sckltran->dependentStep;
             if (sckltran->dependentRbid >= 0){
               if (tid == 0){
-                uint64_t readFlag;
-                int readGlobalIterStep;
-                int readWorkIndex;
-                int gaolGlobalIterStep = GLOBALITERSTEP(iter, dependentStep);
-                do {
-                  readFlag = (scklFlags + dependentBid)->flag;
-                  GETFLAGITEMS(readGlobalIterStep, readWorkIndex, readFlag);
-                } while (readWorkIndex != workIndex || readGlobalIterStep < gaolGlobalIterStep);
+                uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+                while ((scklFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
             }
@@ -88,8 +79,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
           } else if (sckltb->type == SCKL_RECV) {
             prims.directRecv(thisbuffer + offset, offset, nelem);
             if (tid == 0){
-              uint64_t curFlag;
-              SETFLAG(iter, i, workIndex, curFlag);
+              uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
               scklFlags[bid].flag = curFlag;
             }
           }

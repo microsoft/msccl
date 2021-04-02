@@ -689,9 +689,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   sTB->transfers[s].dependentRbid = depend_bid;
                   sTB->transfers[s].dependentStep = depend_step;
                   if (strcmp(buffer, "input") == 0){
-                    sTB->transfers[s].buffer = SCKL_THIS_INPUT;
+                    sTB->transfers[s].buffer = SCKL_INPUT_BUFFER;
                   } else if (strcmp(buffer, "output") == 0) {
-                    sTB->transfers[s].buffer = SCKL_THIS_OUTPUT;
+                    sTB->transfers[s].buffer = SCKL_OUTPUT_BUFFER;
                   } else {
                     WARN("type of buffer is not supported: %s", buffer);
                     return ncclInternalError;
