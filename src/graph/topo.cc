@@ -707,15 +707,14 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               }
               // setting the summary of the sckl aglorithm
               scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
+              sTB->rid = scklChannel->nsendPeers + scklChannel->nrecvPeers;
               if (sTB->type == SCKL_SEND){
                 scklChannel->sendPeers[scklChannel->nsendPeers] = peer;
                 scklChannel->nchunksForSendPeer[scklChannel->nsendPeers] = ntransfers;
-                sTB->rid = scklChannel->nsendPeers;
                 scklChannel->nsendPeers++;
               } else if (sTB->type == SCKL_RECV){
                 scklChannel->recvPeers[scklChannel->nrecvPeers] = peer;
                 scklChannel->nchunksForRecvPeer[scklChannel->nrecvPeers] = ntransfers;
-                sTB->rid = scklChannel->nsendPeers;
                 scklChannel->nrecvPeers++;
               }
               scklChannel->nBlocksForChannel = std::max(scklChannel->nBlocksForChannel, sTB->rid+1);
