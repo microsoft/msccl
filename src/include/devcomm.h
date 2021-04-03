@@ -126,7 +126,7 @@ struct ncclRing {
 struct scklTransfer {
   int16_t offset;
   uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
-  int8_t dependentRbid; // -1 if not dependent on any threadblock
+  int8_t dependentBid; // -1 if not dependent on any threadblock
   int8_t dependentStep;
 };
 
@@ -137,27 +137,34 @@ struct scklThreadBlock {
   uint8_t peer;
   uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
   uint8_t nsteps;
-  uint8_t channelId; // not going to be used for this version. just setting it up for the next version
+  uint8_t channelId; // associated channel
+  uint8_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
 };
 
-// gpuId is the one that is in comm->rank
-struct scklAlgorithm {
-  // number of chunks per gpu
-  int nChunks;
-  // number of threadblocks
-  int nBlocks;
-  // rbid is used as an index into this array
-  struct scklThreadBlock scklTB[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  // these two arrays can be inferred from scklTB. they are created to use NCCL API easily
+struct scklChannelInfo {
   int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nsendPeers;
   int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   int nrecvPeers;
+  int nBlocksForChannel;
+};
 
+// gpuId is the one that is in comm->rank
+struct scklAlgorithm {
+  // max(#chunks in input, #chunks in output)
+  int nchunksPerLoop;
+  // total number of threadblocks needed by sckl algorithm
+  int nBlocks;
+  // bid is used as an index into this array
+  struct scklThreadBlock scklTB[MAXCHANNELS*SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // number of channels needed by sckl algorithm
+  int nChannels;
+  // the arrays in this struct can be inferred from scklTB. they are created to use NCCL API easily
+  struct scklChannelInfo scklChannels[MAXCHANNELS];
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -188,7 +195,8 @@ struct ncclWorkElem {
   uint16_t index;
   // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
   uint16_t active[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  uint16_t scklNumBlocksPerChannel;
+  uint8_t isScklAlgorithm; // right now, 0 indicates not a sckl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scklAlgorithms.
+  uint8_t nActives; // if it is a sckl algorithm, it must be set to associated channel number of thread blocks. if not a sckl algorithm, it is 1.
 
   const void * sendbuff;
   void * recvbuff;

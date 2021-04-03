@@ -622,9 +622,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
     memset(scklAlgo, 0, sizeof(struct scklAlgorithm));
     struct ncclXmlNode* topNode;
     NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
-    int nchunks;
-    NCCLCHECK(xmlGetAttrInt(topNode, "nchunks", &nchunks));
-    scklAlgo->nChunks = nchunks;
+    int nchunksPerLoop;
+    NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
+    scklAlgo->nchunksPerLoop  = nchunksPerLoop;
     for (int s=0; s<topNode->nSubs; s++) {
       struct ncclXmlNode* node = topNode->subs[s];
       if (strcmp(node->name, "gpu") == 0){
@@ -635,24 +635,30 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
           for (int t=0; t<node->nSubs; t++) {
             struct ncclXmlNode* threadblockNode = node->subs[t];
             if (strcmp(threadblockNode->name, "threadblock") == 0){
-              int rbid, peer, channelId;
+              int bid, peer, channelId;
               const char* type;
-              NCCLCHECK(xmlGetAttrInt(threadblockNode, "rbid", &rbid));
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "bid", &bid));
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "peer", &peer));
               NCCLCHECK(xmlGetAttrStr(threadblockNode, "type", &type));
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
-              if (rbid >= SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-                WARN("Too many thread blocks are requested. Max thread blocks: %d, requested: %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL, rbid+1);
-                return ncclInternalError;
-              }
-              if (rbid < 0){
-                WARN("rbid must be positive. rbid: %d", rbid);
-                return ncclInternalError;
+              if (bid < 0){
+                WARN("bid must be positive. bid: %d", bid);
+                return ncclInvalidUsage;
               }              
-              scklAlgo->nBlocks = std::max(comm->scklAlgo.nBlocks, rbid+1);
-              struct scklThreadBlock* sTB = &scklAlgo->scklTB[rbid];
+              scklAlgo->nBlocks = std::max(scklAlgo->nBlocks, bid+1);
+              if (bid >= MAXCHANNELS*SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("Too many thread blocks are requested. Max thread blocks: %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL*MAXCHANNELS);
+                return ncclInvalidUsage;
+              }
+              struct scklThreadBlock* sTB = &scklAlgo->scklTB[bid];
               sTB->nsteps = 0;
               sTB->peer = peer;
+              if (channelId < 0 || channelId > MAXCHANNELS){
+                WARN("ChannelId needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
+                return ncclInvalidUsage;
+              }
+              sTB->channelId = channelId;
+              scklAlgo->nChannels = std::max(scklAlgo->nChannels, channelId+1);
               if (strcmp(type, "send") == 0){
                 sTB->type = SCKL_SEND;
               } else if (strcmp(type, "recv") == 0) {
@@ -686,7 +692,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   NCCLCHECK(xmlGetAttrStr(stepNode, "buffer", &buffer));
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
                   sTB->transfers[s].offset = offset;
-                  sTB->transfers[s].dependentRbid = depend_bid;
+                  sTB->transfers[s].dependentBid = depend_bid;
                   sTB->transfers[s].dependentStep = depend_step;
                   if (strcmp(buffer, "input") == 0){
                     sTB->transfers[s].buffer = SCKL_INPUT_BUFFER;
@@ -694,20 +700,28 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                     sTB->transfers[s].buffer = SCKL_OUTPUT_BUFFER;
                   } else {
                     WARN("type of buffer is not supported: %s", buffer);
-                    return ncclInternalError;
+                    return ncclInvalidUsage;
                   }
                   ntransfers++;
                 }
               }
               // setting the summary of the sckl aglorithm
+              scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
               if (sTB->type == SCKL_SEND){
-                scklAlgo->sendPeers[scklAlgo->nsendPeers] = peer;
-                scklAlgo->nchunksForSendPeer[scklAlgo->nsendPeers] = ntransfers;
-                scklAlgo->nsendPeers++;
+                scklChannel->sendPeers[scklChannel->nsendPeers] = peer;
+                scklChannel->nchunksForSendPeer[scklChannel->nsendPeers] = ntransfers;
+                sTB->rid = scklChannel->nsendPeers;
+                scklChannel->nsendPeers++;
               } else if (sTB->type == SCKL_RECV){
-                scklAlgo->recvPeers[scklAlgo->nrecvPeers] = peer;
-                scklAlgo->nchunksForRecvPeer[scklAlgo->nrecvPeers] = ntransfers;
-                scklAlgo->nrecvPeers++;
+                scklChannel->recvPeers[scklChannel->nrecvPeers] = peer;
+                scklChannel->nchunksForRecvPeer[scklChannel->nrecvPeers] = ntransfers;
+                sTB->rid = scklChannel->nsendPeers;
+                scklChannel->nrecvPeers++;
+              }
+              scklChannel->nBlocksForChannel = std::max(scklChannel->nBlocksForChannel, sTB->rid+1);
+              if (scklChannel->nBlocksForChannel > SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("Too many sends/recv per channel. Max allowed %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                return ncclInvalidUsage;
               }
             }
           }

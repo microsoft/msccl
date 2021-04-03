@@ -865,7 +865,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
     if (comm->nRanks == 1) continue;
-    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, comm->scklAlgo.nrecvPeers, comm->scklAlgo.recvPeers, comm->scklAlgo.nsendPeers, comm->scklAlgo.sendPeers), ret, affinity_restore);
+    struct scklChannelInfo* scklChannel = &comm->scklAlgo.scklChannels[c % comm->scklAlgo.nChannels];
+    NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scklChannel->nrecvPeers, scklChannel->recvPeers, scklChannel->nsendPeers, scklChannel->sendPeers), ret, affinity_restore);
   }
   // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
