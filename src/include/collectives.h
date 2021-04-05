@@ -32,8 +32,8 @@
 #define DECL3(func, redop, type) \
   DECL4(func, RING,    redop, type) \
   DECL4(func, TREE,    redop, type) \
-  DECL4(func, COLLNET, redop, type) \
-  DECL4(func, SCKL, redop, type)
+  DECL4(func, SCKL,    redop, type) \
+  DECL4(func, COLLNET, redop, type)
 
 #define DECL2(func, redop) \
   DECL3(func, redop, int8_t) \

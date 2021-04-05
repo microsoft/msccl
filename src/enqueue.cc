@@ -17,8 +17,8 @@
 #define NCCL_FUNC4(func, redop, type) \
   (void*)NCCL_FUNC5(func, TREE,    redop, type), \
   (void*)NCCL_FUNC5(func, RING,    redop, type), \
-  (void*)NCCL_FUNC5(func, COLLNET, redop, type), \
-  (void*)NCCL_FUNC5(func, SCKL, redop, type)
+  (void*)NCCL_FUNC5(func, SCKL,    redop, type), \
+  (void*)NCCL_FUNC5(func, COLLNET, redop, type)
 
 // Must be consistent with ncclDataType_t
 #define NCCL_FUNCS3A(func, redop) \
@@ -340,7 +340,15 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   info->nChannels = nc;
   // SCKL needs comm->scklAlgo.nChannels. if there are more channels, extra ones replicate SCKL algorithm
   if (info->algorithm == NCCL_ALGO_SCKL){
-    info->nChannels = (nc/comm->scklAlgo.nChannels)*comm->scklAlgo.nChannels;
+    info->nChannels = ROUNDUP(nc,comm->scklAlgo.nChannels);
+    if (info->nChannels > comm->nChannels){
+      WARN("Too few channels allocated for SCKL.");
+      return ncclInvalidUsage;
+    }
+    if (info->nChannels < comm->scklAlgo.nChannels){
+      WARN("SCKL algo should have at least %d channels but ended up with %d channels.", comm->scklAlgo.nChannels, comm->nChannels);
+      return ncclInternalError;
+    }
   }
   info->nThreads = nt;
   return ncclSuccess;

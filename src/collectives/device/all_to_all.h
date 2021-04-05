@@ -18,8 +18,6 @@ template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      return;
-
       struct ncclDevComm* comm = args->comm;
       struct scklAlgorithm* scklAlgo = &comm->scklAlgo;
       const int tid = threadIdx.x;
@@ -40,7 +38,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int totalNChunksPerLoopPerRank = nScklInstnaces*nchunksPerLoopPerRank;
       const ssize_t loopSize = totalNChunksPerLoopPerRank*(ssize_t)chunkSize;
       const ssize_t size = args->coll.count;
-      const int sizePerRank = size/nranks;
+      const int sizePerRank = size;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
@@ -60,7 +58,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
         ssize_t chunkOffset = gridOffset + scklIndex*nchunksPerLoopPerRank*realChunkSize;
         ssize_t offset;
-        int nelem = min(realChunkSize, size-chunkOffset);
+        int nelem = min(realChunkSize, sizePerRank-chunkOffset);
         for (int i = 0; i < scklTB->nsteps; i++){
           struct scklTransfer* sckltran = &scklTB->transfers[i];
           if (sckltran->offset == -1) continue;

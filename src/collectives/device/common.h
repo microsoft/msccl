@@ -9,6 +9,7 @@
 
 #include "collectives.h"
 #include "devcomm.h"
+#include <stdio.h>
 
 #if __CUDA_ARCH__ >= 800
 #define COLL_UNROLL 8
@@ -83,7 +84,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   int activeId = 0;
   if (ALGO == NCCL_ALGO_SCKL){
     int rbid = bid % comm->scklAlgo.nBlocks;
-    channelId = bid / comm->scklAlgo.nBlocks + comm->scklAlgo.scklTB[rbid].channelId;
+    channelId = (bid / comm->scklAlgo.nBlocks) * comm->scklAlgo.nChannels + comm->scklAlgo.scklTB[rbid].channelId;
     activeId = comm->scklAlgo.scklTB[rbid].rid;
   }
   struct ncclChannel* channel = comm->channels+channelId;
