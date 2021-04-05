@@ -36,7 +36,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nranks = comm->nRanks;
       const int nchunksPerLoopPerRank = scklAlgo->nchunksPerLoop/nranks;
       const int totalNChunksPerLoopPerRank = nScklInstnaces*nchunksPerLoopPerRank;
-      const ssize_t loopSize = totalNChunksPerLoopPerRank*(ssize_t)chunkSize;
+      const ssize_t loopSize = (ssize_t)chunkSize;
       const ssize_t size = args->coll.count;
       const int sizePerRank = size;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -53,7 +53,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
 
       ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 1, 1, 1, FUNC>
         prims(tid, nthreads, &recvPeer, &sendPeer, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerRank; gridOffset += loopSize, iter++) {
+      for (ssize_t gridOffset = 0, iter = 0; gridOffset < size/nchunksPerLoopPerRank; gridOffset += loopSize, iter++) {
         int realChunkSize = min(chunkSize, DIVUP(sizePerRank-gridOffset,totalNChunksPerLoopPerRank));
         ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
         ssize_t chunkOffset = gridOffset + scklIndex*nchunksPerLoopPerRank*realChunkSize;
@@ -62,7 +62,7 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
         for (int i = 0; i < scklTB->nsteps; i++){
           struct scklTransfer* sckltran = &scklTB->transfers[i];
           if (sckltran->offset == -1) continue;
-          offset = chunkOffset + sckltran->offset * realChunkSize;
+          offset = chunkOffset + sckltran->offset * (sizePerRank / nchunksPerLoopPerRank);
           T* thisbuffer = (sckltran->buffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           if (scklTB->type == SCKL_SEND){
             int8_t dependentBid = sckltran->dependentBid + scklIndex * scklNBlocks;
