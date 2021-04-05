@@ -341,11 +341,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   // SCKL needs comm->scklAlgo.nChannels. if there are more channels, extra ones replicate SCKL algorithm
   if (info->algorithm == NCCL_ALGO_SCKL){
     info->nChannels = ROUNDUP(nc,comm->scklAlgo.nChannels);
-    if (info->nChannels > comm->nChannels){
-      WARN("Too few channels allocated for SCKL.");
-      return ncclInvalidUsage;
-    }
-    if (info->nChannels < comm->scklAlgo.nChannels){
+    if (info->nChannels > comm->nChannels)
+      info->nChannels -= comm->scklAlgo.nChannels;
+    if (info->nChannels > comm->nChannels || info->nChannels < comm->scklAlgo.nChannels){
       WARN("SCKL algo should have at least %d channels but ended up with %d channels.", comm->scklAlgo.nChannels, comm->nChannels);
       return ncclInternalError;
     }

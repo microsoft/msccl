@@ -36,9 +36,9 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
       const int nranks = comm->nRanks;
       const int nchunksPerLoopPerRank = scklAlgo->nchunksPerLoop/nranks;
       const int totalNChunksPerLoopPerRank = nScklInstnaces*nchunksPerLoopPerRank;
-      const ssize_t loopSize = (ssize_t)chunkSize;
+      const ssize_t loopSize = (ssize_t)chunkSize*nScklInstnaces;
       const ssize_t size = args->coll.count;
-      const int sizePerRank = size;
+      const ssize_t sizePerScklChunk = size/nchunksPerLoopPerRank;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
@@ -53,16 +53,16 @@ class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
 
       ncclPrimitives<UNROLL, ALLTOALL_CHUNKSTEPS/ALLTOALL_SLICESTEPS, ALLTOALL_SLICESTEPS, T, 1, 1, 1, FUNC>
         prims(tid, nthreads, &recvPeer, &sendPeer, thisOutput, stepSize, channel, comm, ncclShmem->ptrs, 0);
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < size/nchunksPerLoopPerRank; gridOffset += loopSize, iter++) {
-        int realChunkSize = min(chunkSize, DIVUP(sizePerRank-gridOffset,totalNChunksPerLoopPerRank));
+      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScklChunk; gridOffset += loopSize, iter++) {
+        int realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
         ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
-        ssize_t chunkOffset = gridOffset + scklIndex*nchunksPerLoopPerRank*realChunkSize;
+        ssize_t chunkOffset = gridOffset + scklIndex*realChunkSize;
         ssize_t offset;
-        int nelem = min(realChunkSize, sizePerRank-chunkOffset);
+        int nelem = min(realChunkSize, sizePerScklChunk-chunkOffset);
         for (int i = 0; i < scklTB->nsteps; i++){
           struct scklTransfer* sckltran = &scklTB->transfers[i];
           if (sckltran->offset == -1) continue;
-          offset = chunkOffset + sckltran->offset * (sizePerRank / nchunksPerLoopPerRank);
+          offset = chunkOffset + sckltran->offset * sizePerScklChunk;
           T* thisbuffer = (sckltran->buffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           if (scklTB->type == SCKL_SEND){
             int8_t dependentBid = sckltran->dependentBid + scklIndex * scklNBlocks;
