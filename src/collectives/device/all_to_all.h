@@ -18,6 +18,8 @@ template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
+      return;
+
       struct ncclDevComm* comm = args->comm;
       struct scklAlgorithm* scklAlgo = &comm->scklAlgo;
       const int tid = threadIdx.x;
