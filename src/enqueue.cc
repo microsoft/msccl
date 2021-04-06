@@ -516,11 +516,10 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
   int nChannels = work.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
-
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-    work.nActives = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.scklChannels[channelId].nBlocksForChannel : 1;
+    work.nActives = (info->algorithm == NCCL_ALGO_SCKL) ? info->comm->scklAlgo.scklChannels[channelId % info->comm->scklAlgo.nChannels].nBlocksForChannel : 1;
     // Proxy
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
