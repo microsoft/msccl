@@ -635,11 +635,10 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
           for (int t=0; t<node->nSubs; t++) {
             struct ncclXmlNode* threadblockNode = node->subs[t];
             if (strcmp(threadblockNode->name, "threadblock") == 0){
-              int bid, peer, channelId;
-              const char* type;
+              int bid, recvpeer, sendpeer, channelId;
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "bid", &bid));
-              NCCLCHECK(xmlGetAttrInt(threadblockNode, "peer", &peer));
-              NCCLCHECK(xmlGetAttrStr(threadblockNode, "type", &type));
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "recvpeer", &recvpeer));
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "sendpeer", &sendpeer));
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
               if (bid < 0){
                 WARN("bid must be positive. bid: %d", bid);
@@ -652,7 +651,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               }
               struct scklThreadBlock* sTB = &scklAlgo->scklTB[bid];
               sTB->nsteps = 0;
-              sTB->peer = peer;
+              sTB->recvpeer = recvpeer;
+              sTB->sendpeer = snedpeer;
               if (channelId < 0 || channelId > MAXCHANNELS){
                 WARN("ChannelId needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
                 return ncclInvalidUsage;
@@ -669,13 +669,15 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               }
               // setting all transfers to -1 so that the ones not set are passed during runtime.
               for (int st=0; st<SCKL_MAX_NUM_STEPS; st++){
-                sTB->transfers[st].offset = -1;
+                sTB->transfers[st].srcoffset = -1;
+                sTB->transfers[st].dstoffset = -1;
               }
-              int ntransfers = 0;
+              int nsendtransfers = 0;
+              int nrecvtransfers = 0;
               for (int st=0; st<threadblockNode->nSubs; st++) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
-                  int s, offset, depend_bid, depend_step;
+                  int s, srcoffset, dstoffset, depend_bid, depend_step;
                   const char* buffer;
                   NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
                   if (s >= SCKL_MAX_NUM_STEPS){

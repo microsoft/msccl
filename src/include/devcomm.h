@@ -123,19 +123,21 @@ struct ncclRing {
 #define SCKL_INPUT_BUFFER 0
 #define SCKL_OUTPUT_BUFFER 1
 
-struct scklTransfer {
-  int16_t offset;
-  uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
-  int8_t dependentBid; // -1 if not dependent on any threadblock
-  int8_t dependentStep;
-};
-
 #define SCKL_SEND 0
 #define SCKL_RECV 1
 
+struct scklTransfer {
+  int16_t srcoffset;
+  int16_t dstoffset;
+  uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  int8_t dependentBid; // -1 if not dependent on any threadblock
+  int8_t dependentStep;
+  uint8_t type;
+};
+
 struct scklThreadBlock {
-  uint8_t peer;
-  uint8_t type; // follow SCKL_SEND and SCKL_RECV macros
+  int8_t sendpeer;
+  int8_t recvpeer;
   uint8_t nsteps;
   uint8_t channelId; // associated channel
   uint8_t rid; // relative id of this thread block to the channel
