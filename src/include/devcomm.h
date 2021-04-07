@@ -125,11 +125,15 @@ struct ncclRing {
 
 #define SCKL_SEND 0
 #define SCKL_RECV 1
+#define SCKL_RECV_COPY_SEND 2
+#define SCKL_RECV_SEND 3
+#define SCKL_NO_OP 4
 
 struct scklTransfer {
   int16_t srcoffset;
   int16_t dstoffset;
-  uint8_t buffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  uint8_t srcbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  uint8_t dstbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
   int8_t dependentStep;
   uint8_t type;
