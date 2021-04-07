@@ -650,6 +650,11 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 WARN("Too many thread blocks are requested. Max thread blocks: %d", SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL*MAXCHANNELS);
                 return ncclInvalidUsage;
               }
+
+              if (peer == id){
+                WARN("peer (%d) and gpu id (%d) must be different", peer, id);
+                return ncclInvalidUsage;
+              }
               struct scklThreadBlock* sTB = &scklAlgo->scklTB[bid];
               sTB->nsteps = 0;
               sTB->peer = peer;
