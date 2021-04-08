@@ -106,7 +106,6 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
           w->index += NCCL_MAX_OPS;
         }
       }
-      
       if (w->funcIndex == FINDEX) {
         f.run(w);
       } else {

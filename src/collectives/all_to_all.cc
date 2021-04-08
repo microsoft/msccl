@@ -14,6 +14,6 @@ ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   struct ncclInfo info = { ncclFuncAllToAll, "AllToAll",
     sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-    ALLTOALL_CHUNKSTEPS, ALLTOALL_SLICESTEPS };
+    SCKL_CHUNKSTEPS, SCKL_SLICESTEPS };
   return ncclEnqueueCheck(&info);
 }

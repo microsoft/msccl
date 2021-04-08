@@ -9,11 +9,29 @@
 #include "collectives.h"
 #include "sckl_interpreter.h"
 
-template<int ALGO, int PROTO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, ALGO, PROTO, FUNC, T, UNROLL> {
+template<int ALGO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      SCKLFunctions<PROTO, FUNC, T, UNROLL> scklfunc;
+      SCKLFunctionSimple<FUNC, T, UNROLL> scklfunc;
+      scklfunc.run(args);
+    }
+};
+
+template<int ALGO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {
+      SCKLFunctionLL128<FUNC, T, UNROLL> scklfunc;
+      scklfunc.run(args);
+    }
+};
+
+template<int ALGO, class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {
+      SCKLFunctionLL<FUNC, T, UNROLL> scklfunc;
       scklfunc.run(args);
     }
 };

@@ -132,7 +132,6 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_RING, NCCL_PROTO_LL, FUNC, T, UN
     }
 };
 
-#include "prims_ll128.h"
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_RING, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
@@ -207,11 +206,29 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_COLLNET, PROTO, FUNC, T, UNROLL>
     __device__ void run(struct ncclWorkElem* args) {}
 };
 
-template<int PROTO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, PROTO, FUNC, T, UNROLL> {
+template<class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      SCKLFunctions<PROTO, FUNC, T, UNROLL> scklfunc;
+      SCKLFunctionSimple<FUNC, T, UNROLL> scklfunc;
+      scklfunc.run(args);
+    }
+};
+
+template<class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {
+      SCKLFunctionLL128<FUNC, T, UNROLL> scklfunc;
+      scklfunc.run(args);
+    }
+};
+
+template<class FUNC, typename T, int UNROLL>
+class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, NCCL_PROTO_LL, FUNC, T, UNROLL> {
+  public:
+    __device__ void run(struct ncclWorkElem* args) {
+      SCKLFunctionLL<FUNC, T, UNROLL> scklfunc;
       scklfunc.run(args);
     }
 };
