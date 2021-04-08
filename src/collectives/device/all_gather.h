@@ -7,6 +7,7 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
+#include "sckl_interpreter.h"
 
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
@@ -209,5 +210,8 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_COLLNET, PROTO, FUNC, T, UNROLL>
 template<int PROTO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCKL, PROTO, FUNC, T, UNROLL> {
   public:
-    __device__ void run(struct ncclWorkElem* args) {}
+    __device__ void run(struct ncclWorkElem* args) {
+      SCKLFunctions<PROTO, FUNC, T, UNROLL> scklfunc;
+      scklfunc.run(args);
+    }
 };

@@ -671,6 +671,12 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 WARN("Wrong recvpeer (%d) or sendpeer (%d) in threadblock %d on gpu %d", recvpeer, sendpeer, bid, id);
                 return ncclInvalidUsage;
               }
+
+              if (recvpeer == id || sendpeer == id){
+                WARN("recvpeer (%d) or sendpeer (%d) for threadblock %d cannot be gpu %d", recvpeer, sendpeer, bid, id);
+                return ncclInvalidUsage;
+              }
+
               sTB->recvpeer = recvpeer;
               sTB->sendpeer = sendpeer;
               if (channelId < 0 || channelId > MAXCHANNELS){
@@ -689,16 +695,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
                   int s, srcoffset, dstoffset, depend_bid, depend_step;
-                  const char* srcbuffer, * dstbuffer * type;
+                  const char* srcbuffer, * dstbuffer, * type;
                   NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
-                  if (s >= SCKL_MAX_NUM_STEPS){
-                    WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
-                    return ncclInternalError;
-                  }
-                  if (s < 0){
-                    WARN("step must be positive: step %d", s);
-                    return ncclInternalError;
-                  }
+
                   NCCLCHECK(xmlGetAttrInt(stepNode, "srcoffset", &srcoffset));
                   NCCLCHECK(xmlGetAttrStr(stepNode, "srcbuffer", &srcbuffer));
                   NCCLCHECK(xmlGetAttrInt(stepNode, "dstoffset", &dstoffset));
@@ -708,24 +707,30 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   NCCLCHECK(xmlGetAttrInt(stepNode, "depend_bid", &depend_bid));
                   NCCLCHECK(xmlGetAttrInt(stepNode, "depend_step", &depend_step));
 
-                  sTB->transfers[s].srcoffset = srcoffset;
-                  NCCLCHECK(scklGetBufferType(srcbuffer, &sTB->transfers[s].srcbuffer));
-                  sTB->transfers[s].srcoffset = srcoffset;
-                  NCCLCHECK(scklGetBufferType(dstbuffer, &sTB->transfers[s].dstbuffer));
-                  sTB->transfers[s].dstoffset = dstoffset;
+                  if (s >= SCKL_MAX_NUM_STEPS){
+                    WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
+                    return ncclInternalError;
+                  }
+                  if (s < 0){
+                    WARN("step must be positive: step %d", s);
+                    return ncclInternalError;
+                  }
+                  struct scklTransfer* sckltran = &sTB->transfers[s];
+
+                  sckltran->srcoffset = srcoffset;
+                  NCCLCHECK(scklGetBufferType(srcbuffer, &sckltran->srcbuffer));
+                  sckltran->srcoffset = srcoffset;
+                  NCCLCHECK(scklGetBufferType(dstbuffer, &sckltran->dstbuffer));
+                  sckltran->dstoffset = dstoffset;
 
                   if (strcmp(type, "s") == 0){
-                    sTB->type = SCKL_SEND;
+                    sckltran->type = SCKL_SEND;
                     nsendtransfers++;
                   } else if (strcmp(type, "r") == 0) {
-                    sTB->type = SCKL_RECV;
+                    sckltran->type = SCKL_RECV;
                     nrecvtransfers++;
                   } else if (strcmp(type, "rcs") == 0) {
-                    sTB->type = SCKL_RECV_COPY_SEND;
-                    nrecvtransfers++;
-                    nsendtransfers++;
-                  } else if (strcmp(type, "rs") == 0) {
-                    sTB->type = SCKL_RECV_SEND;
+                    sckltran->type = SCKL_RECV_COPY_SEND;
                     nrecvtransfers++;
                     nsendtransfers++;
                   } else {
@@ -733,8 +738,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                     return ncclInternalError;
                   }
 
-                  sTB->transfers[s].dependentBid = depend_bid;
-                  sTB->transfers[s].dependentStep = depend_step;
+                  sckltran->dependentBid = depend_bid;
+                  sckltran->dependentStep = depend_step;
 
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
                 }
