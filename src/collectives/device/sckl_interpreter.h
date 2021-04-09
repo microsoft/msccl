@@ -255,7 +255,7 @@ class SCKLFunctionLL {
             default:
               return;
           }
-          if (tid == sync_tid){
+          if (tid == sync_tid && sckltran->has_dependence){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
             scklFlags[bid].flag = curFlag;

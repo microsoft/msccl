@@ -694,7 +694,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               for (int st=0; st<threadblockNode->nSubs; st++) {
                 struct ncclXmlNode* stepNode = threadblockNode->subs[st];
                 if (strcmp(stepNode->name, "step") == 0){
-                  int s, srcoffset, dstoffset, depend_bid, depend_step;
+                  int s, srcoffset, dstoffset, depend_bid, depend_step, has_dependence;
                   const char* srcbuffer, * dstbuffer, * type;
                   NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
 
@@ -706,6 +706,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   NCCLCHECK(xmlGetAttrStr(stepNode, "type", &type));
                   NCCLCHECK(xmlGetAttrInt(stepNode, "depend_bid", &depend_bid));
                   NCCLCHECK(xmlGetAttrInt(stepNode, "depend_step", &depend_step));
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "has_dependence", &has_dependence));
 
                   if (s >= SCKL_MAX_NUM_STEPS){
                     WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCKL_MAX_NUM_STEPS, s+1);
@@ -740,6 +741,11 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
 
                   sckltran->dependentBid = depend_bid;
                   sckltran->dependentStep = depend_step;
+                  if (has_dependence != 0 && has_dependence != 1){
+                    WARN("has_dependence needs to be 0 or 1, but it was %d", has_dependence);
+                    return ncclInternalError;
+                  }
+                  sckltran->has_dependence = has_dependence;
 
                   sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
                 }

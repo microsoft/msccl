@@ -135,6 +135,7 @@ struct scklTransfer {
   uint8_t dstbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
   int8_t dependentStep;
+  int8_t has_dependence;
   uint8_t type;
 };
 
