@@ -98,7 +98,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   struct ncclWork* w = channel->workFifo+opIndex;
   struct ncclWorkElem* e = w->elems;
   for (int i=0; i<e->nActives; i++){
-    volatile uint16_t* activePtr = (volatile uint16_t*)&e->active[i];
+    volatile uint8_t* activePtr = (volatile uint8_t*)&e->active[i];
     while (activePtr[0] != 0) sched_yield();
   }
   memset(w, 0, sizeof(struct ncclWork));
@@ -361,7 +361,7 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUp : ncclPatternPipelineTo; break;
     case ncclFuncReduceScatter:
     case ncclFuncAllGather:
-      info->pattern = ncclPatternRing; break;
+      info->pattern = info->algorithm == NCCL_ALGO_SCKL ? ncclPatternSckl : ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:

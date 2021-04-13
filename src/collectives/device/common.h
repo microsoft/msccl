@@ -47,7 +47,7 @@ static __device__ void load_coll(struct ncclWork* localWork, struct ncclWork* ho
   // Check whether the last operation was aborted and make sure all threads exit
   int abort = tid == 0 ? *(comm->abortFlag) : 0;
   exitIfAbortBarrier(abort);
-  if (tid == blockDim.x-1) hostWork->elems[0].active[activeId] = 0;
+  if (tid == 0) hostWork->elems[0].active[activeId] = 0;
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
@@ -106,6 +106,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
           w->index += NCCL_MAX_OPS;
         }
       }
+      
       if (w->funcIndex == FINDEX) {
         f.run(w);
       } else {
