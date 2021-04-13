@@ -118,7 +118,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
       if (coll == ncclFuncAllToAll || a == NCCL_ALGO_SCKL) {
-        // Only sckl alltoall functions with simple protocol is implemented
+        // Only sckl alltoall and allgather functions with simple protocol is implemented
         // SCKL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
         for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
           if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather) && a == NCCL_ALGO_SCKL){
