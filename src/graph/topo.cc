@@ -662,8 +662,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 return ncclInvalidUsage;
               }
 
-              if (peer == id){
-                WARN("peer (%d) and gpu id (%d) must be different", peer, id);
+              if (recvpeer == id || sendpeer == id){
+                WARN("peer (%d,%d) and gpu id (%d) must be different", recvpeer, sendpeer, id);
                 return ncclInvalidUsage;
               }
               struct scklThreadBlock* sTB = &scklAlgo->scklTB[bid];
