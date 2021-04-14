@@ -818,7 +818,7 @@ ncclResult_t scklAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struct
 }
 
 ncclResult_t scklAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  struct xmlHandler handlers[] = { { "threadblock", scklAlgoXmlthreadblock } };
+  struct xmlHandler handlers[] = { { "tb", scklAlgoXmlthreadblock } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
