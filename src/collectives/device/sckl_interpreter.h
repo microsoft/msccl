@@ -81,6 +81,10 @@ class SCKLFunction {
             case SCKL_RECV_COPY_SEND:
               prims.recvCopySend(dstPointer + dstoffset, dstoffset);
               break;
+            case SCKL_RECV_REDUCE_SEND:
+              prims.recvReduceSend(srcPointer + srcoffset);
+            case SCKL_RECV_REDUCE_COPY:
+              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
             default:
               return;
           }
@@ -128,6 +132,14 @@ struct SimpleWrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.directRecvCopySend(chunkPointer, dstoffset, nelem);
   }
+  
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -167,6 +179,14 @@ struct LL128Wrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.recvCopySend(chunkPointer, nelem);
   }
+
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }  
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -202,6 +222,14 @@ struct LLWrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.recvCopySend(chunkPointer, nelem);
   }
+
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }  
 };
 
 template<class FUNC, typename T, int UNROLL>

@@ -126,7 +126,9 @@ struct ncclRing {
 #define SCKL_SEND 0
 #define SCKL_RECV 1
 #define SCKL_RECV_COPY_SEND 2
-#define SCKL_NO_OP 3
+#define SCKL_RECV_REDUCE_SEND 3
+#define SCKL_RECV_REDUCE_COPY 4
+#define SCKL_NO_OP 5
 
 struct scklTransfer {
   int16_t srcoffset;

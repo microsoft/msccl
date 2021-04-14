@@ -738,6 +738,13 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   sckltran->type = SCKL_RECV_COPY_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
+                } else if (strcmp(type, "rrs") == 0) {
+                  sckltran->type = SCKL_RECV_REDUCE_SEND;
+                  nrecvtransfers++;
+                  nsendtransfers++;
+                } else if (strcmp(type, "rrc") == 0) {
+                  sckltran->type = SCKL_RECV_REDUCE_COPY;
+                  nrecvtransfers++;
                 } else {
                   WARN("type of transfer is not supported: %s", type);
                   return ncclInternalError;
