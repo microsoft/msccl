@@ -639,6 +639,8 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   for (int s=0; s<topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "gpu") == 0){
+      int channelCurrentRelativeThreadBlockIndex[MAXCHANNELS];
+      memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
       int id;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
       if (id == rank){
@@ -763,7 +765,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             // setting the summary of the sckl aglorithm
             scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
-            sTB->rid = scklChannel->nsendPeers + scklChannel->nrecvPeers;
+            sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
             if (sTB->sendpeer >= 0){
               scklChannel->sendPeers[scklChannel->nsendPeers] = sTB->sendpeer;
               scklChannel->nchunksForSendPeer[scklChannel->nsendPeers] = nsendtransfers;

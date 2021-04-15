@@ -215,7 +215,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
     // Only disable algo for Allreduce since others only have one
-    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
+    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
   }
 
   if (comm->rank == 0) {

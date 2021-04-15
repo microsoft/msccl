@@ -36,14 +36,12 @@ class SCKLFunction {
       T * thisOutput = (T*)args->recvbuff;
       int recvPeer = scklTB->recvpeer;
       int sendPeer = scklTB->sendpeer;
-
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
       const int nranks = comm->nRanks;
-      const int nchunksPerLoopPerRank = scklAlgo->nchunksPerLoop/nranks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize*nScklInstnaces;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScklChunk = size/nchunksPerLoopPerRank;
+      const ssize_t sizePerScklChunk = (size*nranks)/scklAlgo->nchunksPerLoop;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
@@ -83,8 +81,10 @@ class SCKLFunction {
               break;
             case SCKL_RECV_REDUCE_SEND:
               prims.recvReduceSend(srcPointer + srcoffset);
+              break;
             case SCKL_RECV_REDUCE_COPY:
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
+              break;
             default:
               return;
           }
