@@ -53,7 +53,7 @@ class SCKLFunction {
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scklTB->nsteps; i++){
           struct scklTransfer* sckltran = &scklTB->transfers[i];
-          if (sckltran->type == SCKL_NO_OP) continue;
+          // if (sckltran->type == SCKL_NO_OP) continue;
           // first wait if there is a dependence
           int8_t dependentBid = sckltran->dependentBid + scklIndex * scklNBlocks;
           int8_t dependentStep = sckltran->dependentStep;
@@ -84,6 +84,8 @@ class SCKLFunction {
               break;
             case SCKL_RECV_REDUCE_COPY:
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
+              break;
+            case SCKL_NO_OP:
               break;
             default:
               return;
