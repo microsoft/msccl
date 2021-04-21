@@ -36,6 +36,7 @@ class SCKLFunction {
       T * thisOutput = (T*)args->recvbuff;
       int recvPeer = scklTB->recvpeer;
       int sendPeer = scklTB->sendpeer;
+
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
       const int nranks = comm->nRanks;
