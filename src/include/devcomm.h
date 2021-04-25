@@ -118,7 +118,7 @@ struct ncclRing {
 };
 
 #define SCKL_MAX_NUM_STEPS 16
-#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 8
+#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
 #define SCKL_INPUT_BUFFER 0
 #define SCKL_OUTPUT_BUFFER 1
@@ -126,7 +126,9 @@ struct ncclRing {
 #define SCKL_SEND 0
 #define SCKL_RECV 1
 #define SCKL_RECV_COPY_SEND 2
-#define SCKL_NO_OP 3
+#define SCKL_RECV_REDUCE_SEND 3
+#define SCKL_RECV_REDUCE_COPY 4
+#define SCKL_NO_OP 5
 
 struct scklTransfer {
   int16_t srcoffset;
@@ -222,13 +224,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[3];
+    uint64_t align[8];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x10*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {

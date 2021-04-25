@@ -635,10 +635,15 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
   int nchunksPerLoop;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
+  int globalNChannels;
+  NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
+  scklAlgo->nChannels = globalNChannels;
   scklAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "gpu") == 0){
+      int channelCurrentRelativeThreadBlockIndex[MAXCHANNELS];
+      memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
       int id;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
       if (id == rank){
@@ -688,7 +693,6 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               return ncclInvalidUsage;
             }
             sTB->channelId = channelId;
-            scklAlgo->nChannels = std::max(scklAlgo->nChannels, channelId+1);
             // setting type to none for all transfers to avoid transfering for non existing steps
             for (int st=0; st<SCKL_MAX_NUM_STEPS; st++){
               sTB->transfers[st].type = SCKL_NO_OP;
@@ -738,6 +742,15 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   sckltran->type = SCKL_RECV_COPY_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
+                } else if (strcmp(type, "rrs") == 0) {
+                  sckltran->type = SCKL_RECV_REDUCE_SEND;
+                  nrecvtransfers++;
+                  nsendtransfers++;
+                } else if (strcmp(type, "rrc") == 0) {
+                  sckltran->type = SCKL_RECV_REDUCE_COPY;
+                  nrecvtransfers++;
+                } else if (strcmp(type, "nop") == 0) {
+                  sckltran->type = SCKL_NO_OP;
                 } else {
                   WARN("type of transfer is not supported: %s", type);
                   return ncclInternalError;
@@ -756,7 +769,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             // setting the summary of the sckl aglorithm
             scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
-            sTB->rid = scklChannel->nsendPeers + scklChannel->nrecvPeers;
+            sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
             if (sTB->sendpeer >= 0){
               scklChannel->sendPeers[scklChannel->nsendPeers] = sTB->sendpeer;
               scklChannel->nchunksForSendPeer[scklChannel->nsendPeers] = nsendtransfers;

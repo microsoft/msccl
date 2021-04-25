@@ -40,10 +40,9 @@ class SCKLFunction {
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
       const int nranks = comm->nRanks;
-      const int nchunksPerLoopPerRank = scklAlgo->nchunksPerLoop/nranks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize*nScklInstnaces;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScklChunk = size/nchunksPerLoopPerRank;
+      const ssize_t sizePerScklChunk = (size*nranks)/scklAlgo->nchunksPerLoop;
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
@@ -55,7 +54,7 @@ class SCKLFunction {
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scklTB->nsteps; i++){
           struct scklTransfer* sckltran = &scklTB->transfers[i];
-          if (sckltran->type == SCKL_NO_OP) continue;
+          // if (sckltran->type == SCKL_NO_OP) continue;
           // first wait if there is a dependence
           int8_t dependentBid = sckltran->dependentBid + scklIndex * scklNBlocks;
           int8_t dependentStep = sckltran->dependentStep;
@@ -80,6 +79,14 @@ class SCKLFunction {
               break;
             case SCKL_RECV_COPY_SEND:
               prims.recvCopySend(dstPointer + dstoffset, dstoffset);
+              break;
+            case SCKL_RECV_REDUCE_SEND:
+              prims.recvReduceSend(srcPointer + srcoffset);
+              break;
+            case SCKL_RECV_REDUCE_COPY:
+              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
+              break;
+            case SCKL_NO_OP:
               break;
             default:
               return;
@@ -128,6 +135,14 @@ struct SimpleWrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.directRecvCopySend(chunkPointer, dstoffset, nelem);
   }
+  
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -167,6 +182,14 @@ struct LL128Wrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.recvCopySend(chunkPointer, nelem);
   }
+
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }  
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -202,6 +225,14 @@ struct LLWrapper {
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
     prims.recvCopySend(chunkPointer, nelem);
   }
+
+  __device__ void recvReduceSend(T * chunkPointer) {
+    prims.recvReduceSend(chunkPointer, nelem);
+  }
+
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  }  
 };
 
 template<class FUNC, typename T, int UNROLL>
