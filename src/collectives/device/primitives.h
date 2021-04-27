@@ -133,7 +133,7 @@ class ncclPrimitives {
 
   template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset) {
+  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, int count = 1, int sckl_offset = 0) {
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -141,20 +141,25 @@ class ncclPrimitives {
     for (int slice=0; slice<SLICESPERCHUNK; ++slice) {
       int realSize = max(0, min(dataSize, nelem-offset));
       if (tid < nworkers) {
-        if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr+offset;
-        if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
-        if (DST && (role & ROLE_DST)) dsts[0] = dstPtr+offset;
-        if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
-        if (realSize > 0) {
-          subBarrier();
-          if (DIRECTRECV && srcs[0] == dsts[0]) {
-            // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
-            if (SEND) {
-              // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+          if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
+          if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
+        for (int c = 0; c < count; c++){
+          if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr+offset+c*sckl_offset;
+          if (DST && (role & ROLE_DST)) dsts[0] = dstPtr+offset+c*sckl_offset;
+          if (RECV && (role & ROLE_WAIT_RECV)) srcs[0] += realSize;
+          if (SEND && (role & ROLE_WAIT_SEND)) dsts[0] += realSize;
+          if (realSize > 0) {
+            subBarrier();
+            if (DIRECTRECV && srcs[0] == dsts[0]) {
+              // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
+              if (SEND) {
+                // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
+                ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+              }
+            } else {
+              ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
+
             }
-          } else {
-            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
           }
         }
       }
@@ -266,8 +271,8 @@ class ncclPrimitives {
     GenericOp<0, 0, 0, 1, 1, 0>(src, NULL, nelem, 0);
   }
   __device__ __forceinline__ void
-  directSend(const T* src, ssize_t directOffset, int nelem) {
-    GenericOp<0, 1, 0, 1, 1, 0>(src, NULL, nelem, directOffset);
+  directSend(const T* src, ssize_t directOffset, int nelem, int count = 1, int offset = 0) {
+    GenericOp<0, 1, 0, 1, 1, 0>(src, NULL, nelem, directOffset, count, offset);
   }
 
   __device__ __forceinline__ void
@@ -275,8 +280,8 @@ class ncclPrimitives {
     GenericOp<0, 0, 1, 0, 0, 1>(NULL, dst, nelem, 0);
   }
   __device__ __forceinline__ void
-  directRecv(T* dst, ssize_t directOffset, int nelem) {
-    GenericOp<1, 0, 1, 0, 0, 1>(NULL, dst, nelem, directOffset);
+  directRecv(T* dst, ssize_t directOffset, int nelem, int count = 1, int offset = 0) {
+    GenericOp<1, 0, 1, 0, 0, 1>(NULL, dst, nelem, directOffset, count, offset);
   }
 
   __device__ __forceinline__ void
