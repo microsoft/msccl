@@ -702,7 +702,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
               if (strcmp(stepNode->name, "step") == 0){
-                int s, srcoffset, dstoffset, depend_bid, depend_step, has_dependence;
+                int s, srcoffset, dstoffset, depend_bid, depend_step, has_dependence, count;
                 const char* srcbuffer, * dstbuffer, * type;
                 NCCLCHECK(xmlGetAttrInt(stepNode, "s", &s));
 
@@ -711,6 +711,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 NCCLCHECK(xmlGetAttrInt(stepNode, "dstoff", &dstoffset));
                 NCCLCHECK(xmlGetAttrStr(stepNode, "dstbuf", &dstbuffer));
 
+                NCCLCHECK(xmlGetAttrInt(stepNode, "cnt", &count));
                 NCCLCHECK(xmlGetAttrStr(stepNode, "type", &type));
                 NCCLCHECK(xmlGetAttrInt(stepNode, "depid", &depend_bid));
                 NCCLCHECK(xmlGetAttrInt(stepNode, "deps", &depend_step));
@@ -731,6 +732,12 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 sckltran->srcoffset = srcoffset;
                 NCCLCHECK(scklGetBufferType(dstbuffer, &sckltran->dstbuffer));
                 sckltran->dstoffset = dstoffset;
+
+                if (count < 0){
+                  WARN("Count must be positive %d", count);
+                  return ncclInternalError;
+                }
+                sckltran->count = count;
 
                 if (strcmp(type, "s") == 0){
                   sckltran->type = SCKL_SEND;

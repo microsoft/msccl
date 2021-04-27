@@ -117,7 +117,7 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCKL_MAX_NUM_STEPS 16
+#define SCKL_MAX_NUM_STEPS 128
 #define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
 #define SCKL_INPUT_BUFFER 0
@@ -139,6 +139,7 @@ struct scklTransfer {
   int8_t dependentStep;
   int8_t has_dependence;
   uint8_t type;
+  uint8_t count;
 };
 
 struct scklThreadBlock {

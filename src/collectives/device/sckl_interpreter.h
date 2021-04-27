@@ -70,21 +70,22 @@ class SCKLFunction {
           srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
           dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           dstoffset = chunkOffset + (ssize_t) sckltran->dstoffset * sizePerScklChunk;
+          int count = (int)sckltran->count;
           switch (sckltran->type) {
             case SCKL_SEND:
-              prims.send(srcPointer + srcoffset, dstoffset);
+              prims.send(srcPointer + srcoffset, dstoffset, count);
               break;
             case SCKL_RECV:
-              prims.recv(dstPointer + dstoffset, dstoffset);
+              prims.recv(dstPointer + dstoffset, dstoffset, count);
               break;
             case SCKL_RECV_COPY_SEND:
-              prims.recvCopySend(dstPointer + dstoffset, dstoffset);
+              prims.recvCopySend(dstPointer + dstoffset, dstoffset, count);
               break;
             case SCKL_RECV_REDUCE_SEND:
-              prims.recvReduceSend(srcPointer + srcoffset);
+              prims.recvReduceSend(srcPointer + srcoffset, count);
               break;
             case SCKL_RECV_REDUCE_COPY:
-              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
+              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, count);
               break;
             case SCKL_NO_OP:
               break;
@@ -124,24 +125,24 @@ struct SimpleWrapper {
     return chunkOffset;
   }
 
-  __device__ void send(T * chunkPointer, ssize_t dstoffset) {
-    prims.directSend(chunkPointer, dstoffset, nelem);
+  __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.directSend(chunkPointer, dstoffset, nelem*count);
   }
 
-  __device__ void recv(T * chunkPointer, ssize_t dstoffset) {
-    prims.directRecv(chunkPointer, dstoffset, nelem);
+  __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.directRecv(chunkPointer, dstoffset, nelem*count);
   }
 
-  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
-    prims.directRecvCopySend(chunkPointer, dstoffset, nelem);
+  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.directRecvCopySend(chunkPointer, dstoffset, nelem*count);
   }
   
-  __device__ void recvReduceSend(T * chunkPointer) {
-    prims.recvReduceSend(chunkPointer, nelem);
+  __device__ void recvReduceSend(T * chunkPointer, int count) {
+    prims.recvReduceSend(chunkPointer, nelem*count);
   }
 
-  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
-    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -171,24 +172,24 @@ struct LL128Wrapper {
     return chunkOffset;
   }
 
-  __device__ void send(T * chunkPointer, ssize_t dstoffset) {
-    prims.send(chunkPointer, nelem);
+  __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.send(chunkPointer, nelem*count);
   }
 
-  __device__ void recv(T * chunkPointer, ssize_t dstoffset) {
-    prims.recv(chunkPointer, nelem);
+  __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.recv(chunkPointer, nelem*count);
   }
 
-  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
-    prims.recvCopySend(chunkPointer, nelem);
+  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.recvCopySend(chunkPointer, nelem*count);
   }
 
-  __device__ void recvReduceSend(T * chunkPointer) {
-    prims.recvReduceSend(chunkPointer, nelem);
+  __device__ void recvReduceSend(T * chunkPointer, int count) {
+    prims.recvReduceSend(chunkPointer, nelem*count);
   }
 
-  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
-    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 };
 
@@ -214,24 +215,24 @@ struct LLWrapper {
     return chunkOffset;
   }
 
-  __device__ void send(T * chunkPointer, ssize_t dstoffset) {
-    prims.send(chunkPointer, nelem);
+  __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.send(chunkPointer, nelem*count);
   }
 
-  __device__ void recv(T * chunkPointer, ssize_t dstoffset) {
-    prims.recv(chunkPointer, nelem);
+  __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.recv(chunkPointer, nelem*count);
   }
 
-  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset) {
-    prims.recvCopySend(chunkPointer, nelem);
+  __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
+    prims.recvCopySend(chunkPointer, nelem*count);
   }
 
-  __device__ void recvReduceSend(T * chunkPointer) {
-    prims.recvReduceSend(chunkPointer, nelem);
+  __device__ void recvReduceSend(T * chunkPointer, int count) {
+    prims.recvReduceSend(chunkPointer, nelem*count);
   }
 
-  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer) {
-    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem);
+  __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 };
 
