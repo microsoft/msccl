@@ -169,7 +169,7 @@ ncclResult_t xmlLoadSub(FILE* file, struct ncclXml* xml, struct ncclXmlNode* hea
   if (head && head->type == NODE_TYPE_SINGLE) return ncclSuccess;
   while (1) {
     if (xml->maxIndex == MAX_NODES) {
-      WARN("Error : XML parser is limited to 1024 nodes");
+      WARN("Error : XML parser is limited to %d nodes", MAX_NODES);
       return ncclInternalError;
     }
     struct ncclXmlNode* node = xml->nodes+xml->maxIndex;
