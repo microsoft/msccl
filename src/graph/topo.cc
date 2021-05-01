@@ -771,7 +771,7 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 }
                 sckltran->has_dependence = has_dependence;
 
-                sTB->nsteps = std::max(sTB->nsteps, (uint8_t)(s+1));
+                sTB->nsteps = std::max(sTB->nsteps, (uint16_t)(s+1));
               }
             }
             // setting the summary of the sckl aglorithm

@@ -117,7 +117,7 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCKL_MAX_NUM_STEPS 256
+#define SCKL_MAX_NUM_STEPS 1024
 #define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
 #define SCKL_INPUT_BUFFER 0
@@ -136,7 +136,7 @@ struct scklTransfer {
   uint8_t srcbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
   uint8_t dstbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
-  int8_t dependentStep;
+  int16_t dependentStep;
   int8_t has_dependence;
   uint8_t type;
   uint8_t count;
@@ -145,9 +145,9 @@ struct scklTransfer {
 struct scklThreadBlock {
   int8_t sendpeer;
   int8_t recvpeer;
-  uint8_t nsteps;
+  uint16_t nsteps;
   uint8_t channelId; // associated channel
-  uint8_t rid; // relative id of this thread block to the channel
+  uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
 };

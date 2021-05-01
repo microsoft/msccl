@@ -11,7 +11,7 @@
 // A few constraints to make the implementation easy
 #define MAX_STR_LEN 255
 #define MAX_ATTR_COUNT 16
-#define MAX_SUBS 256
+#define MAX_SUBS 1024
 #define MAX_NODES 65536
 
 #define NODE_TYPE_NONE 0
