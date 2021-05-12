@@ -20,7 +20,7 @@ typedef enum {
   ncclPatternTreeUpDown,
   ncclPatternCollTreeUp,
   ncclPatternCollTreeDown,
-  ncclPatternSckl
+  ncclPatternsccl
 } ncclPattern_t;
 
 // Used to pass NCCL call information between functions

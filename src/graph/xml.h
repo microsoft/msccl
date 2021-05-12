@@ -43,7 +43,7 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
 ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml);
 #define NCCL_GRAPH_XML_VERSION 1
 ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
-ncclResult_t scklGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+ncclResult_t scclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml);
 
 /* Auto-detect functions */
 ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode);

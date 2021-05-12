@@ -7,14 +7,14 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
-#include "sckl_interpreter.h"
+#include "sccl_interpreter.h"
 
 template<int ALGO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      SCKLFunctionSimple<FUNC, T, UNROLL> scklfunc;
-      scklfunc.run(args);
+      scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
+      scclfunc.run(args);
     }
 };
 
@@ -22,8 +22,8 @@ template<int ALGO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      SCKLFunctionLL128<FUNC, T, UNROLL> scklfunc;
-      scklfunc.run(args);
+      scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
+      scclfunc.run(args);
     }
 };
 
@@ -31,7 +31,7 @@ template<int ALGO, class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      SCKLFunctionLL<FUNC, T, UNROLL> scklfunc;
-      scklfunc.run(args);
+      scclFunctionLL<FUNC, T, UNROLL> scclfunc;
+      scclfunc.run(args);
     }
 };

@@ -58,7 +58,7 @@ struct ncclRecvMem {
 
 struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
-  struct scklAlgorithm scklAlgo;
+  struct scclAlgorithm scclAlgo;
 
   struct ncclPeerInfo* peerInfo;
   struct ncclTopoSystem* topo;

@@ -38,7 +38,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll" };
-const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "SCKL", "CollNet" };
+const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "SCCL", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
 NCCL_PARAM(GroupCudaStream, "GROUP_CUDA_STREAM", NCCL_GROUP_CUDA_STREAM);
@@ -273,8 +273,8 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
-  // SCKL algo is copied to the device side
-  comm->hostDevComm.scklAlgo = comm->scklAlgo;
+  // SCCL algo is copied to the device side
+  comm->hostDevComm.scclAlgo = comm->scclAlgo;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
@@ -860,18 +860,18 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
   // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("SCKL_XML_FILE")){
-    NCCLCHECK(scklGetAlgoFromXMLAndSetComm(comm));
-    // Connect SCKL graph
+  if (getenv("sccl_XML_FILE")){
+    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm));
+    // Connect SCCL graph
     for (int c=0; c<comm->nChannels; c++) {
       struct ncclChannel* channel = comm->channels+c;
       if (comm->nRanks == 1) continue;
-      struct scklChannelInfo* scklChannel = &comm->scklAlgo.scklChannels[c % comm->scklAlgo.nChannels];
-      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scklChannel->nrecvPeers, scklChannel->recvPeers, scklChannel->nsendPeers, scklChannel->sendPeers), ret, affinity_restore);
+      struct scclChannelInfo* scclChannel = &comm->scclAlgo.scclChannels[c % comm->scclAlgo.nChannels];
+      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
     }
     // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-    INFO(NCCL_INIT, "Connected SCKL algorithm");
+    INFO(NCCL_INIT, "Connected SCCL algorithm");
   }
 
   NCCLCHECK(ncclCommSetIntra(comm, intraRank, intraRanks, intraRank0Comm));

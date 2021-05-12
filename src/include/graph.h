@@ -35,8 +35,8 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* topo, int64_t busId, int ne
 // Set CPU affinity
 ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank);
 
-// SCKL get alirthm from XML file and set the communicator
-ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm);
+// SCCL get alirthm from XML file and set the communicator
+ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm);
 
 #define NCCL_TOPO_CPU_ARCH_X86 1
 #define NCCL_TOPO_CPU_ARCH_POWER 2
