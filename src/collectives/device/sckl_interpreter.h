@@ -50,6 +50,8 @@ class SCKLFunction {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScklChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScklChunk, gridOffset, nScklInstnaces, scklIndex);
+        int realChunkSize = prims.realChunkSize;
+        int nelem = prims.nelem;
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scklTB->nsteps; i++){
@@ -67,6 +69,7 @@ class SCKLFunction {
           }
 
           int count = sckltran->count;
+          for (int c = 0; c < )
           srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
           dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
@@ -107,6 +110,8 @@ struct SimpleWrapper {
   const int nthreads;
   const int stepSize;
   const int chunkSize;
+  int realChunkSize;
+  int nsends, nrecvs;
   ncclPrimitives<UNROLL, SCKL_CHUNKSTEPS/SCKL_SLICESTEPS, SCKL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   int nelem;
@@ -115,10 +120,10 @@ struct SimpleWrapper {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       chunkSize(stepSize * SCKL_CHUNKSTEPS),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0), nsends(0), nrecvs(0) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
-    int realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
+    realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
     ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
     ssize_t chunkOffset = gridOffset + scklIndex*realChunkSize;
     nelem = min(realChunkSize, sizePerScklChunk-chunkOffset);
@@ -155,6 +160,7 @@ struct LL128Wrapper {
   const int stepSize;
   ssize_t chunkSize;
   const ssize_t minChunkSize;
+  int realChunkSize;
   ncclLL128Primitives<T, FUNC, 1, 1> prims;
 
   int nelem;
@@ -167,6 +173,7 @@ struct LL128Wrapper {
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
     chunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces*minChunkSize)*minChunkSize);
+    realChunkSize = chunkSize;
     ssize_t chunkOffset = gridOffset + scklIndex*chunkSize;
     nelem = min(chunkSize, sizePerScklChunk-chunkOffset);
     return chunkOffset;
@@ -200,6 +207,7 @@ template<class FUNC, typename T>
 struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
+  int realChunkSize;
   ncclLLPrimitives<T, FUNC, 1, 1> prims;
 
   int nelem;
@@ -207,7 +215,7 @@ struct LLWrapper {
   __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepLines(args->comm->buffSizes[NCCL_PROTO_LL] / (sizeof(union ncclLLFifoLine)*NCCL_STEPS)),
       chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)),
-      prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm) {}
+      prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm), realChunkSize(chunkSize) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
     ssize_t chunkOffset = gridOffset + scklIndex*chunkSize;
