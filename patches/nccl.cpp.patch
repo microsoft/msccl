@@ -1,0 +1,37 @@
+diff --git a/torch/csrc/cuda/nccl.cpp b/torch/csrc/cuda/nccl.cpp
+index 0248e81496..275154c5ce 100644
+--- a/torch/csrc/cuda/nccl.cpp
++++ b/torch/csrc/cuda/nccl.cpp
+@@ -640,12 +640,22 @@ void all2all_single_equal_split(at::Tensor& input,
+ #if defined(NCCL_MAJOR) && (NCCL_MAJOR == 2) && (NCCL_MAJOR * 10 + NCCL_MINOR) >= 27
+   using namespace torch::cuda::nccl::detail;
+ 
+-  int numranks;
++  //int numranks;
+   auto type = to_nccl_data_type(input);
+   size_t count = input.numel() / size;
+-  size_t rankdiff = input.nbytes() / size;
+   const auto* sendbuff = reinterpret_cast<char*>(input.data_ptr());
+   auto* recvbuff = reinterpret_cast<char *>(output.data_ptr());
++  NCCL_CHECK(ncclAllToAll(
++			  sendbuff, 
++			  recvbuff, 
++			  count,
++			  type,
++			  to_nccl_comm(_comm),
++			  stream));
++  
++  /*
++  //size_t rankdiff = input.nbytes() / size;
++
+   auto comm = to_nccl_comm(_comm);
+   NCCL_CHECK(ncclCommCount(comm, &numranks));
+   NCCL_CHECK(ncclGroupStart());
+@@ -658,6 +668,7 @@ void all2all_single_equal_split(at::Tensor& input,
+     }
+   }
+   NCCL_CHECK(ncclGroupEnd());
++  */
+ #else
+   AT_ERROR("all2all is only supported for NCCL lib version >= 2.7.0");
+ #endif
