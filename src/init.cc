@@ -195,6 +195,13 @@ static ncclResult_t commFree(ncclComm_t comm) {
   }
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
+  // free up SCCL allocated scratchPad
+  if (comm->scclAlgo.scratchBuffer != NULL && comm->scclAlgo.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->scclAlgo.scratchBuffer));
+    comm->scclAlgo.scratchBuffer = NULL;
+    comm->scclAlgo.scratchBufferSize = 0;
+  }
+
   // Poison comm to try and catch a double free
   commPoison(comm);
 
@@ -860,7 +867,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
 
   // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("sccl_XML_FILE")){
+  if (getenv("SCCL_XML_FILE")){
     NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm));
     // Connect SCCL graph
     for (int c=0; c<comm->nChannels; c++) {

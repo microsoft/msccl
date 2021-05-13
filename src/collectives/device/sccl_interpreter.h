@@ -8,11 +8,11 @@
 #include "primitives.h"
 #include "collectives.h"
 
-#define sccl_MAX_ITER 65536
+#define SCCL_MAX_ITER 65536
 
 // flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
-   sccl_MAX_ITER*sccl_MAX_NUM_STEPS*__WORKINDEX__ + (__GRIDOFFSET_ITER__ * sccl_MAX_NUM_STEPS + __STEP__)
+   SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*__WORKINDEX__ + (__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + __STEP__)
 
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
@@ -34,6 +34,7 @@ class scclFunction {
       // Compute pointers
       T * thisInput = (T*)args->sendbuff;
       T * thisOutput = (T*)args->recvbuff;
+      T * thisScratch = (T*)args->scratchbuff;
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
@@ -54,7 +55,7 @@ class scclFunction {
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
           struct scclTransfer* sccltran = &scclTB->transfers[i];
-          // if (sccltran->type == sccl_NO_OP) continue;
+          // if (sccltran->type == SCCL_NO_OP) continue;
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid + scclIndex * scclNBlocks;
           int8_t dependentStep = sccltran->dependentStep;
@@ -65,28 +66,27 @@ class scclFunction {
               }
               __syncthreads();
           }
-
-          srcPointer = (sccltran->srcbuffer == sccl_INPUT_BUFFER) ? thisInput : thisOutput;
+          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           srcoffset = chunkOffset + (ssize_t) sccltran->srcoffset * sizePerscclChunk;
-          dstPointer = (sccltran->dstbuffer == sccl_INPUT_BUFFER) ? thisInput : thisOutput;
+          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstoffset = chunkOffset + (ssize_t) sccltran->dstoffset * sizePerscclChunk;
           switch (sccltran->type) {
-            case sccl_SEND:
+            case SCCL_SEND:
               prims.send(srcPointer + srcoffset, dstoffset);
               break;
-            case sccl_RECV:
+            case SCCL_RECV:
               prims.recv(dstPointer + dstoffset, dstoffset);
               break;
-            case sccl_RECV_COPY_SEND:
+            case SCCL_RECV_COPY_SEND:
               prims.recvCopySend(dstPointer + dstoffset, dstoffset);
               break;
-            case sccl_RECV_REDUCE_SEND:
+            case SCCL_RECV_REDUCE_SEND:
               prims.recvReduceSend(srcPointer + srcoffset);
               break;
-            case sccl_RECV_REDUCE_COPY:
+            case SCCL_RECV_REDUCE_COPY:
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset);
               break;
-            case sccl_NO_OP:
+            case SCCL_NO_OP:
               break;
             default:
               return;
@@ -106,14 +106,14 @@ struct SimpleWrapper {
   const int nthreads;
   const int stepSize;
   const int chunkSize;
-  ncclPrimitives<UNROLL, sccl_CHUNKSTEPS/sccl_SLICESTEPS, sccl_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
+  ncclPrimitives<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   int nelem;
 
   __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
-      chunkSize(stepSize * sccl_CHUNKSTEPS),
+      chunkSize(stepSize * SCCL_CHUNKSTEPS),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
 
   __device__ size_t initIter(ssize_t sizePerscclChunk, ssize_t gridOffset, int nscclInstnaces, int scclIndex) {

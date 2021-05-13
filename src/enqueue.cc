@@ -105,7 +105,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
 
-  for (int i=0; i<base->nActives; i++){
+  for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
   }
   e->index = opIndex;
@@ -398,6 +398,20 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
+static ncclResult_t adjustSCCLScratchPad(struct ncclInfo* info) {
+  scclAlgorithm* scclAlgo = &info->comm->scclAlgo;
+  size_t sizeNeeded = info->nBytes * (size_t)DIVUP(scclAlgo->nScratchChunks, scclAlgo->nchunksPerLoop);
+  if (sizeNeeded > scclAlgo->scratchBufferSize){
+    if (scclAlgo->scratchBufferSize > 0 && scclAlgo->scratchBuffer != NULL){
+      CUDACHECK(cudaFree(scclAlgo->scratchBuffer));
+    }
+    NCCLCHECK(ncclCudaCalloc((char**)&scclAlgo->scratchBuffer, sizeNeeded));
+    scclAlgo->scratchBufferSize = sizeNeeded;
+  }
+  info->scratchbuff = scclAlgo->scratchBuffer;
+  return ncclSuccess;
+}
+
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyArgs* proxyArgs /* output */) {
   work->comm = info->comm->devComm;
 
@@ -406,8 +420,14 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
+  if (info->algorithm == NCCL_ALGO_SCCL){
+    // adjust SCCL scratch 
+    NCCLCHECK(adjustSCCLScratchPad(info));
+  }
+
   work->sendbuff = info->sendbuff;
   work->recvbuff = info->recvbuff;
+  work->scratchbuff = info->scratchbuff;
   work->coll.root = info->root;
   work->coll.count = info->count;
   work->coll.nChannels = info->nChannels;

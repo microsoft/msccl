@@ -609,9 +609,11 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
 
 ncclResult_t scclGetBufferType(const char* str, uint8_t* output){
   if (strcmp(str, "i") == 0){
-    *output = sccl_INPUT_BUFFER;
+    *output = SCCL_INPUT_BUFFER;
   } else if (strcmp(str, "o") == 0) {
-    *output = sccl_OUTPUT_BUFFER;
+    *output = SCCL_OUTPUT_BUFFER;
+  } else if (strcmp(str, "s") == 0) {
+    *output = SCCL_SCRATCH_BUFFER;
   } else {
     WARN("type of buffer is not supported: %s", str);
     return ncclInvalidUsage;
@@ -620,8 +622,8 @@ ncclResult_t scclGetBufferType(const char* str, uint8_t* output){
 }
 
 ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
-  char* str = getenv("sccl_XML_FILE");
-  INFO(NCCL_ENV, "sccl_XML_FILE set by environment to %s", str);
+  char* str = getenv("SCCL_XML_FILE");
+  INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
   struct ncclXml* xml;
 
   NCCLCHECK(ncclCalloc(&xml, 1));
@@ -644,8 +646,14 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
     if (strcmp(node->name, "gpu") == 0){
       int channelCurrentRelativeThreadBlockIndex[MAXCHANNELS];
       memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
-      int id;
+      int id, nScratchChunks;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
+      NCCLCHECK(xmlGetAttrInt(node, "s_chunks", &nScratchChunks));
+      if (nScratchChunks < 0){
+        WARN("nScratchChunks must be not negative. nScratchChunks: %d", nScratchChunks);
+        return ncclInvalidUsage;
+      }
+      scclAlgo->nScratchChunks = nScratchChunks;
       if (id == rank){
         scclAlgo->nBlocks = 0;
         for (int t=0; t<node->nSubs; t++) {
@@ -657,12 +665,12 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "send", &sendpeer));
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
             if (bid < 0){
-              WARN("bid must be positive. bid: %d", bid);
+              WARN("bid must be not negative. bid: %d", bid);
               return ncclInvalidUsage;
             }              
             scclAlgo->nBlocks = std::max(scclAlgo->nBlocks, bid+1);
-            if (bid >= MAXCHANNELS*sccl_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-              WARN("Too many thread blocks are requested. Max thread blocks: %d", sccl_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL*MAXCHANNELS);
+            if (bid >= MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+              WARN("Too many thread blocks are requested. Max thread blocks: %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL*MAXCHANNELS);
               return ncclInvalidUsage;
             }
 
@@ -694,8 +702,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             sTB->channelId = channelId;
             // setting type to none for all transfers to avoid transfering for non existing steps
-            for (int st=0; st<sccl_MAX_NUM_STEPS; st++){
-              sTB->transfers[st].type = sccl_NO_OP;
+            for (int st=0; st<SCCL_MAX_NUM_STEPS; st++){
+              sTB->transfers[st].type = SCCL_NO_OP;
             }
             int nsendtransfers = 0;
             int nrecvtransfers = 0;
@@ -716,8 +724,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 NCCLCHECK(xmlGetAttrInt(stepNode, "deps", &depend_step));
                 NCCLCHECK(xmlGetAttrInt(stepNode, "hasdep", &has_dependence));
 
-                if (s >= sccl_MAX_NUM_STEPS){
-                  WARN("Too many steps are requested. Max number of steps: %d, requested: %d", sccl_MAX_NUM_STEPS, s+1);
+                if (s >= SCCL_MAX_NUM_STEPS){
+                  WARN("Too many steps are requested. Max number of steps: %d, requested: %d", SCCL_MAX_NUM_STEPS, s+1);
                   return ncclInternalError;
                 }
                 if (s < 0){
@@ -733,24 +741,24 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 sccltran->dstoffset = dstoffset;
 
                 if (strcmp(type, "s") == 0){
-                  sccltran->type = sccl_SEND;
+                  sccltran->type = SCCL_SEND;
                   nsendtransfers++;
                 } else if (strcmp(type, "r") == 0) {
-                  sccltran->type = sccl_RECV;
+                  sccltran->type = SCCL_RECV;
                   nrecvtransfers++;
                 } else if (strcmp(type, "rcs") == 0) {
-                  sccltran->type = sccl_RECV_COPY_SEND;
+                  sccltran->type = SCCL_RECV_COPY_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
                 } else if (strcmp(type, "rrs") == 0) {
-                  sccltran->type = sccl_RECV_REDUCE_SEND;
+                  sccltran->type = SCCL_RECV_REDUCE_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
                 } else if (strcmp(type, "rrc") == 0) {
-                  sccltran->type = sccl_RECV_REDUCE_COPY;
+                  sccltran->type = SCCL_RECV_REDUCE_COPY;
                   nrecvtransfers++;
                 } else if (strcmp(type, "nop") == 0) {
-                  sccltran->type = sccl_NO_OP;
+                  sccltran->type = SCCL_NO_OP;
                 } else {
                   WARN("type of transfer is not supported: %s", type);
                   return ncclInternalError;
@@ -781,8 +789,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               scclChannel->nrecvPeers++;
             }
             scclChannel->nBlocksForChannel = std::max(scclChannel->nBlocksForChannel, sTB->rid+1);
-            if (scclChannel->nBlocksForChannel > sccl_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-              WARN("Too many sends/recv per channel. Max allowed %d", sccl_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+            if (scclChannel->nBlocksForChannel > SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+              WARN("Too many sends/recv per channel. Max allowed %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
               return ncclInvalidUsage;
             }
           }

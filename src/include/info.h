@@ -52,6 +52,10 @@ struct ncclInfo {
   ssize_t recvbytes;
   uint32_t delta;
   int channelId;
+  
+  // SCCL scratch buffer is passed as an arg
+  // this scratchBuffer can be accessed on the device. The management of this memory is on scclAlgorithm
+  void* scratchbuff;
 };
 
 #endif
