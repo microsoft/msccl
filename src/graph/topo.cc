@@ -621,6 +621,26 @@ ncclResult_t scclGetBufferType(const char* str, uint8_t* output){
   return ncclSuccess;
 }
 
+ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks, int nOutputChunks, int nScratchChunks){
+  if (bufferType == SCCL_INPUT_BUFFER){
+    if (offset < 0 || offset >= nInputChunks){
+      WARN("Incorrect offset set for input buffer: offset: %d maximum allowed: %d", offset, nInputChunks);
+      return ncclInvalidUsage;
+    }
+  } else if (bufferType == SCCL_OUTPUT_BUFFER){
+    if (offset < 0 || offset >= nOutputChunks){
+      WARN("Incorrect offset set for output buffer: offset: %d maximum allowed: %d", offset, nOutputChunks);
+      return ncclInvalidUsage;
+    }
+  } else if (bufferType == SCCL_SCRATCH_BUFFER){
+    if (offset < 0 || offset >= nScratchChunks){
+      WARN("Incorrect offset set for scratch buffer: offset: %d maximum allowed: %d", offset, nScratchChunks);
+      return ncclInvalidUsage;
+    }
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   char* str = getenv("SCCL_XML_FILE");
   INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
@@ -646,8 +666,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
     if (strcmp(node->name, "gpu") == 0){
       int channelCurrentRelativeThreadBlockIndex[MAXCHANNELS];
       memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
-      int id, nScratchChunks;
+      int id, nScratchChunks, nInputChunks, nOutputChunks;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
+      NCCLCHECK(xmlGetAttrInt(node, "i_chunks", &nInputChunks));
+      NCCLCHECK(xmlGetAttrInt(node, "o_chunks", &nOutputChunks));
       NCCLCHECK(xmlGetAttrInt(node, "s_chunks", &nScratchChunks));
       if (nScratchChunks < 0){
         WARN("nScratchChunks must be not negative. nScratchChunks: %d", nScratchChunks);
@@ -739,6 +761,9 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 sccltran->srcoffset = srcoffset;
                 NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
                 sccltran->dstoffset = dstoffset;
+
+                NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
+                NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
 
                 if (strcmp(type, "s") == 0){
                   sccltran->type = SCCL_SEND;
