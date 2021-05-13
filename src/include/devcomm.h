@@ -117,7 +117,7 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCCL_MAX_NUM_STEPS 256
+#define SCCL_MAX_NUM_STEPS 512
 #define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
 #define SCCL_INPUT_BUFFER 0

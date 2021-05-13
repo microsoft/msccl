@@ -12,7 +12,7 @@
 #define MAX_STR_LEN 255
 #define MAX_ATTR_COUNT 16
 #define MAX_SUBS 256
-#define MAX_NODES 16384
+#define MAX_NODES 262144
 
 #define NODE_TYPE_NONE 0
 #define NODE_TYPE_OPEN 1
