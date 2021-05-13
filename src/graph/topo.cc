@@ -623,17 +623,17 @@ ncclResult_t scclGetBufferType(const char* str, uint8_t* output){
 
 ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks, int nOutputChunks, int nScratchChunks){
   if (bufferType == SCCL_INPUT_BUFFER){
-    if (offset < 0 || offset >= nInputChunks){
+    if (offset < -1 || offset >= nInputChunks){
       WARN("Incorrect offset set for input buffer: offset: %d maximum allowed: %d", offset, nInputChunks);
       return ncclInvalidUsage;
     }
   } else if (bufferType == SCCL_OUTPUT_BUFFER){
-    if (offset < 0 || offset >= nOutputChunks){
+    if (offset < -1 || offset >= nOutputChunks){
       WARN("Incorrect offset set for output buffer: offset: %d maximum allowed: %d", offset, nOutputChunks);
       return ncclInvalidUsage;
     }
   } else if (bufferType == SCCL_SCRATCH_BUFFER){
-    if (offset < 0 || offset >= nScratchChunks){
+    if (offset < -1 || offset >= nScratchChunks){
       WARN("Incorrect offset set for scratch buffer: offset: %d maximum allowed: %d", offset, nScratchChunks);
       return ncclInvalidUsage;
     }
@@ -668,15 +668,15 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
       memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
       int id, nScratchChunks, nInputChunks, nOutputChunks;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
-      NCCLCHECK(xmlGetAttrInt(node, "i_chunks", &nInputChunks));
-      NCCLCHECK(xmlGetAttrInt(node, "o_chunks", &nOutputChunks));
-      NCCLCHECK(xmlGetAttrInt(node, "s_chunks", &nScratchChunks));
-      if (nScratchChunks < 0){
-        WARN("nScratchChunks must be not negative. nScratchChunks: %d", nScratchChunks);
-        return ncclInvalidUsage;
-      }
-      scclAlgo->nScratchChunks = nScratchChunks;
       if (id == rank){
+        NCCLCHECK(xmlGetAttrInt(node, "i_chunks", &nInputChunks));
+	NCCLCHECK(xmlGetAttrInt(node, "o_chunks", &nOutputChunks));
+	NCCLCHECK(xmlGetAttrInt(node, "s_chunks", &nScratchChunks));
+	if (nScratchChunks < 0){
+		WARN("nScratchChunks must be not negative. nScratchChunks: %d", nScratchChunks);
+		return ncclInvalidUsage;
+	}
+	scclAlgo->nScratchChunks = nScratchChunks;
         scclAlgo->nBlocks = 0;
         for (int t=0; t<node->nSubs; t++) {
           struct ncclXmlNode* threadblockNode = node->subs[t];
@@ -762,32 +762,42 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
                 sccltran->dstoffset = dstoffset;
 
-                NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
-                NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
+		bool hasSend = false;
+		bool hasRecv = false;
 
                 if (strcmp(type, "s") == 0){
                   sccltran->type = SCCL_SEND;
                   nsendtransfers++;
+		  hasSend = true;
                 } else if (strcmp(type, "r") == 0) {
                   sccltran->type = SCCL_RECV;
                   nrecvtransfers++;
+		  hasRecv = true;
                 } else if (strcmp(type, "rcs") == 0) {
                   sccltran->type = SCCL_RECV_COPY_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
+		  hasSend = true;
+		  hasRecv = true;
                 } else if (strcmp(type, "rrs") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_SEND;
                   nrecvtransfers++;
                   nsendtransfers++;
+		  hasRecv = true;
+		  hasSend = true;
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   nrecvtransfers++;
+		  hasRecv = true;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {
                   WARN("type of transfer is not supported: %s", type);
                   return ncclInternalError;
                 }
+
+		if (hasSend) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
+		if (hasRecv) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
 
                 sccltran->dependentBid = depend_bid;
                 sccltran->dependentStep = depend_step;
