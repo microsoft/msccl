@@ -69,31 +69,34 @@ class SCKLFunction {
           }
 
           int count = sckltran->count;
-          for (int c = 0; c < )
-          srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
-          srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
-          dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
-          dstoffset = chunkOffset + (ssize_t) sckltran->dstoffset * sizePerScklChunk;
-          switch (sckltran->type) {
-            case SCKL_SEND:
-              prims.send(srcPointer + srcoffset, dstoffset, count);
-              break;
-            case SCKL_RECV:
-              prims.recv(dstPointer + dstoffset, dstoffset, count);
-              break;
-            case SCKL_RECV_COPY_SEND:
-              prims.recvCopySend(dstPointer + dstoffset, dstoffset, count);
-              break;
-            case SCKL_RECV_REDUCE_SEND:
-              prims.recvReduceSend(srcPointer + srcoffset, count);
-              break;
-            case SCKL_RECV_REDUCE_COPY:
-              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, count);
-              break;
-            case SCKL_NO_OP:
-              break;
-            default:
-              return;
+          int countsFitInRealChunkSize = realChunkSize/nelem;
+          for (int c = 0; c < count; c += countsFitInRealChunkSize) {
+            int thisCount = min(countsFitInRealChunkSize, count-c);
+            srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
+            srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
+            dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
+            dstoffset = chunkOffset + (ssize_t) sckltran->dstoffset * sizePerScklChunk;
+            switch (sckltran->type) {
+              case SCKL_SEND:
+                prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+                break;
+              case SCKL_RECV:
+                prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+                break;
+              case SCKL_RECV_COPY_SEND:
+                prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
+                break;
+              case SCKL_RECV_REDUCE_SEND:
+                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
+                break;
+              case SCKL_RECV_REDUCE_COPY:
+                prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCKL_NO_OP:
+                break;
+              default:
+                return;
+            }
           }
           if (tid == sync_tid && sckltran->has_dependence){
             __threadfence();
@@ -111,7 +114,11 @@ struct SimpleWrapper {
   const int stepSize;
   const int chunkSize;
   int realChunkSize;
-  int nsends, nrecvs;
+
+  // this is used to set the conn->step so that the proxy stops. if a send sends more than 1 chunk, conn->step is only increased as 
+  // if one chunk was sent. proxy looks at conn->step to stop a proxy
+  int nSendsAdjuster, nRecvsAdjuster;
+
   ncclPrimitives<UNROLL, SCKL_CHUNKSTEPS/SCKL_SLICESTEPS, SCKL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   int nelem;
@@ -120,7 +127,7 @@ struct SimpleWrapper {
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
       chunkSize(stepSize * SCKL_CHUNKSTEPS),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0), nsends(0), nrecvs(0) {}
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0), nSendsAdjuster(0), nRecvsAdjuster(0) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
     realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
@@ -132,22 +139,33 @@ struct SimpleWrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directSend(chunkPointer, dstoffset, nelem*count);
+    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directRecv(chunkPointer, dstoffset, nelem*count);
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directRecvCopySend(chunkPointer, dstoffset, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
   
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+    nRecvsAdjuster += count-1;
+  }
+
+  __device__ ~SimpleWrapper(){
+    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
   }
 };
 
@@ -161,6 +179,9 @@ struct LL128Wrapper {
   ssize_t chunkSize;
   const ssize_t minChunkSize;
   int realChunkSize;
+
+  int nSendsAdjuster, nRecvsAdjuster;
+
   ncclLL128Primitives<T, FUNC, 1, 1> prims;
 
   int nelem;
@@ -181,23 +202,34 @@ struct LL128Wrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.send(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recv(chunkPointer, nelem*count);
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recvCopySend(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+    nRecvsAdjuster += count-1;
   }  
+
+  __device__ ~LL128Wrapper(){
+    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -208,6 +240,9 @@ struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
   int realChunkSize;
+
+  int nSendsAdjuster, nRecvsAdjuster;
+
   ncclLLPrimitives<T, FUNC, 1, 1> prims;
 
   int nelem;
@@ -225,23 +260,34 @@ struct LLWrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.send(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recv(chunkPointer, nelem*count);
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recvCopySend(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
+    nSendsAdjuster += count-1;
+    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+    nRecvsAdjuster += count-1;
   }  
+  
+  __device__ ~LLWrapper(){
+    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>

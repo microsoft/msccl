@@ -317,6 +317,11 @@ class ncclPrimitives {
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
 
+  __device__ __forceinline__ void adjustConnStep(int nSendsAdjuster, int nRecvsAdjuster) {
+    if (role & ROLE_POST_SEND) step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+    if (role & ROLE_POST_RECV) step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+  }
+
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation
     saveSync();

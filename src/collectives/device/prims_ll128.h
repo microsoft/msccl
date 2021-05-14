@@ -383,6 +383,16 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
+  __device__ void adjustConnStep(int nSendsAdjuster, int nRecvsAdjuster) {
+    if (tid < nsend) {
+      sendConnTail += nSendsAdjuster;
+    }
+
+    if (tid >= nthreads-WARP_SIZE && wid < nrecv) {
+      recvConnHead += nRecvsAdjuster;
+    }    
+  }
+
   __device__ __forceinline__ ~ncclLL128Primitives() {
     // Save steps for the next operation
     saveRecvSync();

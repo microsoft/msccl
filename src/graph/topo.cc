@@ -741,21 +741,21 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
 
                 if (strcmp(type, "s") == 0){
                   sckltran->type = SCKL_SEND;
-                  nsendtransfers++;
+                  nsendtransfers += count;
                 } else if (strcmp(type, "r") == 0) {
                   sckltran->type = SCKL_RECV;
-                  nrecvtransfers++;
+                  nrecvtransfers += count;
                 } else if (strcmp(type, "rcs") == 0) {
                   sckltran->type = SCKL_RECV_COPY_SEND;
-                  nrecvtransfers++;
-                  nsendtransfers++;
+                  nrecvtransfers += count;
+                  nsendtransfers += count;
                 } else if (strcmp(type, "rrs") == 0) {
                   sckltran->type = SCKL_RECV_REDUCE_SEND;
-                  nrecvtransfers++;
-                  nsendtransfers++;
+                  nrecvtransfers += count;
+                  nsendtransfers += count;
                 } else if (strcmp(type, "rrc") == 0) {
                   sckltran->type = SCKL_RECV_REDUCE_COPY;
-                  nrecvtransfers++;
+                  nrecvtransfers += count;
                 } else if (strcmp(type, "nop") == 0) {
                   sckltran->type = SCKL_NO_OP;
                 } else {
