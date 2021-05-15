@@ -162,13 +162,14 @@ struct scklChannelInfo {
   int nBlocksForChannel;
 };
 
-// gpuId is the one that is in comm->rank
+// this is only built for when my rank is the gpu id in the XML
 struct scklAlgorithm {
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // total number of threadblocks needed by sckl algorithm
   int nBlocks;
   // bid is used as an index into this array
+  // TODO: make this const
   struct scklThreadBlock scklTB[MAXCHANNELS*SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by sckl algorithm
   int nChannels;

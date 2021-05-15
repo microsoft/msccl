@@ -30,6 +30,7 @@ struct ncclProxyArgs {
   ncclDataType_t dtype;
   ncclRedOp_t redOp;
   int state;   // add component before this line -- it is left out during initialization
+  size_t scclMaxAllowedCount; // SCCL uses this to adjust nsteps for proxy
 
   // Internal state
   uint64_t posted;

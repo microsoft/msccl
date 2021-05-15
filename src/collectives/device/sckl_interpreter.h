@@ -254,6 +254,7 @@ struct LLWrapper {
       chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)),
       prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm), realChunkSize(chunkSize) {}
 
+  // TODO: nScklInstances should be used. Buggy!
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
     ssize_t chunkOffset = gridOffset + scklIndex*chunkSize;
     nelem = min(chunkSize, sizePerScklChunk-chunkOffset);
