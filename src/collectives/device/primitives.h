@@ -318,8 +318,14 @@ class ncclPrimitives {
   }
 
   __device__ __forceinline__ void adjustConnStep(int nSendsAdjuster, int nRecvsAdjuster) {
-    if (role & ROLE_POST_SEND) *connTailPtr = step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
-    if (role & ROLE_POST_RECV) *connHeadPtr = step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+    for (int i = 0; i < nSendsAdjuster; i++)
+      directSend(NULL, 0, 0);
+    for (int i = 0; i < nRecvsAdjuster; i++)
+      directRecv(NULL, 0, 0);
+    // if (role & ROLE_POST_SEND) *connTailPtr = step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+    // if (role & ROLE_POST_RECV) *connHeadPtr = step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+    // if (role & ROLE_WAIT_SEND) step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
+    // if (role & ROLE_WAIT_RECV) step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
   }
 
   __device__ __forceinline__ ~ncclPrimitives() {
