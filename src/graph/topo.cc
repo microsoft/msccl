@@ -697,8 +697,9 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             for (int st=0; st<SCKL_MAX_NUM_STEPS; st++){
               sTB->transfers[st].type = SCKL_NO_OP;
             }
-            int nsendtransfers = 0;
-            int nrecvtransfers = 0;
+
+            // setting the summary of the sckl aglorithm in sckl channels
+            scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
               if (strcmp(stepNode->name, "step") == 0){
@@ -733,34 +734,42 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 NCCLCHECK(scklGetBufferType(dstbuffer, &sckltran->dstbuffer));
                 sckltran->dstoffset = dstoffset;
 
-                if (count < 0){
-                  WARN("Count must be positive %d", count);
+                if (count < 0 || count >= SCCL_MAX_COUNT){
+                  WARN("Count (%d) must be positive and less than %d", count, SCCL_MAX_COUNT);
                   return ncclInternalError;
                 }
-                sckltran->count = count;
 
+                sckltran->count = count;
+                int hasSend = 0;
+                int hasRecv = 0;
                 if (strcmp(type, "s") == 0){
                   sckltran->type = SCKL_SEND;
-                  nsendtransfers += count;
+                  hasSend = 1;
                 } else if (strcmp(type, "r") == 0) {
                   sckltran->type = SCKL_RECV;
-                  nrecvtransfers += count;
+                  hasRecv = 1;
                 } else if (strcmp(type, "rcs") == 0) {
                   sckltran->type = SCKL_RECV_COPY_SEND;
-                  nrecvtransfers += count;
-                  nsendtransfers += count;
+                  hasSend = 1;
+                  hasRecv = 1;
                 } else if (strcmp(type, "rrs") == 0) {
                   sckltran->type = SCKL_RECV_REDUCE_SEND;
-                  nrecvtransfers += count;
-                  nsendtransfers += count;
+                  hasSend = 1;
+                  hasRecv = 1;
                 } else if (strcmp(type, "rrc") == 0) {
                   sckltran->type = SCKL_RECV_REDUCE_COPY;
-                  nrecvtransfers += count;
+                  hasRecv = 1;
                 } else if (strcmp(type, "nop") == 0) {
                   sckltran->type = SCKL_NO_OP;
                 } else {
                   WARN("type of transfer is not supported: %s", type);
                   return ncclInternalError;
+                }
+                if (hasSend){
+                  scklChannel->nchunksForSendPeer[scklChannel->nsendPeers][count-1]++;
+                }
+                if (hasRecv){
+                  scklChannel->nchunksForRecvPeer[scklChannel->nrecvPeers][count-1]++;
                 }
 
                 sckltran->dependentBid = depend_bid;
@@ -774,17 +783,13 @@ ncclResult_t scklGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 sTB->nsteps = std::max(sTB->nsteps, (uint16_t)(s+1));
               }
             }
-            // setting the summary of the sckl aglorithm
-            scklChannelInfo* scklChannel = &scklAlgo->scklChannels[sTB->channelId];
             sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
             if (sTB->sendpeer >= 0){
               scklChannel->sendPeers[scklChannel->nsendPeers] = sTB->sendpeer;
-              scklChannel->nchunksForSendPeer[scklChannel->nsendPeers] = nsendtransfers;
               scklChannel->nsendPeers++;
             }
             if (sTB->recvpeer >= 0){
               scklChannel->recvPeers[scklChannel->nrecvPeers] = sTB->recvpeer;
-              scklChannel->nchunksForRecvPeer[scklChannel->nrecvPeers] = nrecvtransfers;
               scklChannel->nrecvPeers++;
             }
             scklChannel->nBlocksForChannel = std::max(scklChannel->nBlocksForChannel, sTB->rid+1);

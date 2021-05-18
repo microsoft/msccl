@@ -224,11 +224,23 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     scklChannelInfo* scklChannel = &scklAlgo->scklChannels[relativeChannelId];
     // nsteps is adjusted here for SCKL algo
     for (int i=0; i<scklChannel->nrecvPeers; i++){
-      args->nsteps = scklChannel->nchunksForRecvPeer[i] * args->nLoops * args->chunkSteps;
+      int nrecvs = 0;
+      for (int j = 0; j < SCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j,args->scclMaxAllowedCount);
+        nrecvs += scklChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
+      }
+
+      args->nsteps = nrecvs * args->nLoops * args->chunkSteps;
       NCCLCHECK(SaveProxy(proxyRecv, scklChannel->recvPeers[i], args));
     }
     for (int i=0; i<scklChannel->nsendPeers; i++){
-      args->nsteps = scklChannel->nchunksForSendPeer[i] * args->nLoops * args->chunkSteps;
+      int nsends = 0;
+      for (int j = 0; j < SCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j,args->scclMaxAllowedCount);
+        nsends += scklChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
+      }
+
+      args->nsteps = nsends * args->nLoops * args->chunkSteps;
       NCCLCHECK(SaveProxy(proxySend, scklChannel->sendPeers[i], args));
     }
 

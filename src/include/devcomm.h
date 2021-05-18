@@ -152,12 +152,15 @@ struct scklThreadBlock {
   struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
 };
 
+#define SCCL_MAX_COUNT 16
+
 struct scklChannelInfo {
   int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j for threadblock i
+  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nsendPeers;
   int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nrecvPeers;
   int nBlocksForChannel;
 };

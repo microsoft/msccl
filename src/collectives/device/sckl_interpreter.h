@@ -43,6 +43,12 @@ class SCKLFunction {
       const ssize_t loopSize = (ssize_t)prims.chunkSize*nScklInstnaces;
       const ssize_t size = args->coll.count;
       const ssize_t sizePerScklChunk = (size*nranks)/scklAlgo->nchunksPerLoop;
+
+      int chunkEffectiveSize = prims.chunkEffectiveSize;
+      // TODO: add this to the info
+      int scclMaxAllowedCount = chunkEffectiveSize / DIVUP(size*nranks, (size_t)(scklAlgo->nchunksPerLoop * nScklInstnaces));
+
+
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
@@ -50,8 +56,6 @@ class SCKLFunction {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScklChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScklChunk, gridOffset, nScklInstnaces, scklIndex);
-        int realChunkSize = prims.realChunkSize;
-        int nelem = prims.nelem;
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scklTB->nsteps; i++){
@@ -71,9 +75,8 @@ class SCKLFunction {
           }
 
           int count = sckltran->count;
-          int countsFitInRealChunkSize = realChunkSize/nelem;
-          for (int c = 0; c < count; c += countsFitInRealChunkSize) {
-            int thisCount = min(countsFitInRealChunkSize, count-c);
+          for (int c = 0; c < count; c += scclMaxAllowedCount) {
+            int thisCount = min(scclMaxAllowedCount, count-c);
             srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
             srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
             dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
@@ -115,7 +118,7 @@ struct SimpleWrapper {
   const int nthreads;
   const int stepSize;
   const int chunkSize;
-  int realChunkSize;
+  int chunkEffectiveSize;
 
   // this is used to set the conn->step so that the proxy stops. if a send sends more than 1 chunk, conn->step is only increased as 
   // if one chunk was sent. proxy looks at conn->step to stop a proxy
@@ -128,11 +131,11 @@ struct SimpleWrapper {
   __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
-      chunkSize(stepSize * SCKL_CHUNKSTEPS),
-      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0), nSendsAdjuster(0), nRecvsAdjuster(0) {}
+      chunkSize(stepSize * SCKL_CHUNKSTEPS), nSendsAdjuster(0), nRecvsAdjuster(0), chunkEffectiveSize(chunkSize),
+      prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
-    realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
+    int realChunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces));
     ALIGN_SIZE(realChunkSize, nthreads*sizeof(uint64_t)/sizeof(T));
     ssize_t chunkOffset = gridOffset + scklIndex*realChunkSize;
     nelem = min(realChunkSize, sizePerScklChunk-chunkOffset);
@@ -180,7 +183,7 @@ struct LL128Wrapper {
   const int stepSize;
   ssize_t chunkSize;
   const ssize_t minChunkSize;
-  int realChunkSize;
+  int chunkEffectiveSize;
 
   int nSendsAdjuster, nRecvsAdjuster;
 
@@ -191,12 +194,11 @@ struct LL128Wrapper {
   __device__ LL128Wrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepSize(args->comm->buffSizes[NCCL_PROTO_LL128] / (sizeof(uint64_t)*NCCL_STEPS)),
       chunkSize(stepSize*NCCL_LL128_DATAELEMS*sizeof(uint64_t) / (NCCL_LL128_LINEELEMS*sizeof(T))),
-      minChunkSize((NCCL_LL128_SHMEM_ELEMS_PER_THREAD*args->nThreads*NCCL_LL128_DATAELEMS*sizeof(uint64_t))/(NCCL_LL128_LINEELEMS*sizeof(T))/2),
+      minChunkSize((NCCL_LL128_SHMEM_ELEMS_PER_THREAD*args->nThreads*NCCL_LL128_DATAELEMS*sizeof(uint64_t))/(NCCL_LL128_LINEELEMS*sizeof(T))/2), chunkEffectiveSize(chunkSize),
       prims(tid, args->nThreads, recvPeer, sendPeer, stepSize, channel, args->comm) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
     chunkSize = min(chunkSize, DIVUP(sizePerScklChunk-gridOffset,nScklInstnaces*minChunkSize)*minChunkSize);
-    realChunkSize = chunkSize;
     ssize_t chunkOffset = gridOffset + scklIndex*chunkSize;
     nelem = min(chunkSize, sizePerScklChunk-chunkOffset);
     return chunkOffset;
@@ -241,7 +243,7 @@ template<class FUNC, typename T>
 struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
-  int realChunkSize;
+  int chunkEffectiveSize;
 
   int nSendsAdjuster, nRecvsAdjuster;
 
@@ -251,8 +253,8 @@ struct LLWrapper {
 
   __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepLines(args->comm->buffSizes[NCCL_PROTO_LL] / (sizeof(union ncclLLFifoLine)*NCCL_STEPS)),
-      chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)),
-      prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm), realChunkSize(chunkSize) {}
+      chunkSize(stepLines * sizeof(uint64_t) / sizeof(T)), chunkEffectiveSize((int)chunkSize),
+      prims(tid, args->nThreads, recvPeer, sendPeer, stepLines, channel, args->comm) {}
 
   // TODO: nScklInstances should be used. Buggy!
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
