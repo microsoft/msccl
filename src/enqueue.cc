@@ -159,6 +159,9 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       elem->active[i] = 0;
   }
 
+  if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
+    comm->scclAlgo.flagsNeedReset = 1;
+
   params->func = ncclKerns[elem->funcIndex];
   return ncclSuccess;
 }
@@ -524,6 +527,11 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
     size_t rankOffset = info->comm->rank * nBytesPerRank;
     CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
+  }
+
+  if (info->comm->scclAlgo.flagsNeedReset == 1){
+    CUDACHECK(cudaMemsetAsync(info->comm->scclAlgo.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+    info->comm->scclAlgo.flagsNeedReset = 0;
   }
 
   struct ncclWorkElem work;

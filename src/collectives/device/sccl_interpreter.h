@@ -47,7 +47,7 @@ class scclFunction {
       // SCCL flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
-      volatile struct scclFlag* scclFlags = comm->scclFlags;
+      volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerscclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerscclChunk, gridOffset, nscclInstnaces, scclIndex);

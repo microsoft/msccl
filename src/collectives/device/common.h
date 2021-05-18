@@ -105,6 +105,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
         if (tid == 0) {
           w->index += NCCL_MAX_OPS;
         }
+        __syncthreads();
       }
       
       if (w->funcIndex == FINDEX) {

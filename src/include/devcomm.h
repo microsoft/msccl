@@ -162,6 +162,11 @@ struct scclChannelInfo {
   int nBlocksForChannel;
 };
 
+struct scclFlag {
+  uint64_t flag;
+  uint64_t align[3]; // To avoid false sharing
+};
+
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
   // max(#chunks in input, #chunks in output)
@@ -179,6 +184,11 @@ struct scclAlgorithm {
   // declaration for scratchBuffer. This is only to be accessed by the host
   size_t scratchBufferSize;
   void* scratchBuffer;
+
+  // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
+  struct scclFlag* flags;
+  // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
+  int flagsNeedReset;
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -262,17 +272,10 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
-struct scclFlag {
-  uint64_t flag;
-  uint64_t align[3]; // To avoid false sharing
-};
-
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  // allocate enough SCCL flags to synchronize across thread blocks
-  struct scclFlag scclFlags[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS]; 
   struct scclAlgorithm scclAlgo;
 
   // Flag to ask NCCL kernels to abort

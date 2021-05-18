@@ -170,6 +170,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
+  CUDACHECK(cudaFree(comm->scclAlgo.flags));
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
@@ -280,6 +281,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
+  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgo.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // SCCL algo is copied to the device side
   comm->hostDevComm.scclAlgo = comm->scclAlgo;
   
