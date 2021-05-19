@@ -156,7 +156,7 @@ struct scklThreadBlock {
 
 struct scklChannelInfo {
   int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j for threadblock i
+  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
   int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nsendPeers;
   int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];

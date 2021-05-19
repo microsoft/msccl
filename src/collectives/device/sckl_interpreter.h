@@ -46,8 +46,7 @@ class SCKLFunction {
 
       int chunkEffectiveSize = prims.chunkEffectiveSize;
       // TODO: add this to the info
-      int scclMaxAllowedCount = chunkEffectiveSize / DIVUP(size*nranks, (size_t)(scklAlgo->nchunksPerLoop * nScklInstnaces));
-
+      int scclMaxAllowedCount = max((int)(chunkEffectiveSize / DIVUP(size*nranks, (size_t)(scklAlgo->nchunksPerLoop * nScklInstnaces))),1);
 
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
@@ -59,8 +58,6 @@ class SCKLFunction {
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scklTB->nsteps; i++){
-          if (tid == 0)
-            printf("bid %d step %d workIndex = %d\n", bid, i, workIndex);
           struct scklTransfer* sckltran = &scklTB->transfers[i];
           // if (sckltran->type == SCKL_NO_OP) continue;
           // first wait if there is a dependence
@@ -68,19 +65,19 @@ class SCKLFunction {
           int8_t dependentStep = sckltran->dependentStep;
           if (sckltran->dependentBid >= 0){
               if (tid == sync_tid){
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              while ((scklFlags + dependentBid)->flag < goalFlag){};
+                uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+                while ((scklFlags + dependentBid)->flag < goalFlag){};
               }
               __syncthreads();
           }
 
+          srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
+          dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           int count = sckltran->count;
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
+            srcoffset = chunkOffset + (ssize_t) (sckltran->srcoffset+c) * sizePerScklChunk;
+            dstoffset = chunkOffset + (ssize_t) (sckltran->dstoffset+c) * sizePerScklChunk;
             int thisCount = min(scclMaxAllowedCount, count-c);
-            srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
-            srcoffset = chunkOffset + (ssize_t) sckltran->srcoffset * sizePerScklChunk;
-            dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
-            dstoffset = chunkOffset + (ssize_t) sckltran->dstoffset * sizePerScklChunk;
             switch (sckltran->type) {
               case SCKL_SEND:
                 prims.send(srcPointer + srcoffset, dstoffset, thisCount);
@@ -120,10 +117,6 @@ struct SimpleWrapper {
   const int chunkSize;
   int chunkEffectiveSize;
 
-  // this is used to set the conn->step so that the proxy stops. if a send sends more than 1 chunk, conn->step is only increased as 
-  // if one chunk was sent. proxy looks at conn->step to stop a proxy
-  int nSendsAdjuster, nRecvsAdjuster;
-
   ncclPrimitives<UNROLL, SCKL_CHUNKSTEPS/SCKL_SLICESTEPS, SCKL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
 
   int nelem;
@@ -131,7 +124,7 @@ struct SimpleWrapper {
   __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : nthreads(args->nThreads-WARP_SIZE),
       stepSize(args->comm->buffSizes[NCCL_PROTO_SIMPLE] / (sizeof(T)*NCCL_STEPS)),
-      chunkSize(stepSize * SCKL_CHUNKSTEPS), nSendsAdjuster(0), nRecvsAdjuster(0), chunkEffectiveSize(chunkSize),
+      chunkSize(stepSize * SCKL_CHUNKSTEPS), chunkEffectiveSize(chunkSize),
       prims(tid, nthreads, recvPeer, sendPeer, thisOutput, stepSize, channel, args->comm, ncclShmem->ptrs, 0) {}
 
   __device__ size_t initIter(ssize_t sizePerScklChunk, ssize_t gridOffset, int nScklInstnaces, int scklIndex) {
@@ -144,33 +137,22 @@ struct SimpleWrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directSend(chunkPointer, dstoffset, nelem*count);
-    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directRecv(chunkPointer, dstoffset, nelem*count);
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.directRecvCopySend(chunkPointer, dstoffset, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
   
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
-    nRecvsAdjuster += count-1;
-  }
-
-  __device__ ~SimpleWrapper(){
-    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
   }
 };
 
@@ -184,11 +166,7 @@ struct LL128Wrapper {
   ssize_t chunkSize;
   const ssize_t minChunkSize;
   int chunkEffectiveSize;
-
-  int nSendsAdjuster, nRecvsAdjuster;
-
   ncclLL128Primitives<T, FUNC, 1, 1> prims;
-
   int nelem;
 
   __device__ LL128Wrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
@@ -206,34 +184,23 @@ struct LL128Wrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.send(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recv(chunkPointer, nelem*count);
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recvCopySend(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
-    nRecvsAdjuster += count-1;
   }  
-
-  __device__ ~LL128Wrapper(){
-    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
-  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -244,11 +211,7 @@ struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
   int chunkEffectiveSize;
-
-  int nSendsAdjuster, nRecvsAdjuster;
-
   ncclLLPrimitives<T, FUNC, 1, 1> prims;
-
   int nelem;
 
   __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
@@ -265,34 +228,23 @@ struct LLWrapper {
 
   __device__ void send(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.send(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
   }
 
   __device__ void recv(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recv(chunkPointer, nelem*count);
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvCopySend(T * chunkPointer, ssize_t dstoffset, int count) {
     prims.recvCopySend(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceSend(T * chunkPointer, int count) {
     prims.recvReduceSend(chunkPointer, nelem*count);
-    nSendsAdjuster += count-1;
-    nRecvsAdjuster += count-1;
   }
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
-    nRecvsAdjuster += count-1;
   }  
-  
-  __device__ ~LLWrapper(){
-    prims.adjustConnStep(nSendsAdjuster, nRecvsAdjuster);
-  }
 };
 
 template<class FUNC, typename T, int UNROLL>

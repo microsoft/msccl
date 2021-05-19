@@ -226,17 +226,16 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     for (int i=0; i<scklChannel->nrecvPeers; i++){
       int nrecvs = 0;
       for (int j = 0; j < SCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j,args->scclMaxAllowedCount);
+        int ntransfersPerOp = DIVUP(j+1,args->scclMaxAllowedCount);
         nrecvs += scklChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
       }
-
       args->nsteps = nrecvs * args->nLoops * args->chunkSteps;
       NCCLCHECK(SaveProxy(proxyRecv, scklChannel->recvPeers[i], args));
     }
     for (int i=0; i<scklChannel->nsendPeers; i++){
       int nsends = 0;
       for (int j = 0; j < SCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j,args->scclMaxAllowedCount);
+        int ntransfersPerOp = DIVUP(j+1,args->scclMaxAllowedCount);
         nsends += scklChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
       }
 

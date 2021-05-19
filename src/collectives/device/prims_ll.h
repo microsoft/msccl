@@ -237,16 +237,6 @@ class ncclLLPrimitives {
     return LLGenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  __device__ void adjustConnStep(int nSendsAdjuster, int nRecvsAdjuster) {
-    if (tid < nsend) {
-      sendConnHead += nSendsAdjuster;
-    }
-
-    if (tid >= nthreads-WARP_SIZE && wid < nrecv) {
-      recvConnHead += nRecvsAdjuster;
-    }    
-  }
-
   __device__ __forceinline__ ~ncclLLPrimitives() {
     // Save steps for the next operation
     saveRecvSync();

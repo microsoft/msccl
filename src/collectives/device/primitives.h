@@ -317,27 +317,6 @@ class ncclPrimitives {
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
 
-  __device__ __forceinline__ void adjustConnStep(int nSendsAdjuster, int nRecvsAdjuster) {
-    // for (int i = 0; i < nSendsAdjuster; i++){
-    //   if (tid == 0)
-    //     printf("SENDS: bid = %d | i = %d | %d %d\n", (int)blockIdx.x, i, nSendsAdjuster, nRecvsAdjuster);
-    //   directSend(NULL, 0, 0);
-    // }
-    // for (int i = 0; i < nRecvsAdjuster; i++){
-    //   if (tid == 0)
-    //     printf("RECVS: bid = %d | i = %d | %d %d\n", (int)blockIdx.x, i, nSendsAdjuster, nRecvsAdjuster);
-    //   directRecv(NULL, 0, 0);
-    // }
-    // if (role & ROLE_WAIT_SEND) step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
-    // if (role & ROLE_WAIT_RECV) step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
-    // if (role & ROLE_POST_SEND) *connTailPtr = step += nSendsAdjuster*SLICESTEPS*SLICESPERCHUNK;
-    // if (role & ROLE_POST_RECV) *connHeadPtr = step += nRecvsAdjuster*SLICESTEPS*SLICESPERCHUNK;
-    // barrier();
-    // if (tid == 0){
-    //   printf("%d done!\n", (int)blockIdx.x);
-    // }
-  }
-
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation
     saveSync();
