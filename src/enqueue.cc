@@ -469,7 +469,8 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   proxyArgs->redOp = info->op;
   // TODO: Clean up this mess
   int nScclInstances = info->nChannels / info->comm->scklAlgo.nChannels;
-  proxyArgs->scclMaxAllowedCount = std::max( 1, (int)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop * nScclInstances))));
+  proxyArgs->scclMaxAllowedCount = std::max(1, (int)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop * nScclInstances))));
+  // printf("EEE scclMaxAllowedCount %d chunkEffectiveSize %d\n", proxyArgs->scclMaxAllowedCount, chunkEffectiveSize);
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up

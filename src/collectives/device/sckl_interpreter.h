@@ -47,6 +47,8 @@ class SCKLFunction {
       int chunkEffectiveSize = prims.chunkEffectiveSize;
       // TODO: add this to the info
       int scclMaxAllowedCount = max((int)(chunkEffectiveSize / DIVUP(size*nranks, (size_t)(scklAlgo->nchunksPerLoop * nScklInstnaces))),1);
+      // if (tid == 0 && bid == 0)
+      //   printf("scclMaxAllowedCount %d chunkEffectiveSize %d\n", scclMaxAllowedCount, chunkEffectiveSize);
 
       // sckl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
@@ -71,6 +73,8 @@ class SCKLFunction {
               __syncthreads();
           }
 
+          // if (tid == 0)
+          //   printf("1111 %d %d %d %d\n", workIndex, (int) iter, bid, i);
           srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           int count = sckltran->count;
@@ -100,13 +104,18 @@ class SCKLFunction {
                 return;
             }
           }
+          // if (tid == 0)
+          //   printf("2222 %d %d %d %d\n", workIndex, (int) iter, bid, i);
           if (tid == sync_tid && sckltran->has_dependence){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
             scklFlags[bid].flag = curFlag;
+            __threadfence();
           }
         }
       }
+      if (tid == 0)
+        printf("bid %d workIndex %d is done\n", bid, workIndex);
     }
 };
 
