@@ -170,7 +170,8 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_RING, NCCL_PROTO_LL128, FUNC, T,
         // step 0: push data to next GPU
         rankDest = ring->devUserRanks[0];
         offset = chunkOffset + rankDest * size;
-
+        if (tid == 0)
+          printf("nelem = %d size = %d\n", nelem, (int) size);
         if (thisInput + chunkOffset == thisOutput + offset) { // In place
           LLprims.send(thisInput+chunkOffset, nelem);
         } else {
