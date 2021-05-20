@@ -74,7 +74,7 @@ class SCKLFunction {
           }
 
           // if (tid == 0)
-          //   printf("1111 %d %d %d %d\n", workIndex, (int) iter, bid, i);
+          //   printf("1111 %d %d %d %d | %d | %d\n", workIndex, (int) iter, bid, i, (int) prims.nelem, (int) chunkEffectiveSize);
           srcPointer = (sckltran->srcbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           dstPointer = (sckltran->dstbuffer == SCKL_INPUT_BUFFER) ? thisInput : thisOutput;
           int count = sckltran->count;
@@ -105,7 +105,7 @@ class SCKLFunction {
             }
           }
           // if (tid == 0)
-          //   printf("2222 %d %d %d %d\n", workIndex, (int) iter, bid, i);
+          //   printf("2222 %d %d %d %d | %d | %d\n", workIndex, (int) iter, bid, i, (int) prims.nelem, (int) chunkEffectiveSize);
           if (tid == sync_tid && sckltran->has_dependence){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
