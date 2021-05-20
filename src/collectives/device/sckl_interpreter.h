@@ -113,8 +113,6 @@ class SCKLFunction {
           }
         }
       }
-      if (tid == 0)
-        printf("bid %d workIndex %d is done\n", bid, workIndex);
     }
 };
 
