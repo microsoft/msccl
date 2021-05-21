@@ -806,36 +806,36 @@ ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXm
   return ncclSuccess;
 }
 
-ncclResult_t scklAlgoXmlStep(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
+ncclResult_t scclAlgoXmlStep(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
   NCCLCHECK(xmlLoadSub(file, xml, head, NULL, 1));
   return ncclSuccess;
 }
 
-ncclResult_t scklAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  struct xmlHandler handlers[] = { { "step", scklAlgoXmlStep } };
+ncclResult_t scclAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  struct xmlHandler handlers[] = { { "step", scclAlgoXmlStep } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
-ncclResult_t scklAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  struct xmlHandler handlers[] = { { "tb", scklAlgoXmlthreadblock } };
+ncclResult_t scclAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  struct xmlHandler handlers[] = { { "tb", scclAlgoXmlthreadblock } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
-ncclResult_t scklAlgoXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  struct xmlHandler handlers[] = { { "gpu", scklAlgoXmlGpu } };
+ncclResult_t scclAlgoXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  struct xmlHandler handlers[] = { { "gpu", scclAlgoXmlGpu } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
-ncclResult_t scklGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml) {
+ncclResult_t scclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml) {
   FILE* file = fopen(xmlGraphFile, "r");
   if (file == NULL) {
-    WARN("Could not open XML SCKL graph file %s : %s", xmlGraphFile, strerror(errno));
+    WARN("Could not open XML SCCL graph file %s : %s", xmlGraphFile, strerror(errno));
     return ncclSystemError;
   }
-  struct xmlHandler handlers[] = { { "algo", scklAlgoXmlLoad } };
+  struct xmlHandler handlers[] = { { "algo", scclAlgoXmlLoad } };
   xml->maxIndex = 0;
   NCCLCHECK(xmlLoadSub(file, xml, NULL, handlers, 1));
   fclose(file);
