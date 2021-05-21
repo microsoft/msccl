@@ -460,7 +460,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
   // sckl might use multiple channels per loop. therefore, the division by info->comm->scklAlgo.nChannels is necessary if the algo is SCKL.
   proxyArgs->nLoops = (int)(DIVUP(info->nBytes, ((((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)/(size_t) (info->algorithm == NCCL_ALGO_SCKL ? info->comm->scklAlgo.nChannels : 1))));
-  // nstepsPerloop for sckl is incorrect and will be adjusted in ncclProxySaveColl
+  // nstepsPerloop for sckl is incorrect at this pointand will be adjusted in ncclProxySaveColl
   proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
@@ -468,8 +468,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
   // TODO: Clean up this mess
-  int nScclInstances = info->nChannels / info->comm->scklAlgo.nChannels;
-  proxyArgs->scclMaxAllowedCount = std::max(1, (int)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop * nScclInstances))));
+  proxyArgs->scclMaxAllowedCount = std::max(1, (int)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up
