@@ -109,10 +109,9 @@ struct SimpleWrapper {
   const int nthreads;
   const int stepSize;
   const int chunkSize;
+  int nelem;
 
   ncclPrimitives<UNROLL, SCCL_CHUNKSTEPS/SCCL_SLICESTEPS, SCCL_SLICESTEPS, T, 1, 1, 1, FUNC> prims;
-
-  int nelem;
 
   __device__ SimpleWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : nthreads(args->nThreads-WARP_SIZE),
@@ -158,8 +157,9 @@ struct LL128Wrapper {
   const int stepSize;
   ssize_t chunkSize;
   const ssize_t minChunkSize;
-  ncclLL128Primitives<T, FUNC, 1, 1> prims;
   int nelem;
+
+  ncclLL128Primitives<T, FUNC, 1, 1> prims;
 
   __device__ LL128Wrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepSize(args->comm->buffSizes[NCCL_PROTO_LL128] / (sizeof(uint64_t)*NCCL_STEPS)),
@@ -202,8 +202,9 @@ template<class FUNC, typename T>
 struct LLWrapper {
   const int stepLines;
   const ssize_t chunkSize;
-  ncclLLPrimitives<T, FUNC, 1, 1> prims;
   int nelem;
+  
+  ncclLLPrimitives<T, FUNC, 1, 1> prims;
 
   __device__ LLWrapper(struct ncclWorkElem* args, int tid, int* recvPeer, int* sendPeer, T * thisOutput, struct ncclChannel* channel)
     : stepLines(args->comm->buffSizes[NCCL_PROTO_LL] / (sizeof(union ncclLLFifoLine)*NCCL_STEPS)),
