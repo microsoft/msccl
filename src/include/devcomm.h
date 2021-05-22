@@ -18,7 +18,7 @@ extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
-#define NCCL_ALGO_SCKL 2
+#define NCCL_ALGO_SCCL 2
 #define NCCL_ALGO_COLLNET 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
@@ -117,24 +117,25 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCKL_MAX_NUM_STEPS 1024
-#define SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
+#define SCCL_MAX_NUM_STEPS 1024
+#define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 
-#define SCKL_INPUT_BUFFER 0
-#define SCKL_OUTPUT_BUFFER 1
+#define SCCL_INPUT_BUFFER 0
+#define SCCL_OUTPUT_BUFFER 1
 
-#define SCKL_SEND 0
-#define SCKL_RECV 1
-#define SCKL_RECV_COPY_SEND 2
-#define SCKL_RECV_REDUCE_SEND 3
-#define SCKL_RECV_REDUCE_COPY 4
-#define SCKL_NO_OP 5
+#define SCCL_SEND 0
+#define SCCL_RECV 1
+#define SCCL_RECV_COPY_SEND 2
+#define SCCL_RECV_REDUCE_SEND 3
+#define SCCL_RECV_REDUCE_COPY 4
+#define SCCL_NO_OP 5
 
-struct scklTransfer {
+// TODO: compress this by a lot!
+struct scclTransfer {
   int16_t srcoffset;
   int16_t dstoffset;
-  uint8_t srcbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
-  uint8_t dstbuffer; // follow SCKL_THIS_INPUT/SCKL_THIS_OUTPUT macros
+  uint8_t srcbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
+  uint8_t dstbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
   int16_t dependentStep;
   int8_t has_dependence;
@@ -142,38 +143,42 @@ struct scklTransfer {
   uint8_t count;
 };
 
-struct scklThreadBlock {
+struct scclThreadBlock {
   int8_t sendpeer;
   int8_t recvpeer;
   uint16_t nsteps;
   uint8_t channelId; // associated channel
   uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
-  struct scklTransfer transfers[SCKL_MAX_NUM_STEPS];
+  struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
-struct scklChannelInfo {
-  int sendPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForSendPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+#define SCCL_MAX_COUNT 16
+
+struct scclChannelInfo {
+  int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
+  int nchunksForSendPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nsendPeers;
-  int recvPeers[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForRecvPeer[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int recvPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nrecvPeers;
   int nBlocksForChannel;
 };
 
-// gpuId is the one that is in comm->rank
-struct scklAlgorithm {
+// this is only built for when my rank is the gpu id in the XML
+struct scclAlgorithm {
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
-  // total number of threadblocks needed by sckl algorithm
+  // total number of threadblocks needed by sccl algorithm
   int nBlocks;
   // bid is used as an index into this array
-  struct scklThreadBlock scklTB[MAXCHANNELS*SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  // number of channels needed by sckl algorithm
+  // TODO: make this const
+  struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // number of channels needed by sccl algorithm
   int nChannels;
-  // the arrays in this struct can be inferred from scklTB. they are created to use NCCL API easily
-  struct scklChannelInfo scklChannels[MAXCHANNELS];
+  // the arrays in this struct can be inferred from scclTB. they are created to use NCCL API easily
+  struct scclChannelInfo scclChannels[MAXCHANNELS];
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -202,10 +207,11 @@ struct ncclWorkElem {
   uint16_t nThreads;
   uint16_t funcIndex;
   uint16_t index;
-  // in SCKL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
-  uint8_t active[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  uint8_t isScklAlgorithm; // right now, 0 indicates not a sckl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scklAlgorithms.
-  uint8_t nActives; // if it is a sckl algorithm, it must be set to associated channel number of thread blocks. if not a sckl algorithm, it is 1.
+  // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
+  uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
+  uint8_t isScclAlgorithm; // right now, 0 indicates not a sccl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scclAlgorithms.
+  uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
 
   const void * sendbuff;
   void * recvbuff;
@@ -225,7 +231,7 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[8];
+    uint64_t align[7];
   };
 };
 struct ncclWork {
@@ -256,7 +262,7 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
-struct scklFlag {
+struct scclFlag {
   uint64_t flag;
   uint64_t align[3]; // To avoid false sharing
 };
@@ -265,9 +271,9 @@ struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  // allocate enough sckl flags to synchronize across thread blocks
-  struct scklFlag scklFlags[SCKL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS]; 
-  struct scklAlgorithm scklAlgo;
+  // allocate enough sccl flags to synchronize across thread blocks
+  struct scclFlag scclFlags[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS]; 
+  struct scclAlgorithm scclAlgo;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;
