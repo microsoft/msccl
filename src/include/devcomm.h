@@ -247,7 +247,7 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[7];
+    uint64_t align[6];
   };
 };
 struct ncclWork {

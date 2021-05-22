@@ -123,6 +123,7 @@ class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_RING, NCCL_PROTO_LL, FUNC, T
     }
 };
 
+#include "prims_ll128.h"
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_RING, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
