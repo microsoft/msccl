@@ -364,11 +364,11 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUp : ncclPatternPipelineTo; break;
     case ncclFuncReduceScatter:
     case ncclFuncAllGather:
-      info->pattern = info->algorithm == NCCL_ALGO_SCCL ? ncclPatternsccl : ncclPatternRing; break;
+      info->pattern = info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRing; break;
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
-      info->pattern = ncclPatternsccl; break;
+      info->pattern = ncclPatternSccl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -390,7 +390,7 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
-    case ncclPatternsccl:
+    case ncclPatternSccl:
       // SCCL needs a specific number of steps per loop for each channel/connection. it is set properly in ncclProxySaveColl
       // n chunks per loop identifies how many chunks from the input buffer is processed in each iteration.
       info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->scclAlgo.nchunksPerLoop; break;
@@ -481,15 +481,18 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-  // SCCL might use multiple channels per loop. therefore, the division by info->comm->scclAlgo.nChannels is necessary if the algo is SCCL.
-  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, ((((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)/(size_t) (info->algorithm == NCCL_ALGO_SCCL ? info->comm->scclAlgo.nChannels : 1))));
-  // nstepsPerloop for SCCL is incorrect and will be adjusted in ncclProxySaveColl
+  // sccl might use multiple channels per loop. therefore, the division by info->comm->scclAlgo.nChannels is necessary if the algo is SCCL.
+  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->comm->scclAlgo.nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  // nstepsPerloop for sccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
   proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
   proxyArgs->protocol = info->protocol;
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
+  // SCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
+  proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+  work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up
@@ -535,7 +538,6 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   }
 
   struct ncclWorkElem work;
-  // memset(&work, 0, sizeof(struct ncclWorkElem)); // setting all elements to 0 so that active (SCCL) array is also 0 all the way.
   struct ncclProxyArgs proxyArgs;
   memset(&proxyArgs, 0, sizeof(struct ncclProxyArgs));
   NCCLCHECK(computeColl(info, &work, &proxyArgs));
@@ -581,10 +583,10 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     // Reduce the per-channel size if we cannot fully utilize the channels
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     // making sure whether all are SCCL algorithms or none at all.
-    int hasscclAlgo = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL);
+    int hasScclAlgo = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL);
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      if (hasscclAlgo && info->algorithm != NCCL_ALGO_SCCL){
+      if (hasScclAlgo && info->algorithm != NCCL_ALGO_SCCL){
         WARN("SCCL algorithms can only be used asynchronously with other SCCL algorithm.");
         return ncclInvalidUsage;
       }
@@ -693,8 +695,8 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
   NCCLCHECK(saveP2pOp(info, w, segment));
   info->comm->myParams->gridDim.x = std::max<unsigned>(info->comm->myParams->gridDim.x, channelId+1);
   info->comm->myParams->blockDim.x = std::max<unsigned>(info->comm->myParams->blockDim.x, info->nThreads);
-  // SCCL does not generate p2p kernels.
-  w->elems[0].isscclAlgorithm = 0;
+  // sccl does not generate p2p kernels.
+  w->elems[0].isScclAlgorithm = 0;
 
   return ncclSuccess;
 }

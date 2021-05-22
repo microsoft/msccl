@@ -131,33 +131,38 @@ struct ncclRing {
 #define SCCL_RECV_REDUCE_COPY 4
 #define SCCL_NO_OP 5
 
+// TODO: compress this by a lot!
 struct scclTransfer {
   int16_t srcoffset;
   int16_t dstoffset;
   uint8_t srcbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   uint8_t dstbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
-  int8_t dependentStep;
+  int16_t dependentStep;
   int8_t has_dependence;
   uint8_t type;
+  uint8_t count;
 };
 
 struct scclThreadBlock {
   int8_t sendpeer;
   int8_t recvpeer;
-  uint8_t nsteps;
+  uint16_t nsteps;
   uint8_t channelId; // associated channel
-  uint8_t rid; // relative id of this thread block to the channel
+  uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
+#define SCCL_MAX_COUNT 16
+
 struct scclChannelInfo {
   int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForSendPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
+  int nchunksForSendPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nsendPeers;
   int recvPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForRecvPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
   int nrecvPeers;
   int nBlocksForChannel;
 };
@@ -219,8 +224,9 @@ struct ncclWorkElem {
   uint16_t index;
   // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
   uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  uint8_t isscclAlgorithm; // right now, 0 indicates not a SCCL algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scclAlgorithms.
-  uint8_t nActives; // if it is a SCCL algorithm, it must be set to associated channel number of thread blocks. if not a SCCL algorithm, it is 1.
+  uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
+  uint8_t isScclAlgorithm; // right now, 0 indicates not a sccl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scclAlgorithms.
+  uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
 
   const void * sendbuff;
   void * recvbuff;

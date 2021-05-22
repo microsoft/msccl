@@ -7,8 +7,6 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
-#include "sccl_interpreter.h"
-
 
 template<class FUNC, typename T, int UNROLL>
 class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
@@ -199,26 +197,17 @@ class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_COLLNET, PROTO, REDOP, T, UN
 template<class REDOP, typename T, int UNROLL>
 class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_SCCL, NCCL_PROTO_SIMPLE, REDOP, T, UNROLL> {
   public:
-    __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionSimple<REDOP, T, UNROLL> scclfunc;
-      scclfunc.run(args);      
-    }
+    __device__ void run(struct ncclWorkElem* args) {}
 };
 
 template<class REDOP, typename T, int UNROLL>
 class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, REDOP, T, UNROLL> {
   public:
-    __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL128<REDOP, T, UNROLL> scclfunc;
-      scclfunc.run(args);      
-    }
+    __device__ void run(struct ncclWorkElem* args) {}
 };
 
 template<class REDOP, typename T, int UNROLL>
 class ncclFunction<ncclFuncReduceScatter, NCCL_ALGO_SCCL, NCCL_PROTO_LL, REDOP, T, UNROLL> {
   public:
-    __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL<REDOP, T, UNROLL> scclfunc;
-      scclfunc.run(args);      
-    }
+    __device__ void run(struct ncclWorkElem* args) {}
 };
