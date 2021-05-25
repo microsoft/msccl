@@ -23,7 +23,6 @@ class scclFunction {
       const int tid = threadIdx.x;
       const int sync_tid = args->nThreads-1; // last thread is most likely not doing anthing and used for SCCL cross thread synchronization
       const int bid = blockIdx.x;
-      const int scclNBlocks = scclAlgo->nBlocks;
       struct scclThreadBlock* scclTB = &scclAlgo->scclTB[bid];
       const int channelId = scclTB->channelId;
       struct ncclChannel* channel = comm->channels+channelId;

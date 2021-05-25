@@ -341,15 +341,13 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   if (info->protocol == NCCL_PROTO_SIMPLE) nt += WARP_SIZE; // Extra warp for sync
   if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_TREE) nt += WARP_SIZE;
   info->nChannels = nc;
-  // SCCL needs comm->scclAlgo.nChannels. if there are more channels, extra ones replicate SCCL algorithm
+  // SCCL needs exactly comm->scclAlgo.nChannels.
   if (info->algorithm == NCCL_ALGO_SCCL){
-    info->nChannels = ROUNDUP(nc,comm->scclAlgo.nChannels);
-    if (info->nChannels > comm->nChannels)
-      info->nChannels -= comm->scclAlgo.nChannels;
-    if (info->nChannels > comm->nChannels || info->nChannels < comm->scclAlgo.nChannels){
-      WARN("SCCL algo should have at least %d channels but ended up with %d channels.", comm->scclAlgo.nChannels, comm->nChannels);
+    if (comm->scclAlgo.nChannels > comm->nChannels){
+      WARN("Come must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgo.nChannels, comm->nChannels);
       return ncclInternalError;
     }
+    info->nChannels = comm->scclAlgo.nChannels;
   }
   info->nThreads = nt;
   return ncclSuccess;
@@ -424,6 +422,10 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getLoopInfo(info));
 
   if (info->algorithm == NCCL_ALGO_SCCL){
+    if (info->comm->scclAlgo.nChannels == 0){
+      WARN("SCCL algorithm's nchannels shouldn't be 0!");
+      return ncclInternalError;
+    }
     // adjust SCCL scratch 
     NCCLCHECK(adjustSCCLScratchPad(info));
   }
@@ -491,6 +493,10 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
   // SCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
+  if (info->algorithm == NCCL_ALGO_SCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
+    WARN("SCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
+    return ncclInvalidUsage;
+  }
   proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
   work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
@@ -546,6 +552,10 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
   int nChannels = work.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
+  if (info->algorithm == NCCL_ALGO_SCCL && info->comm->scclAlgo.nChannels == 0) {
+    WARN("scclAlgo.nChannels must be positive!\n");
+    return ncclInternalError;
+  }
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;

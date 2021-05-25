@@ -205,6 +205,11 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       if (comm->rank == 0) WARN("CollNet is not supported or fails to initialize, ignoring NCCL_ALGO=COLLNET");
     }
   }
+  
+  // Disable SCCL if SCCL_XML_FILE is not specified
+  if (!getenv("SCCL_XML_FILE")){
+    algoEnable[NCCL_ALGO_SCCL] = 0;
+  }
 
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     int pEnable = protoEnable[p];
@@ -215,7 +220,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
     // Only disable algo for Allreduce since others only have one
-    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
+    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter || c == ncclFuncAllToAll) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
   }
 
   if (comm->rank == 0) {
