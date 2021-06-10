@@ -131,7 +131,7 @@ class ncclPrimitives {
     *connTailPtr = step += SLICESTEPS;
   }
 
-  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST>
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
   inline __device__ void
   GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset) {
     int offset = 0;
@@ -151,10 +151,10 @@ class ncclPrimitives {
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti<UNROLL, FUNC, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+              ReduceOrCopyMulti<UNROLL, BinaryOp, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
             }
           } else {
-            ReduceOrCopyMulti<UNROLL, FUNC, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
+            ReduceOrCopyMulti<UNROLL, BinaryOp, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
           }
         }
       }
@@ -318,8 +318,29 @@ class ncclPrimitives {
   }
 
   __device__ __forceinline__ void
-  binaryOp(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1>(src, dst, nelem, 0);
+  add(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncSum<T>>(src, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  sub(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncDiff<T>>(src, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  mul(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncProd<T>>(src, dst, nelem, 0);
+  }
+
+  // Note this method cannot be named "min" due to a name conflict
+  __device__ __forceinline__ void
+  minimum(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncMin<T>>(src, dst, nelem, 0);
+  }
+
+  __device__ __forceinline__ void
+  maximum(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncMax<T>>(src, dst, nelem, 0);
   }
 
   __device__ __forceinline__ ~ncclPrimitives() {

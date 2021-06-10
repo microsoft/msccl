@@ -113,7 +113,7 @@ class ncclLLPrimitives {
     memcpy((char*)dst, (char*)&val, nbytes);
   }
 
-  template <int RECV, int SEND, int SRC, int DST>
+  template <int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
   __device__ void LLGenericOp(const T* srcPtr, T* dstPtr, int nelem) {
     uint32_t nbytes = nelem < 0 ? 0 : nelem*sizeof(T);
     uint32_t npack = DIVUP(nbytes, sizeof(uint64_t));
@@ -130,9 +130,9 @@ class ncclLLPrimitives {
       // Recv : local, then intra-node, then inter-node
       uint64_t val = SRC ? readAL(srcPack+offset) : readLL(0, offset);
       if (RECV) {
-        if (SRC) val = MULTI<FUNC, T>()(readLL(0, offset), val);
+        if (SRC) val = MULTI<BinaryOp, T>()(readLL(0, offset), val);
         for (int i=1; i<NRECV && i<nrecv; i++) {
-          val = MULTI<FUNC, T>()(readLL(i, offset), val);
+          val = MULTI<BinaryOp, T>()(readLL(i, offset), val);
         }
       }
 
@@ -237,8 +237,24 @@ class ncclLLPrimitives {
     return LLGenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  __device__ void binaryOp(const T* src, T* dst, int nelem) {
-    return LLGenericOp<0, 0, 1, 1>(src, dst, nelem);
+  __device__ void add(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncSum<T>>(src, dst, nelem);
+  }
+
+  __device__ void sub(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncDiff<T>>(src, dst, nelem);
+  }
+
+  __device__ void mul(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncProd<T>>(src, dst, nelem);
+  }
+
+  __device__ void minimum(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncMin<T>>(src, dst, nelem);
+  }
+
+  __device__ void maximum(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncMax<T>>(src, dst, nelem);
   }
 
   __device__ __forceinline__ ~ncclLLPrimitives() {

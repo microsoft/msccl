@@ -87,8 +87,20 @@ class scclFunction {
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
-              case SCCL_BINARY_OP:
-                prims.binaryOp(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              case SCCL_ADD:
+                prims.add(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_SUB:
+                prims.sub(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_MUL:
+                prims.mul(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_MIN:
+                prims.minimum(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
+              case SCCL_MAX:
+                prims.maximum(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_NO_OP:
                 break;
@@ -149,8 +161,24 @@ struct SimpleWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.binaryOp(srcChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -200,9 +228,25 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.binaryOp(srcChunkPointer, dstChunkPointer, nelem*count);
-  }  
+  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -247,9 +291,25 @@ struct LLWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.binaryOp(srcChunkPointer, dstChunkPointer, nelem*count);
-  }  
+  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>

@@ -801,8 +801,16 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
-                } else if (strcmp(type, "binOp") == 0) {
-                  sccltran->type = SCCL_BINARY_OP;
+                } else if (strcmp(type, "add") == 0) {
+                  sccltran->type = SCCL_ADD;
+                } else if (strcmp(type, "sub") == 0) {
+                  sccltran->type = SCCL_SUB;
+                } else if (strcmp(type, "mul") == 0) {
+                  sccltran->type = SCCL_MUL;
+                } else if (strcmp(type, "min") == 0) {
+                  sccltran->type = SCCL_MIN;
+                } else if (strcmp(type, "max") == 0) {
+                  sccltran->type = SCCL_MAX;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {

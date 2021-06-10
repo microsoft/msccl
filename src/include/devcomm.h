@@ -130,7 +130,11 @@ struct ncclRing {
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
 #define SCCL_NO_OP 5
-#define SCCL_BINARY_OP 6
+#define SCCL_ADD 6
+#define SCCL_SUB 7
+#define SCCL_MUL 8
+#define SCCL_MIN 9
+#define SCCL_MAX 10
 
 // TODO: compress this by a lot!
 struct scclTransfer {

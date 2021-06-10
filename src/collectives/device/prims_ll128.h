@@ -150,7 +150,7 @@ class ncclLL128Primitives {
 
   #define WARP_MASK 0xffffffff
 
-  template <int ELEMS_PER_THREAD, int RECV, int SEND, int SRC, int DST>
+  template <int ELEMS_PER_THREAD, int RECV, int SEND, int SRC, int DST, class BinaryOp>
   __device__ __forceinline__ void recvReduceSendCopy(int ll128Offset) {
     uint64_t v[ELEMS_PER_THREAD];
 
@@ -182,8 +182,8 @@ class ncclLL128Primitives {
       #pragma unroll
       for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
         load128(ptr+u*WARP_SIZE, v0, v1);
-        v[u] = SRC ? MULTI<FUNC, T>()(v0, v[u]) : v0;
-        v[u+1] = SRC ? MULTI<FUNC, T>()(v1, v[u+1]) : v1;
+        v[u] = SRC ? MULTI<BinaryOp, T>()(v0, v[u]) : v0;
+        v[u+1] = SRC ? MULTI<BinaryOp, T>()(v1, v[u+1]) : v1;
       }
 
       for (int i=1; i<NRECV && i<nrecv; i++) {
@@ -201,8 +201,8 @@ class ncclLL128Primitives {
         #pragma unroll
         for (int u=0; u<ELEMS_PER_THREAD; u+=2) {
           load128(ptr+u*WARP_SIZE, v0, v1);
-          v[u] = MULTI<FUNC, T>()(v0, v[u]);
-          v[u+1] = MULTI<FUNC, T>()(v1, v[u+1]);
+          v[u] = MULTI<BinaryOp, T>()(v0, v[u]);
+          v[u+1] = MULTI<BinaryOp, T>()(v1, v[u+1]);
         }
       }
     }
@@ -242,7 +242,7 @@ class ncclLL128Primitives {
   #define LL128INC (WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD)
   #define ELEMINC (LL128INC-(LL128INC/NCCL_LL128_LINEELEMS))
 
-  template <int RECV, int SEND, int SRC, int DST>
+  template <int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
   __device__ void GenericOp(const T* srcPtr, T* dstPtr, int nelem) {
     if (nelem <= 0) {
       // Don't move any data but still increase steps and sync with prev/next
@@ -274,7 +274,7 @@ class ncclLL128Primitives {
         loadSrcToShmem(done, maxOffset, (T*)(src64Ptr+elemOffset));
       }
       __syncwarp();
-      recvReduceSendCopy<NCCL_LL128_SHMEM_ELEMS_PER_THREAD, RECV, SEND, SRC, DST>(ll128Offset);
+      recvReduceSendCopy<NCCL_LL128_SHMEM_ELEMS_PER_THREAD, RECV, SEND, SRC, DST, BinaryOp>(ll128Offset);
       __syncwarp();
       if (DST) {
         int done = 0;
@@ -383,8 +383,25 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  __device__ void binaryOp(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1>(src, dst, nelem);
+  __device__ void add(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, FuncSum<T>>(src, dst, nelem);
+  }
+
+  __device__ void sub(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, FuncDiff<T>>(src, dst, nelem);
+  }
+
+  __device__ void mul(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, FuncProd<T>>(src, dst, nelem);
+  }
+
+  // Note this method cannot be named "min" due to a name conflict
+  __device__ void minimum(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, FuncMin<T>>(src, dst, nelem);
+  }
+
+  __device__ void maximum(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, FuncMax<T>>(src, dst, nelem);
   }
 
   __device__ __forceinline__ ~ncclLL128Primitives() {

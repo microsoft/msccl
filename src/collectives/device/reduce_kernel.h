@@ -26,6 +26,13 @@ struct FuncSum {
 };
 
 template<typename T>
+struct FuncDiff {
+  __device__ T operator()(const T x, const T y) const {
+    return x - y;
+  }
+};
+
+template<typename T>
 struct FuncProd {
   __device__ T operator()(const T x, const T y) const {
     return x * y;
