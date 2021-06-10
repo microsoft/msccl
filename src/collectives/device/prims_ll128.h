@@ -383,6 +383,10 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
+  __device__ void binaryOp(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1>(src, dst, nelem);
+  }
+
   __device__ __forceinline__ ~ncclLL128Primitives() {
     // Save steps for the next operation
     saveRecvSync();

@@ -237,6 +237,10 @@ class ncclLLPrimitives {
     return LLGenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
+  __device__ void binaryOp(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1>(src, dst, nelem);
+  }
+
   __device__ __forceinline__ ~ncclLLPrimitives() {
     // Save steps for the next operation
     saveRecvSync();

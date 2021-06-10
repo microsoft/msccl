@@ -801,6 +801,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
+                } else if (strcmp(type, "binOp") == 0) {
+                  sccltran->type = SCCL_BINARY_OP;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {

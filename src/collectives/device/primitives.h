@@ -317,6 +317,11 @@ class ncclPrimitives {
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
 
+  __device__ __forceinline__ void
+  binaryOp(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1>(src, dst, nelem, 0);
+  }
+
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation
     saveSync();
