@@ -714,10 +714,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             struct scclThreadBlock* sTB = &scclAlgo->scclTB[bid];
             sTB->nsteps = 0;
-            if (recvpeer == -1 && sendpeer == -1){
-              WARN("No point in creating in threadblock %d on gpu %d", bid, id);
-              return ncclInvalidUsage;
-            }
             if (recvpeer < -1 || sendpeer < -1){
               WARN("Wrong recvpeer (%d) or sendpeer (%d) in threadblock %d on gpu %d", recvpeer, sendpeer, bid, id);
               return ncclInvalidUsage;
@@ -731,8 +727,12 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             sTB->recvpeer = recvpeer;
             sTB->sendpeer = sendpeer;
             if (channelId < 0 || channelId > MAXCHANNELS){
-              WARN("ChannelId needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
-              return ncclInvalidUsage;
+              if (channelId == -1 && recvpeer == -1 && sendpeer == -1){
+                WARN("Threadblock %d on GPU %d has no send or recv", bid, id);
+              } else {
+                WARN("For threadblocks with recv/send, chan needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
+                return ncclInvalidUsage;
+              }
             }
             sTB->channelId = channelId;
             // setting type to none for all transfers to avoid transfering for non existing steps
@@ -741,7 +741,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
 
             // setting the summary of the sccl aglorithm in sccl channels
-            scclChannelInfo* scclChannel = &scclAlgo->scclChannels[sTB->channelId];
+            scclChannelInfo* scclChannel = (sTB->channelId == -1) ? NULL : &scclAlgo->scclChannels[sTB->channelId];
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
               if (strcmp(stepNode->name, "step") == 0){
@@ -784,23 +784,36 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 sccltran->count = count;
                 int hasSend = 0;
                 int hasRecv = 0;
+                int checkSrc = 0;
+                int checkDst = 0;
                 if (strcmp(type, "s") == 0){
                   sccltran->type = SCCL_SEND;
                   hasSend = 1;
+                  checkSrc = 1;
                 } else if (strcmp(type, "r") == 0) {
                   sccltran->type = SCCL_RECV;
                   hasRecv = 1;
+                  checkDst = 1;
                 } else if (strcmp(type, "rcs") == 0) {
                   sccltran->type = SCCL_RECV_COPY_SEND;
                   hasSend = 1;
                   hasRecv = 1;
+                  checkDst = 1;
                 } else if (strcmp(type, "rrs") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_SEND;
                   hasSend = 1;
                   hasRecv = 1;
+                  checkSrc = 1;
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
+                  checkDst = 1;
+                  checkSrc = 1;
+                  checkDst = 1;
+                } else if (strcmp(type, "cpy") == 0) {
+                  sccltran->type = SCCL_LOCAL_COPY;
+                  checkSrc = 1;
+                  checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {
@@ -808,14 +821,30 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   return ncclInternalError;
                 }
                 if (hasSend){
+                  if (sendpeer < 0){
+                    WARN("There is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
+                    return ncclInvalidUsage;
+                  }
+                  if (scclChannel == NULL) {
+                    WARN("Something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                    return ncclInternalError;
+                  }
                   scclChannel->nchunksForSendPeer[scclChannel->nsendPeers][count-1]++;
                 }
                 if (hasRecv){
+                  if (recvpeer < 0){
+                    WARN("There is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
+                    return ncclInvalidUsage;
+                  }
+                  if (scclChannel == NULL) {
+                    WARN("Something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                    return ncclInternalError;
+                  }
                   scclChannel->nchunksForRecvPeer[scclChannel->nrecvPeers][count-1]++;
                 }
 
-                if (hasSend) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
-                if (hasRecv) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
+                if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
+                if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
 
                 sccltran->dependentBid = depend_bid;
                 sccltran->dependentStep = depend_step;
@@ -830,17 +859,27 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
             if (sTB->sendpeer >= 0){
+              if (scclChannel == NULL) {
+                WARN("Something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                return ncclInternalError;
+              }
               scclChannel->sendPeers[scclChannel->nsendPeers] = sTB->sendpeer;
               scclChannel->nsendPeers++;
             }
             if (sTB->recvpeer >= 0){
+              if (scclChannel == NULL) {
+                WARN("Something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                return ncclInternalError;
+              }
               scclChannel->recvPeers[scclChannel->nrecvPeers] = sTB->recvpeer;
               scclChannel->nrecvPeers++;
             }
-            scclChannel->nBlocksForChannel = std::max(scclChannel->nBlocksForChannel, sTB->rid+1);
-            if (scclChannel->nBlocksForChannel > SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-              WARN("Too many sends/recv per channel. Max allowed %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
-              return ncclInvalidUsage;
+            if (scclChannel) {
+              scclChannel->nBlocksForChannel = std::max(scclChannel->nBlocksForChannel, sTB->rid+1);
+              if (scclChannel->nBlocksForChannel > SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                WARN("Too many sends/recv per channel. Max allowed %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                return ncclInvalidUsage;
+              }
             }
           }
         }

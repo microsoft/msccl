@@ -535,7 +535,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     }
     size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
     size_t rankOffset = info->comm->rank * nBytesPerRank;
-    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
+    // CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
   }
 
   if (info->comm->scclAlgo.flagsNeedReset == 1){

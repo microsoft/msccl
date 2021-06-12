@@ -52,6 +52,8 @@ class scclFunction {
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
+          // if (tid == 0)
+          //   printf("bid %d step %d workIndex %d\n", bid, i, workIndex);
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
@@ -87,6 +89,8 @@ class scclFunction {
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
+              case SCCL_LOCAL_COPY:
+                prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
               case SCCL_NO_OP:
                 break;
               default:
@@ -145,6 +149,10 @@ struct SimpleWrapper {
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -191,7 +199,11 @@ struct LL128Wrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
-  }  
+  }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -234,7 +246,11 @@ struct LLWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
-  }  
+  }
+
+  __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
