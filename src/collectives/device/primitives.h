@@ -343,6 +343,11 @@ class ncclPrimitives {
     GenericOp<0, 0, 0, 0, 1, 1, FuncMax<T>>(src, dst, nelem, 0);
   }
 
+  __device__ __forceinline__ void
+  invsqrt(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, FuncInvSqrt<T>>(src, dst, nelem, 0);
+  }
+
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation
     saveSync();

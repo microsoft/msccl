@@ -102,6 +102,9 @@ class scclFunction {
               case SCCL_MAX:
                 prims.maximum(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
+              case SCCL_ISQRT:
+                prims.invsqrt(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_NO_OP:
                 break;
               default:
@@ -180,6 +183,10 @@ struct SimpleWrapper {
   __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+
+  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -247,6 +254,10 @@ struct LL128Wrapper {
   __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+
+  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 };
 
 template<class FUNC, typename T, int UNROLL>
@@ -309,6 +320,10 @@ struct LLWrapper {
 
   __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 

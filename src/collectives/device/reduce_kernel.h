@@ -53,6 +53,13 @@ struct FuncMin {
   }
 };
 
+template<typename T>
+struct FuncInvSqrt {
+  __device__ T operator()(const T x, const T) const {
+    return 1.0f / sqrt((float)x);
+  }
+};
+
 #define MASK0 0x00ff00ff
 #define MASK1 0xff00ff00
 static __device__ uint32_t addChar4(const uint32_t x, const uint32_t y) {

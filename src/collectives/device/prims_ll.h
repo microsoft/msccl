@@ -257,6 +257,10 @@ class ncclLLPrimitives {
     return LLGenericOp<0, 0, 1, 1, FuncMax<T>>(src, dst, nelem);
   }
 
+  __device__ void invsqrt(const T* src, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, FuncInvSqrt<T>>(src, dst, nelem);
+  }
+
   __device__ __forceinline__ ~ncclLLPrimitives() {
     // Save steps for the next operation
     saveRecvSync();

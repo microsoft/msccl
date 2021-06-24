@@ -135,6 +135,7 @@ struct ncclRing {
 #define SCCL_MUL 8
 #define SCCL_MIN 9
 #define SCCL_MAX 10
+#define SCCL_ISQRT 11
 
 // TODO: compress this by a lot!
 struct scclTransfer {
