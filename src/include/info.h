@@ -56,6 +56,10 @@ struct ncclInfo {
   // SCCL scratch buffer is passed as an arg
   // this scratchBuffer can be accessed on the device. The management of this memory is on scclAlgorithm
   void* scratchbuff;
+
+  // SCCL additional args for pointers to buffers accessible on the device.
+  // The management of this memory is up to the user.
+  argBuffs_t argbuffs;
 };
 
 #endif

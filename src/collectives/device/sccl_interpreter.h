@@ -34,6 +34,8 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
+      //printf("tid %d, bid %d, channelId %d, input %p, output %p, scratch %p, arg[0] %p, recv %d, send %d\n", tid, bid, channelId, thisInput, thisOutput, thisScratch, args->argbuffs[0], recvPeer, sendPeer);
+
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
       const int nranks = comm->nRanks;
@@ -64,8 +66,14 @@ class scclFunction {
               __syncthreads();
           }
 
-          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+          srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput
+                     : (sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput
+                     : (sccltran->srcbuffer == SCCL_SCRATCH_BUFFER) ? thisScratch
+                     : (T *)(args->argbuffs[sccltran->srcbuffer - SCCL_ARG_BUFFERS_BEGIN]);
+          dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput
+                     : (sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput
+                     : (sccltran->dstbuffer == SCCL_SCRATCH_BUFFER) ? thisScratch
+                     : (T *)(args->argbuffs[sccltran->dstbuffer - SCCL_ARG_BUFFERS_BEGIN]);
           int count = sccltran->count;
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;

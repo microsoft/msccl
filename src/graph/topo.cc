@@ -614,6 +614,8 @@ ncclResult_t scclGetBufferType(const char* str, uint8_t* output){
     *output = SCCL_OUTPUT_BUFFER;
   } else if (strcmp(str, "s") == 0) {
     *output = SCCL_SCRATCH_BUFFER;
+  } else if (str[0] == 'a') {
+    *output = SCCL_ARG_BUFFERS_BEGIN + std::atoi(str + 1);
   } else {
     WARN("type of buffer is not supported: %s", str);
     return ncclInvalidUsage;
@@ -637,6 +639,14 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
       WARN("Incorrect offset set for scratch buffer: offset: %d maximum allowed: %d", offset, nScratchChunks);
       return ncclInvalidUsage;
     }
+  } else {
+    //TODO: Allow different number of chunks for separate arg buffers,
+    //      instead of tying them all to nScratchChunks
+    if (offset < -1 || offset >= nScratchChunks){
+      WARN("Incorrect offset set for arg buffer: offset: %d maximum allowed: %d", offset, nScratchChunks);
+      return ncclInvalidUsage;
+    }
+    return ncclSuccess;
   }
   return ncclSuccess;
 }

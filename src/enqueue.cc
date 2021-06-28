@@ -433,6 +433,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->sendbuff = info->sendbuff;
   work->recvbuff = info->recvbuff;
   work->scratchbuff = info->scratchbuff;
+  work->argbuffs = info->argbuffs;
   work->coll.root = info->root;
   work->coll.count = info->count;
   work->coll.nChannels = info->nChannels;

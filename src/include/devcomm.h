@@ -123,6 +123,8 @@ struct ncclRing {
 #define SCCL_INPUT_BUFFER 0
 #define SCCL_OUTPUT_BUFFER 1
 #define SCCL_SCRATCH_BUFFER 2
+#define SCCL_ARG_BUFFERS_BEGIN 3
+#define SCCL_ARG_BUFFERS_END (SCCL_ARG_BUFFERS_BEGIN + SCCL_NUM_ARG_BUFFS)
 
 #define SCCL_SEND 0
 #define SCCL_RECV 1
@@ -239,6 +241,7 @@ struct ncclWorkElem {
   const void * sendbuff;
   void * recvbuff;
   void * scratchbuff;
+  argBuffs_t argbuffs;
 
   // Op-specific fields.
   union {
@@ -261,7 +264,7 @@ struct ncclWorkElem {
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x40*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {

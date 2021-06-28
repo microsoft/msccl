@@ -230,7 +230,18 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  *
  * In-place operations is not permitted.
  */
-ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount,
+#define SCCL_NUM_ARG_BUFFS 16
+struct argBuffs_t {
+  void* argbuffs[SCCL_NUM_ARG_BUFFS];
+#ifdef __cplusplus
+#ifdef __CUDA_ARCH__
+  __device__
+#endif
+  void*& operator[](size_t index) { return argbuffs[index]; }
+#endif
+};
+typedef struct argBuffs_t argBuffs_t;
+ncclResult_t  ncclAllToAll(const void* sendbuff, void* recvbuff, argBuffs_t argbuffs, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t pncclncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
