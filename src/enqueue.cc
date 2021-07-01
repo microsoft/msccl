@@ -484,7 +484,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
   // sccl might use multiple channels per loop. therefore, the division by info->comm->scclAlgo.nChannels is necessary if the algo is SCCL.
-  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->comm->scclAlgo.nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
   // nstepsPerloop for sccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
   proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
