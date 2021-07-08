@@ -868,6 +868,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // NetSharedBuffers needs to be set for this to work across nodes.
   if (getenv("SCCL_XML_FILE")){
     NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm));
+    comm->scclAlgo.isValid = true;
     // Connect SCCL graph
     if (comm->nChannels < comm->scclAlgo.nChannels){
       WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", comm->scclAlgo.nChannels, comm->nChannels, comm->scclAlgo.nChannels);
@@ -883,6 +884,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected SCCL algorithm");
+  } else {
+    comm->scclAlgo.isValid = false;
   }
 
   // Compute time models for algorithm and protocol combinations.

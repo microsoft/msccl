@@ -690,7 +690,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
           return ncclInvalidUsage;
         }
         scclAlgo->nScratchChunks = nScratchChunks;
-        scclAlgo->nBlocks = 0;
         for (int t=0; t<node->nSubs; t++) {
           struct ncclXmlNode* threadblockNode = node->subs[t];
           if (strcmp(threadblockNode->name, "tb") == 0){
@@ -703,7 +702,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
               WARN("bid must be not negative. bid: %d", bid);
               return ncclInvalidUsage;
             }              
-            scclAlgo->nBlocks = std::max(scclAlgo->nBlocks, bid+1);
             if (bid >= MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
               WARN("Too many thread blocks are requested. Max thread blocks: %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL*MAXCHANNELS);
               return ncclInvalidUsage;
