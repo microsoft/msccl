@@ -129,7 +129,8 @@ struct ncclRing {
 #define SCCL_RECV_COPY_SEND 2
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
-#define SCCL_NO_OP 5
+#define SCCL_LOCAL_COPY 5
+#define SCCL_NO_OP 6
 
 // TODO: compress this by a lot!
 struct scclTransfer {
@@ -148,13 +149,13 @@ struct scclThreadBlock {
   int8_t sendpeer;
   int8_t recvpeer;
   uint16_t nsteps;
-  uint8_t channelId; // associated channel
+  int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
-#define SCCL_MAX_COUNT 16
+#define SCCL_MAX_COUNT 64
 
 struct scclChannelInfo {
   int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
