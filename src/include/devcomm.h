@@ -175,12 +175,12 @@ struct scclFlag {
 
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
+  // a flag to specify if the SCCL algorithm is a valid one
+  bool isValid;
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // the protocol that the algorithm needs to use
   int protocol;
-  // total number of threadblocks needed by SCCL algorithm
-  int nBlocks; // TODO could be removed
   // bid is used as an index into this array
   struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by SCCL algorithm

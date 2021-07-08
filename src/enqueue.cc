@@ -676,6 +676,7 @@ static ncclResult_t saveP2pOp(struct ncclInfo* info /* input */, struct ncclWork
   elem->p2p.sendCount = info->sendbytes;
   elem->p2p.recvCount = info->recvbytes;
   elem->p2p.delta = info->delta;
+  elem->nActives = 1;
   const int nsegments = s+1;
   int nThreads = 512;
   while (nsegments*nThreads > 512) nThreads /= 2;
