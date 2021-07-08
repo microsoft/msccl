@@ -52,8 +52,6 @@ class scclFunction {
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
-          // if (tid == 0)
-          //   printf("bid %d step %d workIndex %d\n", bid, i, workIndex);
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;

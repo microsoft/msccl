@@ -602,6 +602,7 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_
     }
     if (path->width == maxWidth && path->type == minType) nets[count++] = system->nodes[NET].nodes[n].id;
   }
+  // TODO: net device should be selected based on the XML description of the IB device. this is a hack for when nodes have multiple IB devices and NCCL gets confused about which IB device is close.
   *id = nets[rank % count];
   free(nets);
   return ncclSuccess;
