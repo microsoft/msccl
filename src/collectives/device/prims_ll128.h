@@ -383,29 +383,9 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  __device__ void add(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncSum<T>>(src, dst, nelem);
-  }
-
-  __device__ void sub(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncDiff<T>>(src, dst, nelem);
-  }
-
-  __device__ void mul(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncProd<T>>(src, dst, nelem);
-  }
-
-  // Note this method cannot be named "min" due to a name conflict
-  __device__ void minimum(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncMin<T>>(src, dst, nelem);
-  }
-
-  __device__ void maximum(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncMax<T>>(src, dst, nelem);
-  }
-
-  __device__ void invsqrt(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, FuncInvSqrt<T>>(src, dst, nelem);
+  template <class BinaryOp>
+  __device__ void binaryOp(const T* src, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, BinaryOp>(src, dst, nelem);
   }
 
   __device__ __forceinline__ ~ncclLL128Primitives() {

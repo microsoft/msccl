@@ -317,35 +317,10 @@ class ncclPrimitives {
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
 
+  template <class BinaryOp>
   __device__ __forceinline__ void
-  add(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncSum<T>>(src, dst, nelem, 0);
-  }
-
-  __device__ __forceinline__ void
-  sub(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncDiff<T>>(src, dst, nelem, 0);
-  }
-
-  __device__ __forceinline__ void
-  mul(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncProd<T>>(src, dst, nelem, 0);
-  }
-
-  // Note this method cannot be named "min" due to a name conflict
-  __device__ __forceinline__ void
-  minimum(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncMin<T>>(src, dst, nelem, 0);
-  }
-
-  __device__ __forceinline__ void
-  maximum(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncMax<T>>(src, dst, nelem, 0);
-  }
-
-  __device__ __forceinline__ void
-  invsqrt(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, FuncInvSqrt<T>>(src, dst, nelem, 0);
+  binaryOp(const T* src, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, BinaryOp>(src, dst, nelem, 0);
   }
 
   __device__ __forceinline__ ~ncclPrimitives() {

@@ -96,22 +96,22 @@ class scclFunction {
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ADD:
-                prims.add(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncSum<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_SUB:
-                prims.sub(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncDiff<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MUL:
-                prims.mul(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncProd<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MIN:
-                prims.minimum(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMin<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MAX:
-                prims.maximum(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMax<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ISQRT:
-                prims.invsqrt(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncInvSqrt<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_NO_OP:
                 break;
@@ -172,28 +172,9 @@ struct SimpleWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
-  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
+  template <class BinaryOp>
+  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -243,28 +224,9 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
+  template <class BinaryOp>
+  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -310,28 +272,9 @@ struct LLWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  __device__ void add(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.add(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void sub(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.sub(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void mul(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.mul(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void minimum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.minimum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void maximum(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.maximum(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void invsqrt(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.invsqrt(srcChunkPointer, dstChunkPointer, nelem*count);
+  template <class BinaryOp>
+  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
