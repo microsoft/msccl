@@ -27,15 +27,19 @@ for node in range(nnodes):
             withinNghrNode, withinNghrG, withinCrossNodeNghr = CrossNodeNghr(node, withinnodenghr)
             if withinnodenghr == g:
                 for ch in range(instances):
+                    step = 0
                     print('    <tb id="{}" send="-1" recv="-1" chan="0">'.format(tbindex))
-                    print('      <step s="0" type="cpy" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(nghrNode*ngpuspernode, g*ngpuspernode, 1))
-                    step = 1
+                    print('      <step s="{}" type="cpy" srcbuf="i" srcoff="{}" dstbuf="s" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="{}"/>'.format(step, nghrNode*ngpuspernode, g*ngpuspernode, ngpuspernode, 1 if step == 1+ngpuspernode-2 else 0))
+                    step += 1
                     for j in range(ngpuspernode):
                         if j != g:
                             print('      <step s="{}" type="nop" srcbuf="i" srcoff="0" dstbuf="o" dstoff="0" cnt="0" depid="{}" deps="{}" hasdep="{}"/>'.format(step, j+2, 1, 1 if step == 1+ngpuspernode-2 else 0))
                             step += 1
                     print('      <step s="{}" type="cpy" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(step, node*ngpuspernode+g, node*ngpuspernode+g, 1))
                     step += 1
+                    for j in range(ngpuspernode):
+                        print('      <step s="{}" type="cpy" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, ngpuspernode**2+j*ngpuspernode+g, nghrNode*ngpuspernode+j, 1, 1 if step == ngpuspernode+1 else -1, 0 if step == ngpuspernode+1 else -1))
+                        step += 1
                     print('    </tb>')
                     tbindex+=1
             else:
