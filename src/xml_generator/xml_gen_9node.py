@@ -1,5 +1,5 @@
-nnodes = 3
-ngpuspernode = 2
+nnodes = 4
+ngpuspernode = 3
 instances = 1
 nchunksperloop = nnodes*ngpuspernode*instances
 print('<algo name="test" nchunksperloop="{}" nchannels="{}" proto="Simple">'.format(nchunksperloop, instances))
@@ -50,14 +50,12 @@ for node in range(nnodes):
                     print('      <step s="2" type="s" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(node*ngpuspernode+withinnodenghr, node*ngpuspernode+g, 1))
                     print('      <step s="3" type="r" srcbuf="i" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="-1" deps="-1" hasdep="0"/>'.format(node*ngpuspernode+g, node*ngpuspernode+withinnodenghr, 1))
                     step = 4
-                    for i in range(ngpuspernode):
-                        print('      <step s="{}" type="s" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, ngpuspernode**2+j*ngpuspernode+withinnodenghr, nghrNode*ngpuspernode+j, 1, 1 if i == 0 else -1, 0 if i == 0 else -1))
+                    for j in range(ngpuspernode):
+                        print('      <step s="{}" type="s" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, ngpuspernode**2+j*ngpuspernode+withinnodenghr, nghrNode*ngpuspernode+j, 1, 1 if j == 0 else -1, 0 if j == 0 else -1))
                         step += 1
-                        print('      <step s="{}" type="r" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, ngpuspernode**2+j*ngpuspernode+g, nghrNode*ngpuspernode+j, 1, 1 if i == 0 else -1, 0 if i == 0 else -1))
+                        print('      <step s="{}" type="r" srcbuf="s" srcoff="{}" dstbuf="o" dstoff="{}" cnt="{}" depid="{}" deps="{}" hasdep="0"/>'.format(step, ngpuspernode**2+j*ngpuspernode+g, withinNghrNode*ngpuspernode+j, 1, 1 if j == 0 else -1, 0 if j == 0 else -1))
                         step += 1
                     print('    </tb>')
                     tbindex+=1
         print('  </gpu>')
-
 print('</algo>')
-

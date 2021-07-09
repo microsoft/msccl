@@ -155,7 +155,7 @@ struct scclThreadBlock {
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
-#define SCCL_MAX_COUNT 64
+#define SCCL_MAX_COUNT 72
 
 struct scclChannelInfo {
   int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
