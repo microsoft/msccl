@@ -529,7 +529,9 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     return ncclSuccess;
   }
   // Alltoall needs a local copy and it has no allocated channel/threadblock. the corresponding chunk is transferred here
-  if (info->coll == ncclFuncAllToAll){
+  // [parasail/victor] We are abusing alltoall to invoke the SCCL interpreter,
+  // so no need for this chunk copy in SCCL interpreter use cases.
+  if (0 && info->coll == ncclFuncAllToAll){
     if (info->sendbuff == info->recvbuff){
       WARN("Alltoall needs separate receive and send buffers.");
       return ncclInvalidArgument;
