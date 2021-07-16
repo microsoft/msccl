@@ -129,6 +129,7 @@ class ncclLLPrimitives {
     for (; offset<npack; offset+=nthreads) {
       // Recv : local, then intra-node, then inter-node
       uint64_t val = SRC ? readAL(srcPack+offset) : readLL(0, offset);
+      if (SRC == 2) val = MULTI<FUNC, T>()(readAL(dstPack+offset), val);
       if (RECV) {
         if (SRC) val = MULTI<FUNC, T>()(readLL(0, offset), val);
         for (int i=1; i<NRECV && i<nrecv; i++) {
@@ -239,6 +240,9 @@ class ncclLLPrimitives {
 
   __device__ void localCopy(const T* src, T* dst, int nelem) {
     LLGenericOp<0, 0, 1, 1>(src, dst, nelem);
+  }
+  __device__ void reduce(const T* src, T* dst, int nelem) {
+    LLGenericOp<0, 0, 2, 1>(src, dst, nelem);
   }
 
   __device__ __forceinline__ ~ncclLLPrimitives() {

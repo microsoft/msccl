@@ -39,7 +39,8 @@ class scclFunction {
       const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScclChunk = (size*nranks)/scclAlgo->nchunksPerLoop;
+      // TODO gotta do something about this
+      const ssize_t sizePerScclChunk = (size)/scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -52,6 +53,9 @@ class scclFunction {
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
+          // if (tid == sync_tid){
+          //   printf("step %d bid %d start\n", i, bid);
+          // }
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
@@ -87,19 +91,28 @@ class scclFunction {
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
+              case SCCL_REDUCE:
+                prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_LOCAL_COPY:
                 prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_NO_OP:
                 break;
               default:
                 return;
             }
           }
+          if (sccltran->has_dependence)
+            __syncthreads();
           if (tid == sync_tid && sccltran->has_dependence){
             __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
             scclFlags[bid].flag = curFlag;
           }
+          // if (tid == sync_tid){
+          //   printf("step %d bid %d end\n", i, bid);
+          // }
         }
       }
     }
@@ -146,6 +159,10 @@ struct SimpleWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
@@ -199,6 +216,10 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
@@ -244,6 +265,10 @@ struct LLWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
+  
+  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
