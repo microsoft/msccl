@@ -118,7 +118,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
       if (coll == ncclFuncAllToAll || a == NCCL_ALGO_SCCL) {
-        // SCCL algorithm has hooks for AllToAll, AllGather and ReduceScatter
+        // SCCL algorithm has hooks for AllToAll, AllGather, AllReduce and ReduceScatter
         // SCCL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
         for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
           if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter || coll == ncclFuncAllReduce) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol){
@@ -184,7 +184,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   // Protocols/Algorithms enable/disable, and user overrides.
   // All are enabled except ll128 which is enabled by default only in certain cases.
   int protoEnable[NCCL_NUM_PROTOCOLS] = { 1, 2, 1 };
-  int algoEnable[NCCL_NUM_ALGORITHMS] = { 1, 1, 1, 0 }; // SCCL algorithms are disabled by default
+  int algoEnable[NCCL_NUM_ALGORITHMS] = { 1, 1, 0, 0 }; // SCCL algorithms are disabled by default
 
   const char *protoStr = getenv("NCCL_PROTO");
   if (protoStr) {
@@ -201,7 +201,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     algoEnable[NCCL_ALGO_COLLNET] = 0;
     // If user has hard set NCCL_ALGO=COLLNET, ignore it
     if (algoEnable[NCCL_ALGO_RING] == 0 && algoEnable[NCCL_ALGO_TREE] == 0 && algoEnable[NCCL_ALGO_SCCL] == 0) {
-      algoEnable[NCCL_ALGO_RING] = algoEnable[NCCL_ALGO_TREE] = algoEnable[NCCL_ALGO_SCCL] = 1;
+      algoEnable[NCCL_ALGO_RING] = algoEnable[NCCL_ALGO_TREE] = 1;
       if (comm->rank == 0) WARN("CollNet is not supported or fails to initialize, ignoring NCCL_ALGO=COLLNET");
     }
   }
@@ -211,6 +211,8 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     algoEnable[NCCL_ALGO_SCCL] = 0;
   }
 
+  printf("algo enabled %d\n", algoEnable[NCCL_ALGO_SCCL]);
+
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
     int pEnable = protoEnable[p];
     if (pEnable == 2 && p == NCCL_PROTO_LL128) {
@@ -219,8 +221,9 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
         ((minCompCap == 70 && maxCompCap == 70) || (minCompCap == 80 && maxCompCap == 80)) ? 1 : 0;
     }
     if (pEnable == 0) comm->bandwidths[c][a][p] = 0;
+    // TODO: clean this mess
     // Only disable algo for Allreduce since others only have one
-    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter || c == ncclFuncAllToAll) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
+    if ((c == ncclFuncAllReduce || c == ncclFuncAllGather || c == ncclFuncReduceScatter) && algoEnable[a] == 0) comm->bandwidths[c][a][p] = 0;
   }
 
   if (comm->rank == 0) {
