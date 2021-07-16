@@ -242,8 +242,9 @@ class ncclLL128Primitives {
   #define LL128INC (WARP_SIZE*NCCL_LL128_SHMEM_ELEMS_PER_THREAD)
   #define ELEMINC (LL128INC-(LL128INC/NCCL_LL128_LINEELEMS))
 
-  template <int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
-  __device__ void GenericOp(const T* srcPtr, T* dstPtr, int nelem) {
+  template <int RECV, int SEND, int SRC, int DST,
+            /*For SCCL interpreter:*/ class BinaryOp=FUNC, typename Type=T, int SRC2=0>
+  __device__ void GenericOp(const T* srcPtr, T* dstPtr, int nelem, const T* src2Ptr=nullptr) {
     if (nelem <= 0) {
       // Don't move any data but still increase steps and sync with prev/next
       if (SEND) waitSend(0);
@@ -251,36 +252,43 @@ class ncclLL128Primitives {
       FOR_RECV(incRecv); if (RECV) postRecv();
       return;
     }
-    const int nelem64 = ((nelem*sizeof(T))/(2*sizeof(uint64_t)))*2;
+    const int nelem64 = ((nelem*sizeof(Type))/(2*sizeof(uint64_t)))*2;
     const uint64_t* src64Ptr = ((uint64_t*)srcPtr);
+    //const uint64_t* src64Ptr2 = ((uint64_t*)src2Ptr);  // For SCCL interpreter
     uint64_t* dst64Ptr = ((uint64_t*)dstPtr);
 
     int ll128Offset = LL128INC*warp+2*wid;
     int elemOffset = ELEMINC*warp;
     const int nwarps = nthreads/WARP_SIZE;
 
-    if (SEND) waitSend(DIVUP(nelem*sizeof(T), ELEMINC*sizeof(uint64_t))*LL128INC*sizeof(uint64_t));
+    if (SEND) waitSend(DIVUP(nelem*sizeof(Type), ELEMINC*sizeof(uint64_t))*LL128INC*sizeof(uint64_t));
     barrier();
 
-    while (elemOffset*(sizeof(uint64_t)/sizeof(T)) < nelem) {
+    while (elemOffset*(sizeof(uint64_t)/sizeof(Type)) < nelem) {
       const int maxOffset128 = min(nelem64-elemOffset, (int)ELEMINC);
-      const int maxOffset = min(nelem-(elemOffset*((int)(sizeof(uint64_t)/sizeof(T)))), (int)(ELEMINC*(sizeof(uint64_t)/sizeof(T))));
+      const int maxOffset = min(nelem-(elemOffset*((int)(sizeof(uint64_t)/sizeof(Type)))), (int)(ELEMINC*(sizeof(uint64_t)/sizeof(Type))));
       if (SRC) {
         int done = 0;
         if ((((uint64_t)srcPtr)&0xf) == 0) {
           loadSrcToShmem128<NCCL_LL128_SHMEM_ELEMS_PER_THREAD>(maxOffset128-2*wid, src64Ptr+elemOffset+2*wid);
-          done = maxOffset128*(sizeof(uint64_t)/sizeof(T));
+          done = maxOffset128*(sizeof(uint64_t)/sizeof(Type));
         }
         loadSrcToShmem(done, maxOffset, (T*)(src64Ptr+elemOffset));
       }
+      if (SRC2) {
+        //TODO: For SCCL interpreter, Also load from src64Ptr2 to shared memory
+        printf("LL128 does not yet support SCCL interpreter binary operations\n");
+        return;
+      }
       __syncwarp();
+      //TODO: For SCCL interpreter, adapt recvReduceSendCopy to handle 2nd source operand
       recvReduceSendCopy<NCCL_LL128_SHMEM_ELEMS_PER_THREAD, RECV, SEND, SRC, DST, BinaryOp>(ll128Offset);
       __syncwarp();
       if (DST) {
         int done = 0;
         if ((((uint64_t)dstPtr)&0xf) == 0) {
           storeShmemToDst128<NCCL_LL128_SHMEM_ELEMS_PER_THREAD>(maxOffset128-2*wid, dst64Ptr+elemOffset+2*wid);
-          done = maxOffset128*(sizeof(uint64_t)/sizeof(T));
+          done = maxOffset128*(sizeof(uint64_t)/sizeof(Type));
         }
         storeShmemToDst(done, maxOffset, (T*)(dst64Ptr+elemOffset));
       }
@@ -383,9 +391,9 @@ class ncclLL128Primitives {
     return GenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  template <class BinaryOp>
-  __device__ void binaryOp(const T* src, T* dst, int nelem) {
-    return GenericOp<0, 0, 1, 1, BinaryOp>(src, dst, nelem);
+  template <class BinaryOp, typename Type>
+  __device__ void binaryOp(const T* src1, const T* src2, T* dst, int nelem) {
+    return GenericOp<0, 0, 1, 1, BinaryOp, Type, 1>(src1, dst, nelem, src2);
   }
 
   __device__ __forceinline__ ~ncclLL128Primitives() {

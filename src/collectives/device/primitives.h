@@ -131,9 +131,12 @@ class ncclPrimitives {
     *connTailPtr = step += SLICESTEPS;
   }
 
-  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
+  template <int DIRECTRECV, int DIRECTSEND, int RECV, int SEND, int SRC, int DST,
+            /*For SCCL interpreter:*/ class BinaryOp=FUNC, typename Type=T, int SRC2=0>
   inline __device__ void
-  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset) {
+  GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, const T* src2Ptr = nullptr) {
+    //printf("primitives GenericOp datatype size %lu, src %p, src2 %p, dst %p nelem %d\n",
+    //       sizeof(Type), srcPtr, src2Ptr, dstPtr, nelem);
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);
@@ -142,19 +145,20 @@ class ncclPrimitives {
       int realSize = max(0, min(dataSize, nelem-offset));
       if (tid < nworkers) {
         if (SRC && (role & ROLE_SRC)) srcs[0] = srcPtr+offset;
-        if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC, DIRECTRECV>(directOffset+offset);
+        if (SRC2) srcs[1] = src2Ptr+offset;  // For SCCL interpreter
+        if (RECV && (role & ROLE_WAIT_RECV)) waitRecv<SRC + SRC2, DIRECTRECV>(directOffset+offset);
         if (DST && (role & ROLE_DST)) dsts[0] = dstPtr+offset;
-        if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(T));
+        if (SEND && (role & ROLE_WAIT_SEND)) waitSend<DST, DIRECTSEND>(directOffset+offset, realSize*sizeof(Type));
         if (realSize > 0) {
           subBarrier();
           if (DIRECTRECV && srcs[0] == dsts[0]) {
             // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
             if (SEND) {
               // (1-SEND) is only there to avoid compilation errors in case NSEND=0 (and SEND=0).
-              ReduceOrCopyMulti<UNROLL, BinaryOp, T, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, srcs, nsend, dsts+1, realSize);
+              ReduceOrCopyMulti<UNROLL, BinaryOp, Type, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, (const Type**)srcs, nsend, (Type**)dsts+1, realSize);
             }
           } else {
-            ReduceOrCopyMulti<UNROLL, BinaryOp, T, RECV+SRC, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC, srcs, SEND*nsend+DST, dsts, realSize);
+            ReduceOrCopyMulti<UNROLL, BinaryOp, Type, RECV+SRC+SRC2, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC+SRC2, (const Type**)srcs, SEND*nsend+DST, (Type**)dsts, realSize);
           }
         }
       }
@@ -317,10 +321,10 @@ class ncclPrimitives {
     GenericOp<0, 1, 1, 1, 1, 1>(src, dst, nelem, directOffset);
   }
 
-  template <class BinaryOp>
+  template <class BinaryOp, typename Type>
   __device__ __forceinline__ void
-  binaryOp(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 1, 1, BinaryOp>(src, dst, nelem, 0);
+  binaryOp(const T* src1, const T* src2, T* dst, int nelem) {
+    GenericOp<0, 0, 0, 0, 1, 1, BinaryOp, Type, 1>(src1, dst, nelem, 0, src2);
   }
 
   __device__ __forceinline__ ~ncclPrimitives() {

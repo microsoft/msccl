@@ -113,11 +113,13 @@ class ncclLLPrimitives {
     memcpy((char*)dst, (char*)&val, nbytes);
   }
 
-  template <int RECV, int SEND, int SRC, int DST, class BinaryOp = FUNC>
-  __device__ void LLGenericOp(const T* srcPtr, T* dstPtr, int nelem) {
-    uint32_t nbytes = nelem < 0 ? 0 : nelem*sizeof(T);
+  template <int RECV, int SEND, int SRC, int DST,
+            /*For SCCL interpreter:*/ class BinaryOp=FUNC, typename Type=T, int SRC2=0>
+  __device__ void LLGenericOp(const T* srcPtr, T* dstPtr, int nelem, const T* src2Ptr=nullptr) {
+    uint32_t nbytes = nelem < 0 ? 0 : nelem*sizeof(Type);
     uint32_t npack = DIVUP(nbytes, sizeof(uint64_t));
     uint64_t* srcPack = (uint64_t*)srcPtr;
+    uint64_t* src2Pack = (uint64_t*)src2Ptr;  // For SCCL interpreter
     uint64_t* dstPack = (uint64_t*)dstPtr;
     int offset = tid;
 
@@ -129,10 +131,11 @@ class ncclLLPrimitives {
     for (; offset<npack; offset+=nthreads) {
       // Recv : local, then intra-node, then inter-node
       uint64_t val = SRC ? readAL(srcPack+offset) : readLL(0, offset);
+      if (SRC2) val = MULTI<BinaryOp, Type>()(readAL(src2Pack+offset), val);  // For SCCL interpreter
       if (RECV) {
-        if (SRC) val = MULTI<BinaryOp, T>()(readLL(0, offset), val);
+        if (SRC) val = MULTI<BinaryOp, Type>()(readLL(0, offset), val);
         for (int i=1; i<NRECV && i<nrecv; i++) {
-          val = MULTI<BinaryOp, T>()(readLL(i, offset), val);
+          val = MULTI<BinaryOp, Type>()(readLL(i, offset), val);
         }
       }
 
@@ -237,9 +240,9 @@ class ncclLLPrimitives {
     return LLGenericOp<1, 1, 1, 1>(src, dst, nelem);
   }
 
-  template <class BinaryOp>
-  __device__ void binaryOp(const T* src, T* dst, int nelem) {
-    return LLGenericOp<0, 0, 1, 1, BinaryOp>(src, dst, nelem);
+  template <class BinaryOp, typename Type>
+  __device__ void binaryOp(const T* src1, const T* src2, T* dst, int nelem) {
+    return LLGenericOp<0, 0, 1, 1, BinaryOp, Type, 1>(src1, dst, nelem, src2);
   }
 
   __device__ __forceinline__ ~ncclLLPrimitives() {

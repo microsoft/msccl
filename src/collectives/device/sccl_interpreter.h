@@ -34,7 +34,7 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
-      //printf("tid %d, bid %d, channelId %d, input %p, output %p, scratch %p, arg[0] %p, recv %d, send %d\n", tid, bid, channelId, thisInput, thisOutput, thisScratch, args->argbuffs[0], recvPeer, sendPeer);
+      //printf("tid %d, bid %d, channelId %d, input %p, output %p, scratch %p, arg[0] %p, arg[1] %p, recv %d, send %d\n", tid, bid, channelId, thisInput, thisOutput, thisScratch, args->argbuffs[0], args->argbuffs[0], recvPeer, sendPeer);
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
@@ -75,6 +75,8 @@ class scclFunction {
                      : (sccltran->dstbuffer == SCCL_SCRATCH_BUFFER) ? thisScratch
                      : (T *)(args->argbuffs[sccltran->dstbuffer - SCCL_ARG_BUFFERS_BEGIN]);
           int count = sccltran->count;
+          //printf("SCCL op %d count %d src %p dst %p\n",
+          //       sccltran->type, count, srcPointer, dstPointer);
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
@@ -96,22 +98,22 @@ class scclFunction {
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ADD:
-                prims.template binaryOp<FuncSum<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncSum<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_SUB:
-                prims.template binaryOp<FuncDiff<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncDiff<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MUL:
-                prims.template binaryOp<FuncProd<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncProd<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MIN:
-                prims.template binaryOp<FuncMin<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMin<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MAX:
-                prims.template binaryOp<FuncMax<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMax<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ISQRT:
-                prims.template binaryOp<FuncInvSqrt<T>>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncInvSqrt<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_NO_OP:
                 break;
@@ -172,9 +174,9 @@ struct SimpleWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
-  template <class BinaryOp>
+  template <class BinaryOp, typename Type>
   __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
+    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, dstChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -224,9 +226,9 @@ struct LL128Wrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  template <class BinaryOp>
+  template <class BinaryOp, typename Type>
   __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
+    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, srcChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
@@ -272,9 +274,9 @@ struct LLWrapper {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }  
 
-  template <class BinaryOp>
+  template <class BinaryOp, typename Type>
   __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp>(srcChunkPointer, dstChunkPointer, nelem*count);
+    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, dstChunkPointer, dstChunkPointer, nelem*count);
   }
 };
 
