@@ -230,7 +230,7 @@ ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
  *
  * In-place operations is not permitted.
  */
-#define SCCL_NUM_ARG_BUFFS 16
+#define SCCL_NUM_ARG_BUFFS 48
 struct argBuffs_t {
   void* argbuffs[SCCL_NUM_ARG_BUFFS];
 #ifdef __cplusplus
