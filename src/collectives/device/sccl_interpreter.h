@@ -128,8 +128,8 @@ class scclFunction {
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
-              case SCCL_ISQRT:
-                prims.template binaryOp<FuncInvSqrt<float>, float>(
+              case SCCL_RSQRT:
+                prims.template binaryOp<FuncRSqrt<float>, float>(
                     srcPointer + srcoffset, srcPointer + srcoffset,
                     dstPointer + dstoffset, thisCount);
                 break;

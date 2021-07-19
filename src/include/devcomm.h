@@ -139,7 +139,7 @@ struct ncclRing {
 #define SCCL_MIN (SCCL_BINARY_OP_BEGIN + 3)
 #define SCCL_MAX (SCCL_BINARY_OP_BEGIN + 4)
 #define SCCL_BINARY_OP_END (SCCL_MAX)
-#define SCCL_ISQRT 11
+#define SCCL_RSQRT 11
 
 // TODO: compress this by a lot!
 struct scclTransfer {

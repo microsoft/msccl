@@ -824,8 +824,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                   sccltran->type = SCCL_MIN;
                 } else if (strcmp(type, "max") == 0) {
                   sccltran->type = SCCL_MAX;
-                } else if (strcmp(type, "isqrt") == 0) {
-                  sccltran->type = SCCL_ISQRT;
+                } else if (strcmp(type, "rsqrt") == 0) {
+                  sccltran->type = SCCL_RSQRT;
                 } else if (strcmp(type, "nop") == 0) {
                   sccltran->type = SCCL_NO_OP;
                 } else {

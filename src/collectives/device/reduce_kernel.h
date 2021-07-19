@@ -54,7 +54,7 @@ struct FuncMin {
 };
 
 template<typename T>
-struct FuncInvSqrt {
+struct FuncRSqrt {
   __device__ T operator()(const T x, const T) const {
     return 1.0f / sqrt((float)x);
   }
