@@ -159,7 +159,7 @@ class ncclPrimitives {
               ReduceOrCopyMulti<UNROLL, BinaryOp, Type, 1, 1, 1, (1-SEND)+NSEND>(tid, nworkers, 1, (const Type**)srcs, nsend, (Type**)dsts+1, realSize);
             }
           } else {
-            ReduceOrCopyMulti<UNROLL, BinaryOp, Type, RECV+SRC+SRC2, RECV*NRECV+SRC, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC+SRC2, (const Type**)srcs, SEND*nsend+DST, (Type**)dsts, realSize);
+            ReduceOrCopyMulti<UNROLL, BinaryOp, Type, RECV+SRC+SRC2, RECV*NRECV+SRC+SRC2, SEND+DST, SEND*NSEND+DST>(tid, nworkers, RECV*nrecv+SRC+SRC2, (const Type**)srcs, SEND*nsend+DST, (Type**)dsts, realSize);
           }
         }
       }
