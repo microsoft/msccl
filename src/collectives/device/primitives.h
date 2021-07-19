@@ -135,8 +135,9 @@ class ncclPrimitives {
             /*For SCCL interpreter:*/ class BinaryOp=FUNC, typename Type=T, int SRC2=0>
   inline __device__ void
   GenericOp(const T* srcPtr, T* dstPtr, int nelem, ssize_t directOffset, const T* src2Ptr = nullptr) {
-    //printf("primitives GenericOp datatype size %lu, src %p, src2 %p, dst %p nelem %d\n",
-    //       sizeof(Type), srcPtr, src2Ptr, dstPtr, nelem);
+    if (tid == 0)
+      printf("primitives GenericOp datatype size %lu, src %p, src2 %p, dst %p nelem %d\n",
+             sizeof(Type), srcPtr, src2Ptr, dstPtr, nelem);
     int offset = 0;
     int sliceSize = stepSize*SLICESTEPS;
     int dataSize = max(DIVUP(nelem, 16*SLICESPERCHUNK)*16, sliceSize/32);

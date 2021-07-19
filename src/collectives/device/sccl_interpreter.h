@@ -34,7 +34,7 @@ class scclFunction {
       int recvPeer = scclTB->recvpeer;
       int sendPeer = scclTB->sendpeer;
 
-      //if (tid == 0) printf("tid %d, bid %d, channelId %d, input %p, output %p, scratch %p, arg[0] %p, arg[1] %p, recv %d, send %d\n", tid, bid, channelId, thisInput, thisOutput, thisScratch, args->argbuffs[0], args->argbuffs[0], recvPeer, sendPeer);
+      if (tid == 0) printf("tid %d, bid %d, channelId %d, input %p, output %p, scratch %p, arg[0] %p, arg[1] %p, recv %d, send %d\n", tid, bid, channelId, thisInput, thisOutput, thisScratch, args->argbuffs[0], args->argbuffs[0], recvPeer, sendPeer);
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
@@ -79,11 +79,11 @@ class scclFunction {
                      : (sccltran->src2buffer == SCCL_SCRATCH_BUFFER) ? thisScratch
                      : (T *)(args->argbuffs[sccltran->src2buffer - SCCL_ARG_BUFFERS_BEGIN]);
           int count = sccltran->count;
-          //if (tid == 0)
-          //  printf("SCCL iter %ld, step %d, op %d count %d src %p dst %p src2 %p\n",
-          //         iter, i,
-          //         sccltran->type, count,
-          //         srcPointer, dstPointer, src2Pointer);
+          if (tid == 0)
+            printf("SCCL iter %ld, step %d, op %d count %d src %p dst %p src2 %p\n",
+                   iter, i,
+                   sccltran->type, count,
+                   srcPointer, dstPointer, src2Pointer);
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
