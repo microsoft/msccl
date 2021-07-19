@@ -132,19 +132,23 @@ struct ncclRing {
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
 #define SCCL_NO_OP 5
-#define SCCL_ADD 6
-#define SCCL_SUB 7
-#define SCCL_MUL 8
-#define SCCL_MIN 9
-#define SCCL_MAX 10
+#define SCCL_BINARY_OP_BEGIN 6
+#define SCCL_ADD (SCCL_BINARY_OP_BEGIN + 0)
+#define SCCL_SUB (SCCL_BINARY_OP_BEGIN + 1)
+#define SCCL_MUL (SCCL_BINARY_OP_BEGIN + 2)
+#define SCCL_MIN (SCCL_BINARY_OP_BEGIN + 3)
+#define SCCL_MAX (SCCL_BINARY_OP_BEGIN + 4)
+#define SCCL_BINARY_OP_END (SCCL_MAX)
 #define SCCL_ISQRT 11
 
 // TODO: compress this by a lot!
 struct scclTransfer {
   int16_t srcoffset;
   int16_t dstoffset;
+  int16_t src2offset;
   uint8_t srcbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   uint8_t dstbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
+  uint8_t src2buffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   int8_t dependentBid; // -1 if not dependent on any threadblock
   int16_t dependentStep;
   int8_t has_dependence;

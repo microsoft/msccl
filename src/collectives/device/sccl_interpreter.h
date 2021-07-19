@@ -51,8 +51,8 @@ class scclFunction {
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
-        ssize_t srcoffset, dstoffset;
-        T* srcPointer, * dstPointer;
+        ssize_t srcoffset, dstoffset, src2offset;
+        T* srcPointer, * dstPointer, * src2Pointer;
         for (int i = 0; i < scclTB->nsteps; i++){
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
@@ -74,12 +74,18 @@ class scclFunction {
                      : (sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput
                      : (sccltran->dstbuffer == SCCL_SCRATCH_BUFFER) ? thisScratch
                      : (T *)(args->argbuffs[sccltran->dstbuffer - SCCL_ARG_BUFFERS_BEGIN]);
+          src2Pointer = (sccltran->src2buffer == SCCL_INPUT_BUFFER) ? thisInput
+                     : (sccltran->src2buffer == SCCL_OUTPUT_BUFFER) ? thisOutput
+                     : (sccltran->src2buffer == SCCL_SCRATCH_BUFFER) ? thisScratch
+                     : (T *)(args->argbuffs[sccltran->src2buffer - SCCL_ARG_BUFFERS_BEGIN]);
           int count = sccltran->count;
-          //printf("SCCL op %d count %d src %p dst %p\n",
-          //       sccltran->type, count, srcPointer, dstPointer);
+          //printf("SCCL iter %ld, step %d, op %d count %d src %p dst %p src2 %p\n",
+          //       iter, i,
+          //       sccltran->type, count, srcPointer, dstPointer, src2Pointer);
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
+            src2offset = chunkOffset + (ssize_t) (sccltran->src2offset+c) * sizePerScclChunk;
             int thisCount = min(scclMaxAllowedCount, count-c);
             switch (sccltran->type) {
               case SCCL_SEND:
@@ -98,22 +104,34 @@ class scclFunction {
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ADD:
-                prims.template binaryOp<FuncSum<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncSum<float>, float>(
+                    srcPointer + srcoffset, src2Pointer + src2offset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_SUB:
-                prims.template binaryOp<FuncDiff<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncDiff<float>, float>(
+                    srcPointer + srcoffset, src2Pointer + src2offset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MUL:
-                prims.template binaryOp<FuncProd<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncProd<float>, float>(
+                    srcPointer + srcoffset, src2Pointer + src2offset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MIN:
-                prims.template binaryOp<FuncMin<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMin<float>, float>(
+                    srcPointer + srcoffset, src2Pointer + src2offset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MAX:
-                prims.template binaryOp<FuncMax<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncMax<float>, float>(
+                    srcPointer + srcoffset, src2Pointer + src2offset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ISQRT:
-                prims.template binaryOp<FuncInvSqrt<float>, float>(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                prims.template binaryOp<FuncInvSqrt<float>, float>(
+                    srcPointer + srcoffset, srcPointer + srcoffset,
+                    dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_NO_OP:
                 break;
@@ -175,8 +193,10 @@ struct SimpleWrapper {
   }
 
   template <class BinaryOp, typename Type>
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, dstChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void binaryOp(T * src1ChunkPointer, T * src2ChunkPointer,
+                           T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp, Type>(src1ChunkPointer, src2ChunkPointer,
+                                            dstChunkPointer, nelem*count);
   }
 };
 
@@ -227,8 +247,10 @@ struct LL128Wrapper {
   }  
 
   template <class BinaryOp, typename Type>
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, srcChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void binaryOp(T * src1ChunkPointer, T * src2ChunkPointer,
+                           T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp, Type>(src1ChunkPointer, src2ChunkPointer,
+                                            dstChunkPointer, nelem*count);
   }
 };
 
@@ -275,8 +297,10 @@ struct LLWrapper {
   }  
 
   template <class BinaryOp, typename Type>
-  __device__ void binaryOp(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.template binaryOp<BinaryOp, Type>(srcChunkPointer, dstChunkPointer, dstChunkPointer, nelem*count);
+  __device__ void binaryOp(T * src1ChunkPointer, T * src2ChunkPointer,
+                           T * dstChunkPointer, int count) {
+    prims.template binaryOp<BinaryOp, Type>(src1ChunkPointer, src2ChunkPointer,
+                                            dstChunkPointer, nelem*count);
   }
 };
 

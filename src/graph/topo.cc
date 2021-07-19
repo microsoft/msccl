@@ -651,6 +651,10 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
   return ncclSuccess;
 }
 
+bool scclIsBinaryOp(int optype) {
+  return SCCL_BINARY_OP_BEGIN <= optype && optype <= SCCL_BINARY_OP_END;
+}
+
 ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   char* str = getenv("SCCL_XML_FILE");
   INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
@@ -780,7 +784,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 }
                 struct scclTransfer* sccltran = &sTB->transfers[s];
 
-                sccltran->srcoffset = srcoffset;
                 NCCLCHECK(scclGetBufferType(srcbuffer, &sccltran->srcbuffer));
                 sccltran->srcoffset = srcoffset;
                 NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
@@ -838,6 +841,19 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
 
                 if (hasSend) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
                 if (hasRecv) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
+
+                if (scclIsBinaryOp(sccltran->type)) {
+                  if (hasSend || hasRecv) {
+                    WARN("Maybe we need scclCheckBufferBounds on src2");
+                    return ncclInternalError;
+                  }
+                  int src2offset;
+                  const char* src2buffer;
+                  NCCLCHECK(xmlGetAttrInt(stepNode, "src2off", &src2offset));
+                  NCCLCHECK(xmlGetAttrStr(stepNode, "src2buf", &src2buffer));
+                  NCCLCHECK(scclGetBufferType(src2buffer, &sccltran->src2buffer));
+                  sccltran->src2offset = src2offset;
+                }
 
                 sccltran->dependentBid = depend_bid;
                 sccltran->dependentStep = depend_step;
