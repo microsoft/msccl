@@ -78,17 +78,18 @@ class scclFunction {
                      : (sccltran->src2buffer == SCCL_OUTPUT_BUFFER) ? thisOutput
                      : (sccltran->src2buffer == SCCL_SCRATCH_BUFFER) ? thisScratch
                      : (T *)(args->argbuffs[sccltran->src2buffer - SCCL_ARG_BUFFERS_BEGIN]);
-          int count = sccltran->count;
-          //if (tid == 0)
-          //  printf("SCCL iter %ld, step %d, op %d count %d src %p dst %p src2 %p\n",
-          //         iter, i,
-          //         sccltran->type, count,
-          //         srcPointer, dstPointer, src2Pointer);
+          const int count = sccltran->count;
           for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
             src2offset = chunkOffset + (ssize_t) (sccltran->src2offset+c) * sizePerScclChunk;
-            int thisCount = min(scclMaxAllowedCount, count-c);
+            const int thisCount = min(scclMaxAllowedCount, count-c);
+            //if (tid == 0)
+            //  printf("SCCL iter %ld, step %d, op %d, count %d, thisCount %d, maxAllowedCount %d, "
+            //         "src %p dst %p src2 %p\n",
+            //         iter, i,
+            //         sccltran->type, count, thisCount, scclMaxAllowedCount,
+            //         srcPointer, dstPointer, src2Pointer);
             switch (sccltran->type) {
               case SCCL_SEND:
                 prims.send(srcPointer + srcoffset, dstoffset, thisCount);

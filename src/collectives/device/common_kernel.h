@@ -257,6 +257,8 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
   const int inc = nw * UNROLL * WARP_SIZE;
   int offset = w * UNROLL * WARP_SIZE + t;
 
+  //printf("ReduceCopyMulti: for non-aligned buffers: this never happens?\n");
+
   const T* srcs[MAXSRCS];
   for (int i=0; i<MAXSRCS; i++) srcs[i] = s[i]+elemOffset+offset;
   T* dsts[MAXDSTS];
@@ -302,24 +304,57 @@ __device__ __forceinline__ void ReduceCopyMulti(const int w, const int nw, const
 template<class FUNC, typename T, int UNROLL, int MINSRCS, int MAXSRCS, int MINDSTS, int MAXDSTS>
 __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, const int t,
     int nsrcs, const T** s, int ndsts, T** d, const int elemOffset, const int Npack) {
+  static_assert(MINSRCS <= MAXSRCS, "");
+  static_assert(MINDSTS <= MAXDSTS, "");
   const int inc = nw * UNROLL * WARP_SIZE;
   int offset = w * UNROLL * WARP_SIZE + t;
+
+  //if (w == 0 && t == 0 && offset == 0) {
+  //  printf("1ReduceCopy128bMulti\n %d srcs %d dsts, elemOffset %d\n", nsrcs, ndsts, elemOffset);
+  //  printf("1UNROLL %d, MINSRCS %d, MAXSRCS %d, MINDSTS %d, MAXDSTS %d\n",
+  //         UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS);
+  //  printf("1src[0] %f(%p), src[1] %f(%p), dst[0] %p\n",
+  //         *(float*)s[0], s[0], *(float*)s[1], s[1], d[0]);
+  //}
 
   const Pack128* srcs[MAXSRCS];
   for (int i=0; i<MAXSRCS; i++) srcs[i] = ((const Pack128*)(s[i]+elemOffset))+offset;
   Pack128* dsts[MAXDSTS];
   for (int i=0; i<MAXDSTS; i++) dsts[i] = ((Pack128*)(d[i]+elemOffset))+offset;
 
+  //if (w == 0 && t == 0 && offset == 0) {
+  //  printf("2ReduceCopy128bMulti\n %d srcs %d dsts\n", nsrcs, ndsts);
+  //  printf("2UNROLL %d, MINSRCS %d, MAXSRCS %d, MINDSTS %d, MAXDSTS %d\n",
+  //         UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS);
+  //  printf("2src[0] %f(%p), src[1] %f(%p), dst[0] %p\n",
+  //         *(float*)srcs[0], srcs[0], *(float*)srcs[1], srcs[1], dsts[0]);
+  //}
+
   while (offset < Npack) {
     Pack128 vals[UNROLL];
     // Load and reduce
     for (int u = 0; u < UNROLL; ++u) Fetch128(vals[u], srcs[0]+u*WARP_SIZE);
 
+    //if (w == 0 && t == 0 && offset == 0)
+    //if (((long long)srcs[0] & 0xff) == 0)
+    //  printf("0loaded %f from srcs[0] %p \n", *(float*)&(vals[0]), srcs[0]);
     #pragma unroll
     for (int i=1; i<MINSRCS; i++) {
       Pack128 vals2[UNROLL];
       for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
       for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+      //if (w == 0 && t == 0 && offset == 0)
+      //if (((long long)srcs[i] & 0xff) == 0)
+      //  printf("1loaded %f from srcs[%d] %p \n"
+      //         "1computed %f\n"
+      //         "1s[0] %f(%p), s[1] %f(%p), d[0] %p\n"
+      //         "1src[0] %f(%p), src[1] %f(%p), dst[0] %p\n"
+      //         "1w %d, nw %d, t %d, elemOffset %d, offset %d, Npack %d\n",
+      //      *(float *)&(vals2[0]), i, srcs[i],
+      //      *(float *)&(vals[0]),
+      //     *(float*)s[0], s[0], *(float*)s[1], s[1], d[0],
+      //     *(float*)srcs[0], srcs[0], *(float*)srcs[1], srcs[1], dsts[0],
+      //     w, nw, t, elemOffset, offset, Npack);
     }
     #pragma unroll
     for (int i=MINSRCS; i<MAXSRCS; i++) {
@@ -327,6 +362,10 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
         Pack128 vals2[UNROLL];
         for (int u = 0; u < UNROLL; ++u) Fetch128(vals2[u], srcs[i]+u*WARP_SIZE);
         for (int u = 0; u < UNROLL; ++u) MULTI128<FUNC, T>()(vals[u], vals2[u]);
+        //if (w == 0 && t == 0 && offset == 0)
+        //  printf("2loaded %f\n", *(float *)&(vals2[0]));
+        //if (w == 0 && t == 0 && offset == 0)
+        //  printf("2computed %f\n", *(float *)&(vals[0]));
       }
     }
 
@@ -334,11 +373,17 @@ __device__ __forceinline__ void ReduceCopy128bMulti(const int w, const int nw, c
     #pragma unroll
     for (int i = 0; i < MINDSTS; i++) {
       for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+      //if (w == 0 && t == 0 && offset == 0)
+      //if ((long long)dsts[i] & 0xFF == 0)
+      //if (((long long)dsts[i] & 0xff) == 0)
+      //  printf("3stored %f to %p\n", *(float *)&(vals[0]), dsts[i]);
     }
     #pragma unroll
     for (int i=MINDSTS; i<MAXDSTS; i++) {
       if (i<ndsts) {
         for (int u = 0; u < UNROLL; ++u) Store128(dsts[i]+u*WARP_SIZE, vals[u]);
+        //if (w == 0 && t == 0 && offset == 0)
+        //  printf("4stored %f to %p\n", *(float *)&(vals[0]), dsts[i]);
       }
     }
     for (int i=0; i<MAXSRCS; i++) srcs[i] += inc;
@@ -356,8 +401,17 @@ template<int UNROLL, class FUNC, typename T, int MINSRCS, int MAXSRCS, int MINDS
 __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthreads,
     int nsrcs, const T** srcs, int ndsts, T** dsts,
     int N) {
+  static_assert(MINSRCS <= MAXSRCS, "");
+  static_assert(MINDSTS <= MAXDSTS, "");
   int Nrem = N;
   if (Nrem <= 0) return;
+  //if (tid == 0) {
+  //  printf("ReduceOrCopyMulti tid %d, %d srcs %d dsts\n", tid, nsrcs, ndsts);
+  //  printf("UNROLL %d, MINSRCS %d, MAXSRCS %d, MINDSTS %d, MAXDSTS %d\n",
+  //         UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS);
+  //  printf("src[0] %f(%p), src[1] %f(%p), dst[0] %p\n",
+  //         *(float*)srcs[0], srcs[0], *(float*)srcs[1], srcs[1], dsts[0]);
+  //}
 
   int w = tid / WARP_SIZE;       // Warp number
   int nw = nthreads / WARP_SIZE; // Number of warps
@@ -377,6 +431,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     // fast path: use 128b loads/stores to do the bulk of the work,
     // assuming the pointers we have are all 128-bit aligned.
 
+    //if (tid == 0) printf("fast path main loop\n");
     // main loop
     int Npack = (Nrem / (PACKELEMS*UNROLL*WARP_SIZE)) * (UNROLL*WARP_SIZE); // round down
     int Nelem = Npack * PACKELEMS;
@@ -387,6 +442,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     if (Nrem == 0) return;
     offset += Nelem;
 
+    //if (tid == 0) printf("non-unrolled fast path main loop\n");
     // slightly less optimized for section when we don't have full unrolling
     Npack = Nrem / PACKELEMS;
     Nelem = Npack * PACKELEMS;
@@ -398,6 +454,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     offset += Nelem;
   }
 
+  //if (tid == 0) printf("unrolled non-aligned buffers\n");
   // unrolled, by-type (mostly for unaligned buffers)
   int Nelem = (Nrem / (UNROLL*PACKELEMS/2*WARP_SIZE)) * (UNROLL*PACKELEMS/2*WARP_SIZE); // round down
 
@@ -407,6 +464,7 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
   if (Nrem == 0) return;
   offset += Nelem;
 
+  //if (tid == 0) printf("non-unrolled non-aligned buffers\n");
   // no unroll, by type. Should finish what's remaining.
   ReduceCopyMulti<FUNC, T, 1, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS>(w, nw, t, nsrcs, srcs, ndsts, dsts, offset, Nrem);
 }
