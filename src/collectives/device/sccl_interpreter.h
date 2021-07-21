@@ -107,32 +107,32 @@ class scclFunction {
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_ADD:
-                prims.template binaryOp<FuncSum<float>, float>(
+                prims.template binaryOp<FuncSum<T>, T>(
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_SUB:
-                prims.template binaryOp<FuncDiff<float>, float>(
+                prims.template binaryOp<FuncDiff<T>, T>(
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MUL:
-                prims.template binaryOp<FuncProd<float>, float>(
+                prims.template binaryOp<FuncProd<T>, T>(
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MIN:
-                prims.template binaryOp<FuncMin<float>, float>(
+                prims.template binaryOp<FuncMin<T>, T>(
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_MAX:
-                prims.template binaryOp<FuncMax<float>, float>(
+                prims.template binaryOp<FuncMax<T>, T>(
                     srcPointer + srcoffset, src2Pointer + src2offset,
                     dstPointer + dstoffset, thisCount);
                 break;
               case SCCL_RSQRT:
-                prims.template binaryOp<FuncRSqrt<float>, float>(
+                prims.template binaryOp<FuncRSqrt<T>, T>(
                     srcPointer + srcoffset, srcPointer + srcoffset,
                     dstPointer + dstoffset, thisCount);
                 break;

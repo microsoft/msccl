@@ -8,4 +8,4 @@
 #include "common.h"
 #include "collectives.h"
 
-IMPL_COLL_C(AllToAll);
+IMPL_COLL_R(AllToAll);

@@ -58,7 +58,7 @@
   DECL2(AllGather, Sum) \
   DECL(ReduceScatter) \
   DECL(AllReduce) \
-  DECL2(AllToAll, Sum) \
+  DECL(AllToAll) \
   DECL5(SendRecv, RING, SIMPLE, Sum, int8_t) \
 
 DECL_ALL

@@ -254,6 +254,21 @@ struct FuncSum<half> {
 };
 
 template<>
+struct FuncDiff<half> {
+  __device__ half2 operator()(const half2 x, const half2 y) const {
+    float2 fx, fy, fr;
+    fx = __half22float2(x);
+    fy = __half22float2(y);
+    fr.x = fx.x - fy.x;
+    fr.y = fx.y - fy.y;
+    return __float22half2_rn(fr);
+  }
+  __device__ half operator()(const half x, const half y) const {
+    return __float2half( __half2float(x) - __half2float(y) );
+  }
+};
+
+template<>
 struct FuncProd<half> {
   __device__ half2 operator()(const half2 x, const half2 y) const {
 #if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
@@ -313,4 +328,19 @@ struct FuncMin<half> {
     return __float2half(fm);
   }
 };
+
+template<>
+struct FuncRSqrt<half> {
+  __device__ half2 operator()(const half2 x, const half2 y) const {
+    float2 fx, fr;
+    fx = __half22float2(x);
+    fr.x = 1.0f / sqrt(fx.x);
+    fr.y = 1.0f / sqrt(fx.y);
+    return __float22half2_rn(fr);
+  }
+  __device__ half operator()(const half x, const half y) const {
+    return __float2half( 1.0f / sqrt(__half2float(x)) );
+  }
+};
+
 #endif // REDUCE_KERNEL_H_

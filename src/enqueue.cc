@@ -62,7 +62,7 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
-  NCCL_FUNCS2B(AllToAll)
+  NCCL_FUNCS2A(AllToAll)
 };
 
 /*****************************************************************************/
