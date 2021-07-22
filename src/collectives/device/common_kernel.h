@@ -403,14 +403,19 @@ __device__ __forceinline__ void ReduceOrCopyMulti(const int tid, const int nthre
     int N) {
   static_assert(MINSRCS <= MAXSRCS, "");
   static_assert(MINDSTS <= MAXDSTS, "");
+  static_assert(MINSRCS >= 1, "");
   int Nrem = N;
   if (Nrem <= 0) return;
   //if (tid == 0) {
-  //  printf("ReduceOrCopyMulti tid %d, %d srcs %d dsts\n", tid, nsrcs, ndsts);
-  //  printf("UNROLL %d, MINSRCS %d, MAXSRCS %d, MINDSTS %d, MAXDSTS %d\n",
-  //         UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS);
-  //  printf("src[0] %f(%p), src[1] %f(%p), dst[0] %p\n",
-  //         *(float*)srcs[0], srcs[0], *(float*)srcs[1], srcs[1], dsts[0]);
+  //  printf("ReduceOrCopyMulti tid %d, %d srcs %d dsts\n"
+  //         "UNROLL %d, MINSRCS %d, MAXSRCS %d, MINDSTS %d, MAXDSTS %d\n"
+  //         "src[0] %f(%p), src[1] %f(%p), dst[0] %p\n",
+  //         tid, nsrcs, ndsts,
+  //         UNROLL, MINSRCS, MAXSRCS, MINDSTS, MAXDSTS,
+  //         *(float*)srcs[0], srcs[0],
+  //         (MINSRCS > 1) ? (*(float*)srcs[1]) : 0.0f,
+  //         (MINSRCS > 1) ? srcs[1] : nullptr,
+  //         MINDSTS ? dsts[0] : nullptr);
   //}
 
   int w = tid / WARP_SIZE;       // Warp number
