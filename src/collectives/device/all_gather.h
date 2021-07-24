@@ -210,6 +210,7 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_SIMPLE, FUNC, T
   public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
+      args->coll.count *= args->comm->nRanks;
       scclfunc.run(args);
     }
 };
@@ -219,6 +220,7 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, FUNC, T,
   public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
+      args->coll.count *= args->comm->nRanks;
       scclfunc.run(args);
     }
 };
@@ -228,6 +230,7 @@ class ncclFunction<ncclFuncAllGather, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FUNC, T, UN
   public:
     __device__ void run(struct ncclWorkElem* args) {
       scclFunctionLL<FUNC, T, UNROLL> scclfunc;
+      args->coll.count *= args->comm->nRanks;
       scclfunc.run(args);
     }
 };

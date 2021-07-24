@@ -36,11 +36,9 @@ class scclFunction {
 
       PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
 
-      const int nranks = comm->nRanks;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t size = args->coll.count;
-      // TODO gotta do something about this
-      const ssize_t sizePerScclChunk = (size)/scclAlgo->nchunksPerLoop;
+      const ssize_t sizePerScclChunk = size/scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
@@ -53,9 +51,6 @@ class scclFunction {
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
-          // if (tid == sync_tid){
-          //   printf("step %d bid %d start\n", i, bid);
-          // }
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
@@ -110,9 +105,6 @@ class scclFunction {
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
             scclFlags[bid].flag = curFlag;
           }
-          // if (tid == sync_tid){
-          //   printf("step %d bid %d end\n", i, bid);
-          // }
         }
       }
     }
