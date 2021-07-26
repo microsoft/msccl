@@ -177,6 +177,8 @@ struct scclFlag {
 struct scclAlgorithm {
   // a flag to specify if the SCCL algorithm is a valid one
   bool isValid;
+  // number of gpus in the group
+  int ngpus;
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // the protocol that the algorithm needs to use

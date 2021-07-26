@@ -867,23 +867,40 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   // NetSharedBuffers needs to be set for this to work across nodes.
   if (getenv("SCCL_XML_FILE")){
-    NCCLCHECK(scclGetAlgoFromXMLAndSetComm(comm));
-    comm->scclAlgo.isValid = true;
-    // Connect SCCL graph
-    if (comm->nChannels < comm->scclAlgo.nChannels){
-      WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", comm->scclAlgo.nChannels, comm->nChannels, comm->scclAlgo.nChannels);
-      return ncclInvalidUsage;
+    if (scclGetAlgoFromXMLAndSetComm(comm) == ncclSuccess){
+      comm->scclAlgo.isValid = true;
+    } else {
+      comm->scclAlgo.isValid = false;
     }
-    
-    for (int c=0; c<comm->scclAlgo.nChannels; c++) {
-      struct ncclChannel* channel = comm->channels+c;
-      if (comm->nRanks == 1) continue;
-      struct scclChannelInfo* scclChannel = &comm->scclAlgo.scclChannels[c];
-      NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
+    char* netSharedBufferEnv = getenv("NCCL_NET_SHARED_BUFFERS");
+    if (netSharedBufferEnv){
+      if (strcasecmp(netSharedBufferEnv, "0") != 0){
+        WARN("SCCL needs NCCL_NET_SHARED_BUFFERS set to 0");
+        comm->scclAlgo.isValid = false;
+      }
     }
-    // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-    INFO(NCCL_INIT, "Connected SCCL algorithm");
+
+    if (comm->scclAlgo.isValid){
+      // Connect SCCL graph only if it was a valid algorithm
+      if (comm->nChannels < comm->scclAlgo.nChannels){
+        WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", comm->scclAlgo.nChannels, comm->nChannels, comm->scclAlgo.nChannels);
+        comm->scclAlgo.isValid = false;
+      }
+    }
+    if (comm->scclAlgo.isValid){
+      for (int c=0; c<comm->scclAlgo.nChannels; c++) {
+        struct ncclChannel* channel = comm->channels+c;
+        if (comm->nRanks == 1) continue;
+        struct scclChannelInfo* scclChannel = &comm->scclAlgo.scclChannels[c];
+        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
+      }
+      // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
+      NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
+      INFO(NCCL_INIT, "Connected SCCL algorithm");
+    }
+    if (!comm->scclAlgo.isValid) {
+      WARN("SCCL algo initialization failed. SCCL_XML_FILE will be ignored.");
+    }
   } else {
     comm->scclAlgo.isValid = false;
   }

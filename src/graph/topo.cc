@@ -656,6 +656,13 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   memset(scclAlgo, 0, sizeof(struct scclAlgorithm));
   struct ncclXmlNode* topNode;
   NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
+  int ngpus;
+  NCCLCHECK(xmlGetAttrInt(topNode, "ngpus", &ngpus));
+  if (comm->nRanks != ngpus){
+    WARN("ngpus set in the SCCL algo (%d) doesn't match the communicator ngpus (%d)", ngpus, comm->nRanks);
+    return ncclInvalidUsage;
+  }
+  scclAlgo->ngpus = ngpus;
   int nchunksPerLoop;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
@@ -720,6 +727,11 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
 
             if (recvpeer == id || sendpeer == id){
               WARN("recvpeer (%d) or sendpeer (%d) for threadblock %d cannot be gpu %d", recvpeer, sendpeer, bid, id);
+              return ncclInvalidUsage;
+            }
+
+            if (recvpeer >= ngpus || sendpeer >= ngpus) {
+              WARN("recvpeer (%d) or sendpeer (%d) must be -1 or between 0 and ngpus (%d)", recvpeer, sendpeer, ngpus);
               return ncclInvalidUsage;
             }
 
