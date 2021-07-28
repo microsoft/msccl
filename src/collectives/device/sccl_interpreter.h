@@ -17,7 +17,7 @@
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
-    __device__ void run(struct ncclWorkElem* args) {
+    __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
       struct ncclDevComm* comm = args->comm;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
       const int tid = threadIdx.x;
@@ -38,7 +38,7 @@ class scclFunction {
 
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
       const ssize_t size = args->coll.count;
-      const ssize_t sizePerScclChunk = size/scclAlgo->nchunksPerLoop;
+      const ssize_t sizePerScclChunk = (size*sizeMultiplier)/scclAlgo->nchunksPerLoop;
       uint32_t scclMaxAllowedCount = args->scclMaxAllowedCount;
 
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
