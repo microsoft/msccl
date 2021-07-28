@@ -818,11 +818,14 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
-                  checkDst = 1;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "cpy") == 0) {
                   sccltran->type = SCCL_LOCAL_COPY;
+                  checkSrc = 1;
+                  checkDst = 1;
+                } else if (strcmp(type, "re") == 0) {
+                  sccltran->type = SCCL_REDUCE;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {

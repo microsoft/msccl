@@ -387,6 +387,14 @@ class ncclLL128Primitives {
     GenericOp<0, 0, 1, 1>(src, dst, nelem);
   }
 
+  __device__ void reduce(const T* src, T* dst, int nelem) {
+    for (int offset = tid; offset < nelem; offset += nthreads) {
+      T v0 = src[offset];
+      v0 += dst[offset];
+      dst[offset] = v0;
+    }
+  }
+
   __device__ __forceinline__ ~ncclLL128Primitives() {
     // Save steps for the next operation
     saveRecvSync();
