@@ -542,7 +542,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   }
 
   if (info->comm->scclAlgo.flagsNeedReset == 1){
-    // CUDACHECK(cudaMemsetAsync(info->comm->scclAlgo.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+    CUDACHECK(cudaMemsetAsync(info->comm->scclAlgo.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
     info->comm->scclAlgo.flagsNeedReset = 0;
   }
 
