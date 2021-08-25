@@ -388,9 +388,10 @@ class ncclLL128Primitives {
   }
 
   __device__ void reduce(const T* src, T* dst, int nelem) {
+    // TODO: This needs to be optimized
     for (int offset = tid; offset < nelem; offset += nthreads) {
       T v0 = src[offset];
-      v0 += dst[offset];
+      v0 = FUNC()(v0,dst[offset]);
       dst[offset] = v0;
     }
   }

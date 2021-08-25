@@ -642,8 +642,7 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
   return ncclSuccess;
 }
 
-ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
-  char* str = getenv("SCCL_XML_FILE");
+ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str) {
   INFO(NCCL_ENV, "SCCL_XML_FILE set by environment to %s", str);
   struct ncclXml* xml;
 
@@ -667,6 +666,25 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
+
+  const char* redop;
+  NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
+  if (strcmp(redop, "sum") == 0){
+    scclAlgo->redOp = ncclSum;
+  } else if (strcmp(redop, "prod") == 0){
+    scclAlgo->redOp = ncclProd;
+  } else if (strcmp(redop, "max") == 0){
+    scclAlgo->redOp = ncclMax;
+  } else if (strcmp(redop, "min") == 0){
+    scclAlgo->redOp = ncclMin;
+  } else if (strcmp(redop, "nop") == 0){
+    //If algorithm has no reduction operator then use ncclSum.
+    scclAlgo->redOp = ncclSum;
+  } else {
+    WARN("Redop %s is not supported.", redop);
+    return ncclInvalidUsage;
+  }
+
   const char* protocol;
   NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
   if (strcmp(protocol, "Simple") == 0){
@@ -679,6 +697,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
     WARN("Protocol %s is not supported.", protocol);
     return ncclInvalidUsage;
   }
+
   scclAlgo->nChannels = globalNChannels;
   scclAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {
@@ -818,6 +837,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
                 } else if (strcmp(type, "rrc") == 0) {
                   sccltran->type = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
+                } else if (strcmp(type, "rrcs") == 0) {
+                  sccltran->type = SCCL_RECV_REDUCE_COPY_SEND;
+                  hasRecv = 1;
+                  hasSend = 1;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "cpy") == 0) {
