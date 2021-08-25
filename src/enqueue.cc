@@ -62,7 +62,8 @@ static void* const ncclKerns[1+NCCL_NUM_FUNCTIONS*ncclNumOps*ncclNumTypes*NCCL_N
   NCCL_FUNCS2B(AllGather),
   NCCL_FUNCS2A(ReduceScatter),
   NCCL_FUNCS2A(AllReduce),
-  NCCL_FUNCS2B(AllToAll)
+  NCCL_FUNCS2B(AllToAll),
+  NCCL_FUNCS2A(CustomCollective)
 };
 
 /*****************************************************************************/
@@ -104,7 +105,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
-
+  if (!base) e->nActives = 1; // This only happens when it is a p2p case
   for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
   }
@@ -366,6 +367,8 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
     case ncclFuncAllReduce:
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
+      info->pattern = ncclPatternSccl; break;
+    case ncclFuncCustomCollective:
       info->pattern = ncclPatternSccl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
@@ -713,6 +716,9 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
+  if (info->coll == ncclFuncCustomCollective) {
+    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgo.protocol] = 1.0f;
+  }
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;

@@ -11,11 +11,11 @@
 #include "align.h"
 #include <stdint.h>
 
-#define NCCL_NUM_FUNCTIONS 6 // SendRecv not included for now
-typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncSendRecv} ncclFunc_t;
+#define NCCL_NUM_FUNCTIONS 7 // SendRecv not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
-#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/CollNet
+#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/SCCL/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
 #define NCCL_ALGO_SCCL 2
@@ -129,9 +129,10 @@ struct ncclRing {
 #define SCCL_RECV_COPY_SEND 2
 #define SCCL_RECV_REDUCE_SEND 3
 #define SCCL_RECV_REDUCE_COPY 4
-#define SCCL_LOCAL_COPY 5
-#define SCCL_REDUCE 6
-#define SCCL_NO_OP 7
+#define SCCL_RECV_REDUCE_COPY_SEND 5
+#define SCCL_LOCAL_COPY 6
+#define SCCL_REDUCE 7
+#define SCCL_NO_OP 8
 
 // TODO: compress this by a lot!
 struct scclTransfer {
@@ -195,6 +196,9 @@ struct scclAlgorithm {
   // declaration for scratchBuffer. This is only to be accessed by the host
   size_t scratchBufferSize;
   void* scratchBuffer;
+  //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
+  //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
+  ncclRedOp_t redOp;
 
   // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
   struct scclFlag* flags;

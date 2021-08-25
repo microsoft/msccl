@@ -83,6 +83,9 @@ class scclFunction {
               case SCCL_RECV_REDUCE_SEND:
                 prims.recvReduceSend(srcPointer + srcoffset, thisCount);
                 break;
+              case SCCL_RECV_REDUCE_COPY_SEND:
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+                break;
               case SCCL_RECV_REDUCE_COPY:
                 prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
                 break;
@@ -152,6 +155,10 @@ struct SimpleWrapper {
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
+  
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
+  }
 
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
@@ -206,6 +213,10 @@ struct LL128Wrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }  
+
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
@@ -257,6 +268,10 @@ struct LLWrapper {
 
   __device__ void recvReduceCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopy(srcChunkPointer, dstChunkPointer, nelem*count);
+  }  
+  
+  __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
+    prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
   
   __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
