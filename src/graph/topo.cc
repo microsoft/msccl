@@ -728,10 +728,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm) {
             }
             struct scclThreadBlock* sTB = &scclAlgo->scclTB[bid];
             sTB->nsteps = 0;
-            if (recvpeer == -1 && sendpeer == -1){
-              WARN("No point in creating in threadblock %d on gpu %d", bid, id);
-              return ncclInvalidUsage;
-            }
             if (recvpeer < -1 || sendpeer < -1){
               WARN("Wrong recvpeer (%d) or sendpeer (%d) in threadblock %d on gpu %d", recvpeer, sendpeer, bid, id);
               return ncclInvalidUsage;
