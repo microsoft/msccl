@@ -119,6 +119,9 @@ struct ncclRing {
 
 #define SCCL_MAX_NUM_STEPS 512
 #define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
+#define SCCL_MAX_NUM_THREAD_BLOCKS 108 // set this to 108 which is the number of SMs on A100
+
+static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM_THREAD_BLOCKS);
 
 #define SCCL_INPUT_BUFFER 0
 #define SCCL_OUTPUT_BUFFER 1
@@ -148,8 +151,8 @@ struct scclTransfer {
 };
 
 struct scclThreadBlock {
-  int8_t sendpeer;
-  int8_t recvpeer;
+  int16_t sendpeer;
+  int16_t recvpeer;
   uint16_t nsteps;
   int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   uint16_t rid; // relative id of this thread block to the channel
@@ -179,12 +182,18 @@ struct scclFlag {
 struct scclAlgorithm {
   // a flag to specify if the SCCL algorithm is a valid one
   bool isValid;
+  // the type of collective this algorithm is
+  ncclFunc_t collectiveType;
+  // inPlace collective
+  int inPlace;
   // number of gpus in the group
   int ngpus;
   // max(#chunks in input, #chunks in output)
   int nchunksPerLoop;
   // the protocol that the algorithm needs to use
   int protocol;
+  // the range of size in which this algorithm is performant
+  int64_t minBytes; int64_t maxBytes;
   // bid is used as an index into this array
   struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // number of channels needed by SCCL algorithm
@@ -193,17 +202,19 @@ struct scclAlgorithm {
   struct scclChannelInfo scclChannels[MAXCHANNELS];
   // number of scratch chunks that SCCL will use
   int nScratchChunks;
-  // declaration for scratchBuffer. This is only to be accessed by the host
-  size_t scratchBufferSize;
-  void* scratchBuffer;
   //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
   //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
   ncclRedOp_t redOp;
+};
 
+struct scclAlgorithmShared {
   // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
   struct scclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
+  // declaration for scratchBuffer. This is only to be accessed by the host
+  size_t scratchBufferSize;
+  void* scratchBuffer;
 };
 
 #define NCCL_MAX_TREE_ARITY 3
@@ -232,11 +243,12 @@ struct ncclWorkElem {
   uint16_t nThreads;
   uint16_t funcIndex;
   uint16_t index;
+
   // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
   uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
-  uint8_t isScclAlgorithm; // right now, 0 indicates not a sccl algorithm and 1 indicates it is. In future versions, this will be the index into arrays of scclAlgorithms.
   uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  int scclAlgoIndex; // taken from info->scclAlgoIndex
 
   const void * sendbuff;
   void * recvbuff;
@@ -288,11 +300,16 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
+#define SCCL_MAX_NUM_ALGOS 4
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
-  struct scclAlgorithm scclAlgo;
+
+  // SCCL related elements
+  int numberOfSCCAlgorithms;
+  struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
+  struct scclAlgorithmShared scclAlgoShared;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;

@@ -11,22 +11,29 @@ NCCL_API(ncclResult_t, ncclAllToAll, const void* sendbuff, void* recvbuff, size_
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclAllToAll(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream) {
-  
-  if (comm->scclAlgo.isValid && ((sendcount*comm->nRanks) % comm->scclAlgo.nchunksPerLoop) == 0){
-    NVTX3_FUNC_RANGE_IN(nccl_domain);
-    struct ncclInfo info = { ncclFuncAllToAll, "AllToAll",
-      sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-      SCCL_CHUNKSTEPS, SCCL_SLICESTEPS };
-    return ncclEnqueueCheck(&info);
-  } else {
-    NCCLCHECK(ncclGroupStart());
-    for (int r=0; r<comm->nRanks; r++){
-      if (sendcount != 0){
-        NCCLCHECK(ncclSend(((char*)sendbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
-        NCCLCHECK(ncclRecv(((char*)recvbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
-      }
+  size_t allcount = sendcount*comm->nRanks;
+  size_t nbytes = allcount*ncclTypeSize(datatype);
+  for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++) {
+    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
+    if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) 
+        && ((allcount % comm->scclAlgos[scclAlgoIndex].nchunksPerLoop) == 0)
+        && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes)){
+      NVTX3_FUNC_RANGE_IN(nccl_domain);
+      struct ncclInfo info = { ncclFuncAllToAll, "AllToAll",
+        sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+        SCCL_CHUNKSTEPS, SCCL_SLICESTEPS };
+      info.scclAlgoIndex = scclAlgoIndex;
+      return ncclEnqueueCheck(&info);
     }
-    NCCLCHECK(ncclGroupEnd());   
-    return ncclSuccess;
   }
+  // If there is no proper SCCL algorithm, then use p2p
+  NCCLCHECK(ncclGroupStart());
+  for (int r=0; r<comm->nRanks; r++){
+    if (sendcount != 0){
+      NCCLCHECK(ncclSend(((char*)sendbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
+      NCCLCHECK(ncclRecv(((char*)recvbuff)+r*sendcount*ncclTypeSize(datatype), sendcount, datatype, r, comm, stream));
+    }
+  }
+  NCCLCHECK(ncclGroupEnd());   
+  return ncclSuccess;
 }
