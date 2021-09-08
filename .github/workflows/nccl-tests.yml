@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+    - msccl/*
+
+jobs:
+  nccl-tests:
+    name: Build and run nccl tests
+    runs-on: [self-hosted, linux, x64, gpu]
+    container:
+      image: nvcr.io/nvidia/pytorch:20.12-py3
+      options: --privileged --net=host --ipc=host --gpus=all
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Build and install
+      run: |
+        make src.build -j
+        make install
+    - name: Build nccl-tests
+      run: |
+        git clone https://github.com/nvidia/nccl-tests /nccl-tests
+        cd /nccl-tests
+        make MPI=1 MPI_HOME=/usr/local/mpi -j
+    - name: Test local all reduce
+      run: |
+        mpirun \
+          -allow-run-as-root -H localhost:4 -np 4 \
+          /nccl-tests/build/all_reduce_perf -b 1K -e 256M -f 2 -g 1 -c 1 -w 20 -n 50
