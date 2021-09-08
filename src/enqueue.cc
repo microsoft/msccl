@@ -110,7 +110,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
     e->active[i] = 1;
   }
   e->index = (setOpIndex == -1) ? opIndex : setOpIndex;
-  base->index = e->index;
+  if (base) base->index = e->index;
   channel->workFifoTail++;
   channel->workCount++;
   if (work) *work = w;
