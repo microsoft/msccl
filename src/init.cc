@@ -170,7 +170,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->scclAlgo.flags));
+  CUDACHECK(cudaFree(comm->scclAlgoShared.flags));
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
@@ -197,10 +197,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
   // free up SCCL allocated scratchPad
-  if (comm->scclAlgo.scratchBuffer != NULL && comm->scclAlgo.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->scclAlgo.scratchBuffer));
-    comm->scclAlgo.scratchBuffer = NULL;
-    comm->scclAlgo.scratchBufferSize = 0;
+  if (comm->scclAlgoShared.scratchBuffer != NULL && comm->scclAlgoShared.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->scclAlgoShared.scratchBuffer));
+    comm->scclAlgoShared.scratchBuffer = NULL;
+    comm->scclAlgoShared.scratchBufferSize = 0;
   }
 
   // Poison comm to try and catch a double free
@@ -281,9 +281,12 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
-  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgo.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgoShared.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // SCCL algo is copied to the device side
-  comm->hostDevComm.scclAlgo = comm->scclAlgo;
+  for (int i = 0; i < comm->numberOfSCCAlgorithms; i++)
+    comm->hostDevComm.scclAlgos[i] = comm->scclAlgos[i];
+  comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
+  comm->hostDevComm.numberOfSCCAlgorithms = comm->numberOfSCCAlgorithms;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
@@ -770,6 +773,20 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
+  int scclMinRequireNChannels = 0;
+  int numValidSCCLAlgos; // We only use this at connect site
+  if (getenv("SCCL_XML_FILES")){
+    // Read SCCL algorithms first, but do not connect them yet.
+    NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
+    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
+      if (scclAlgo->isValid){
+        // Make sure SCCL at least has scclAlgo->nChannels
+        scclMinRequireNChannels = std::max(comm->nChannels, scclAlgo->nChannels);
+      }
+    }
+  }
+
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
     // duplicated channels since we have removed some.
@@ -779,7 +796,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
 
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings));
+  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, scclMinRequireNChannels));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
@@ -811,7 +828,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   sched_getaffinity(0, sizeof(cpu_set_t), &affinitySave);
   NCCLCHECK(ncclTopoSetAffinity(comm->topo, comm->rank));
   ncclResult_t ret;
-
+  
   NCCLCHECK(computeBuffSizes(comm));
 
   // Connect with prev/next for each ring
@@ -861,46 +878,30 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
   free(rings);
 
+  numValidSCCLAlgos = 0;
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-  // NetSharedBuffers needs to be set for this to work across nodes.
-  if (getenv("SCCL_XML_FILE")){
-    if (scclGetAlgoFromXMLAndSetComm(comm, getenv("SCCL_XML_FILE")) == ncclSuccess){
-      comm->scclAlgo.isValid = true;
-    } else {
-      comm->scclAlgo.isValid = false;
-    }
-    char* netSharedBufferEnv = getenv("NCCL_NET_SHARED_BUFFERS");
-    if (netSharedBufferEnv){
-      if (strcasecmp(netSharedBufferEnv, "0") != 0){
-        WARN("SCCL needs NCCL_NET_SHARED_BUFFERS set to 0");
-        comm->scclAlgo.isValid = false;
+  for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
+    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
+    if (scclAlgo->isValid){
+      if (scclAlgo->nChannels > comm->nChannels){
+        scclAlgo->isValid = false;
+        continue;
       }
-    }
-
-    if (comm->scclAlgo.isValid){
       // Connect SCCL graph only if it was a valid algorithm
-      if (comm->nChannels < comm->scclAlgo.nChannels){
-        WARN("SCCL algo needs %d channels but ended up with %d channels in comm. Make sure NCCL_MIN_NCHANNELS is at least %d", comm->scclAlgo.nChannels, comm->nChannels, comm->scclAlgo.nChannels);
-        comm->scclAlgo.isValid = false;
-      }
-    }
-    if (comm->scclAlgo.isValid){
-      for (int c=0; c<comm->scclAlgo.nChannels; c++) {
+      for (int c=0; c<scclAlgo->nChannels; c++) {
         struct ncclChannel* channel = comm->channels+c;
         if (comm->nRanks == 1) continue;
-        struct scclChannelInfo* scclChannel = &comm->scclAlgo.scclChannels[c];
+        struct scclChannelInfo* scclChannel = &scclAlgo->scclChannels[c];
         NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
       }
-      // It appears that graph is not really needed for P2pSetup. The only place that actually uses it is in ncclTopoGetNetDev which has a bypass for when it is set to NULL.
-      NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
-      INFO(NCCL_INIT, "Connected SCCL algorithm");
+      numValidSCCLAlgos++;
     }
-    if (!comm->scclAlgo.isValid) {
-      WARN("SCCL algo initialization failed. SCCL_XML_FILE will be ignored.");
-    }
-  } else {
-    comm->scclAlgo.isValid = false;
+  }
+  if (numValidSCCLAlgos > 0){
+    // We use ringGraph which uses channel % numIBsClosestToThisGPU for NET
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph), ret, affinity_restore);
+    INFO(NCCL_INIT, "Connected %d SCCL algorithms", numValidSCCLAlgos);
   }
 
   // Compute time models for algorithm and protocol combinations.

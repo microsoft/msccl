@@ -36,7 +36,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* topo, int64_t busId, int ne
 ncclResult_t ncclTopoSetAffinity(struct ncclTopoSystem* system, int rank);
 
 // SCCL get alirthm from XML file and set the communicator
-ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str);
+ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str);
 
 #define NCCL_TOPO_CPU_ARCH_X86 1
 #define NCCL_TOPO_CPU_ARCH_POWER 2
@@ -98,12 +98,12 @@ ncclResult_t ncclTopoPreset(struct ncclComm* comm,
     struct ncclTopoRanks* topoRanks);
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns,
-    struct ncclTopoRanks** allTopoRanks, int* rings);
+    struct ncclTopoRanks** allTopoRanks, int* rings, int scclMinRequireNChannels);
 
 ncclResult_t ncclTopoConnectCollNet(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, int rank);
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph* treeGraph, struct ncclTopoGraph* ringGraph, struct ncclTopoGraph* collNetGraph);
 #include "info.h"
-ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time);
+ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time, int* scclAlgoIndex, struct ncclComm* comm);
 
 #endif

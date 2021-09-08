@@ -19,7 +19,7 @@ class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
       struct ncclDevComm* comm = args->comm;
-      struct scclAlgorithm* scclAlgo = &comm->scclAlgo;
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[args->scclAlgoIndex];
       const int tid = threadIdx.x;
       const int sync_tid = args->nThreads-1; // last thread is most likely not doing anthing and used for SCCL cross thread synchronization
       const int bid = blockIdx.x;
@@ -44,7 +44,7 @@ class scclFunction {
       // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
-      volatile struct scclFlag* scclFlags = comm->scclAlgo.flags;
+      volatile struct scclFlag* scclFlags = comm->scclAlgoShared.flags;
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);

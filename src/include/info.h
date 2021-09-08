@@ -30,6 +30,7 @@ struct ncclInfo {
   // NCCL Coll Args
   const void* sendbuff;
   void* recvbuff;
+  int inplace; // needed for sccl
   size_t count;
   ncclDataType_t datatype;
   ncclRedOp_t op;
@@ -41,6 +42,7 @@ struct ncclInfo {
   int sliceSteps;
   // Computed later
   int algorithm;
+  int scclAlgoIndex; // Used to indentify SCCL algorithm
   int protocol;
   ncclPattern_t pattern;
   int nChannels;

@@ -117,26 +117,16 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     // Skipping on SCCL algorithms here since SCCL tune the algorithm in the synthesizer.
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
-      if (coll == ncclFuncAllToAll || coll == ncclFuncCustomCollective || a == NCCL_ALGO_SCCL) {
-        // SCCL algorithm has hooks for AllToAll, AllGather, AllReduce and ReduceScatter
-        // SCCL algorithm is dynamic and busBw/latency can only be determined by the input XML algorithm. An analysis will be added later.
-        for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-          if ((coll == ncclFuncAllToAll || coll == ncclFuncAllGather || coll == ncclFuncReduceScatter || coll == ncclFuncAllReduce) && a == NCCL_ALGO_SCCL && p == comm->scclAlgo.protocol){
-            // Setting the bandwidth and latency values to 1.0 (some arbitrary value) so that they don't get skipped by ncclTopoGetAlgoTime
-            comm->bandwidths[coll][a][p] = 1.0;
-            comm->latencies[coll][a][p] = 1.0;
-          } else {
-            //Set all protocols for NCCL_ALGO_SCCL for ncclFuncCustomCollective to 0 because XML is loaded later.
-            comm->bandwidths[coll][a][p] = 0.0; // This will make sure that sccl is not selected for any other scenario
-            comm->latencies[coll][a][p] = 0.0;
-          }
-        }
-        continue;
-      }
-
       if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+        if (a == NCCL_ALGO_SCCL) {
+          // SCCL algorithms have a range for each algorithm and are decided by ncclTopoGetAlgoTime function.
+          comm->latencies[coll][a][p] = 0.;
+          comm->bandwidths[coll][a][p] = 0.;
+          continue;
+        }
+
         float speed = nNodes <= 2 || a == NCCL_ALGO_COLLNET ? graphs[a]->speedIntra : graphs[a]->speedInter;
         float busBw = graphs[a]->nChannels * speed;
 
@@ -207,9 +197,13 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
     }
   }
   
-  // Disable SCCL if SCCL_XML_FILE is not specified
-  if (!getenv("SCCL_XML_FILE")){
+  // Disable SCCL if SCCL_XML_FILES is not specified
+  if (!getenv("SCCL_XML_FILES")){
     algoEnable[NCCL_ALGO_SCCL] = 0;
+  }
+
+  if (algoEnable[NCCL_ALGO_SCCL] == 0) {
+   comm->numberOfSCCAlgorithms = 0;
   }
 
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
@@ -298,7 +292,18 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
   {  .9,  .9,  .9,  .9,  .9,  .9,  .9,  .8,  .7,  .6,  .6,  .5,  .5,  .5,  .5,  .6,  .7,  .8,  .7,  .7,  .8,  .9,  .9 }
 };
 
-ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time) {
+ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time, int* scclAlgoIndex, struct ncclComm* comm) {
+  if (algorithm == NCCL_ALGO_SCCL){
+    for (int i=0; i<comm->numberOfSCCAlgorithms; i++){
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[i];
+      if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->protocol == protocol) && (scclAlgo->ngpus == info->comm->nRanks)
+          && ((info->count % scclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= scclAlgo->minBytes) && (info->nBytes < scclAlgo->maxBytes)) {
+        *time = 0.f;
+        *scclAlgoIndex = i;
+        return ncclSuccess;
+      }
+    }
+  }
   float bw = info->comm->bandwidths[info->coll][algorithm][protocol];
   float lat = info->comm->latencies[info->coll][algorithm][protocol];
   if (bw == 0) {
