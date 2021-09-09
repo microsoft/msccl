@@ -242,9 +242,7 @@ class ncclLLPrimitives {
     LLGenericOp<0, 0, 1, 1>(src, dst, nelem);
   }
   __device__ void reduce(const T* src, T* dst, int nelem) {
-    for (int i = tid; i < nelem; i += nthreads)
-      dst[i] += src[i];
-    // LLGenericOp<0, 0, 2, 1>(src, dst, nelem);
+    LLGenericOp<0, 0, 2, 1>(src, dst, nelem);
   }
 
   __device__ __forceinline__ ~ncclLLPrimitives() {
