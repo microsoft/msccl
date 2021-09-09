@@ -116,23 +116,95 @@ class Primitives;
 template<typename RealPrimitives>
 struct PrimitivesWithoutDirect {
   __device__ void directSend(intptr_t inpIx, intptr_t remoteOutIx, int eltN) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_SEND_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     static_cast<RealPrimitives*>(this)->send(inpIx, eltN);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_SEND_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
   __device__ void directSendFromOutput(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     static_cast<RealPrimitives*>(this)->sendFromOutput(outIx, eltN);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
   __device__ void directRecv(intptr_t outIx, int eltN) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     static_cast<RealPrimitives*>(this)->recv(outIx, eltN, /*postOp=*/false);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
   __device__ void directCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_COPY_SEND_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_COPY_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     static_cast<RealPrimitives*>(this)->copySend(inpIx, outIx, eltN, postOp);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_COPY_SEND_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_COPY_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
   __device__ void directRecvCopySend(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_COPY_SEND_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     static_cast<RealPrimitives*>(this)->recvCopySend(outIx, eltN, /*postOp=*/false);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_COPY_SEND_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
   __device__ void directRecvReduceCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
     // Direct is only for the send part
     static_cast<RealPrimitives*>(this)->recvReduceCopySend(inpIx, outIx, eltN, postOp);
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
   }
 };
 

@@ -7,6 +7,9 @@
 #include "channel.h"
 #include "param.h"
 #include "gdrwrap.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 // GDRCOPY support: FIFO_ENABLE when enabled locates a workFifo in CUDA memory
 NCCL_PARAM(GdrCopyFifoEnable, "GDRCOPY_FIFO_ENABLE", 1);
@@ -42,6 +45,14 @@ ncclResult_t initChannel(struct ncclComm* comm, int channelid) {
     // The device workFifo is the Host one
     channel->workFifoDev = channel->workFifo;
   }
+
+#if defined(ENABLE_NPKIT)
+  // Init NpKit
+  channel->npKitEvent.bits[0] = channel->npKitEvent.bits[1] = 0;
+  channel->gpuNpKitEventCollectContext = NpKit::GetGpuEventCollectContext(channelid);
+  channel->cpuNpKitEventCollectContext = NpKit::GetCpuEventCollectContext(channelid);
+  channel->cpuTimestamp = NpKit::GetCpuTimeStamp();
+#endif
 
   return ncclSuccess;
 }

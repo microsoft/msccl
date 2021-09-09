@@ -9,6 +9,9 @@
 
 #include "nccl.h"
 #include "align.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit_struct.h"
+#endif
 #include <stdint.h>
 
 #define NCCL_NUM_FUNCTIONS 5 // SendRecv not included for now
@@ -209,6 +212,13 @@ struct ncclChannel {
       struct ncclWork* workFifoGdr;
       struct ncclWork* workFifoDev;
       void* gdrMemDesc;
+
+#if defined(ENABLE_NPKIT)
+      NpKitEvent npKitEvent;
+      NpKitEventCollectContext* gpuNpKitEventCollectContext;
+      NpKitEventCollectContext* cpuNpKitEventCollectContext;
+      uint64_t* cpuTimestamp;
+#endif
     };
     int data[0x80];
   };

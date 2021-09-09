@@ -36,6 +36,10 @@ struct ncclProxySubArgs {
   uint64_t done;
   uint64_t end;
   void* requests[NCCL_STEPS];
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_SEND_DONE)
+  int npKitSizesFifo[NCCL_STEPS];
+#endif
 };
 
 struct ncclProxyArgs {

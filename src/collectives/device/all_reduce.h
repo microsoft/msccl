@@ -7,6 +7,9 @@
 #include "devcomm.h"
 #include "collectives.h"
 #include "primitives.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
@@ -21,6 +24,28 @@ namespace {
     const int nranks = ncclShmem.comm.nRanks;
     const ssize_t loopSize = nChannels*nranks*chunkSize;
     const ssize_t size = args->coll.count;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
+    if (threadIdx.x == 0) {
+      uint64_t* cpuTimestamp = ncclShmem.channel.cpuTimestamp;
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_ENTRY, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
 
     int minChunkSize;
     if (Proto::Id == NCCL_PROTO_LL)
@@ -92,6 +117,14 @@ namespace {
       nelem = min(realChunkSize, size-offset);
       prims.directRecv(offset, nelem);
     }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_RING_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_RING_EXIT, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
   }
 
   template<typename T, typename RedOp, typename Proto>
@@ -109,6 +142,28 @@ namespace {
                    /* LL & LL128 */  : nthreads*(Proto::calcBytePerGrain()/sizeof(T)));
     const ssize_t loopSize = int(nChannels*chunkSize);
     const ssize_t size = args->coll.count;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
+    if (threadIdx.x == 0) {
+      uint64_t* cpuTimestamp = ncclShmem.channel.cpuTimestamp;
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_TREE_UPDOWN_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_TREE_UPDOWN_ENTRY, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
 
     if (loopSize > size)
       chunkSize = divUp((int)size, int(nChannels*minChunkSize))*int(minChunkSize);
@@ -164,6 +219,14 @@ namespace {
         }
       }
     }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_TREE_UPDOWN_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_TREE_UPDOWN_EXIT, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
   }
 
   template<typename T, typename RedOp, typename Proto>
@@ -182,6 +245,28 @@ namespace {
                    /* LL128 */       : nthreads*(Proto::calcBytePerGrain()/sizeof(T))/8);
     const ssize_t loopSize = int(nChannels*chunkSize);
     const ssize_t size = args->coll.count;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
+    if (threadIdx.x == 0) {
+      uint64_t* cpuTimestamp = ncclShmem.channel.cpuTimestamp;
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_TREE_SPLIT_ENTRY)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_TREE_SPLIT_ENTRY, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
 
     int nthreadsSplit;
     if (Proto::Id == NCCL_PROTO_SIMPLE) {
@@ -251,6 +336,14 @@ namespace {
         }
       }
     }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_ALL_REDUCE_TREE_SPLIT_EXIT)
+    if (threadIdx.x == 0) {
+      NpKit::GenerateAndCollectGpuEvent(NPKIT_EVENT_ALL_REDUCE_TREE_SPLIT_EXIT, size*sizeof(T), 0, clock64(),
+          &(ncclShmem.channel.npKitEvent), ncclShmem.channel.gpuNpKitEventCollectContext);
+    }
+#endif
+
   }
 }
 

@@ -9,6 +9,9 @@
 #include "graph.h"
 #include "collectives.h"
 #include "gdrwrap.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 struct netConnectInfo {
   ncclNetHandle_t netHandle;
@@ -342,6 +345,11 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         if (sizesFifo[buffSlot] != -1 && ((*recvTail > (sub->base+sub->transmitted)) || p == NCCL_PROTO_LL)) {
           // We have something to receive, let's check if it's completely ready.
           int size = sizesFifo[buffSlot];
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_SEND_DONE)
+          sub->npKitSizesFifo[buffSlot] = size;
+#endif
+
           char* buff = resources->shared ? (char*)resources->recvMem->ptrsFifo[buffSlot] : localBuff+buffSlot*stepSize;
           int ready = 1;
           if (p == NCCL_PROTO_LL128) {
@@ -371,6 +379,14 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
             // Data is ready, try to send.
             NCCLCHECK(ncclNetIsend(resources->netSendComm, buff, size, mhandle, sub->requests+buffSlot));
             if (sub->requests[buffSlot] != NULL) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_SEND_DONE)
+          NpKit::GenerateAndCollectCpuEvent(
+              NPKIT_EVENT_NET_SEND_POSTED, size, uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              *(volatile uint64_t*)NpKit::GetCpuTimeStamp(),
+              &(sub->channel->npKitEvent), sub->channel->cpuNpKitEventCollectContext);
+#endif
+
               TRACE(NCCL_NET, "sendProxy [%ld/%d] Isend (LL) posted, req %p", sub->transmitted, buffSlot, sub->requests[buffSlot]);
               sizesFifo[buffSlot] = -1;
               // Make sure size is reset to zero before we update the head.
@@ -388,6 +404,14 @@ ncclResult_t netSendProxy(struct ncclProxyArgs* args) {
         int buffSlot = (sub->base+sub->done)%NCCL_STEPS;
         NCCLCHECK(ncclNetTest(sub->requests[buffSlot], &done, NULL));
         if (done) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_SEND_DONE)
+          NpKit::GenerateAndCollectCpuEvent(
+              NPKIT_EVENT_NET_SEND_DONE, sub->npKitSizesFifo[buffSlot], uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              *(volatile uint64_t*)NpKit::GetCpuTimeStamp(),
+              &(sub->channel->npKitEvent), sub->channel->cpuNpKitEventCollectContext);
+#endif
+
           TRACE(NCCL_NET, "sendProxy [%ld/%d] request %p done", sub->done, buffSlot, sub->requests[buffSlot]);
           sub->done += args->sliceSteps;
 
@@ -447,6 +471,14 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
         }
         NCCLCHECK(ncclNetIrecv(resources->netRecvComm, ptr, buffSize, mhandle, sub->requests+buffSlot));
         if (sub->requests[buffSlot] != NULL) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_RECV_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_RECV_DONE)
+          NpKit::GenerateAndCollectCpuEvent(
+              NPKIT_EVENT_NET_RECV_POSTED, buffSize, uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              *(volatile uint64_t*)NpKit::GetCpuTimeStamp(),
+              &(sub->channel->npKitEvent), sub->channel->cpuNpKitEventCollectContext);
+#endif
+
           TRACE(NCCL_NET, "recvProxy [%ld/%d] posted recv request %p", sub->posted, buffSlot, sub->requests[buffSlot]);
           sub->posted += args->sliceSteps;
           args->idle = 0;
@@ -458,6 +490,14 @@ ncclResult_t netRecvProxy(struct ncclProxyArgs* args) {
         int done, size;
         NCCLCHECK(ncclNetTest(sub->requests[buffSlot], &done, &size));
         if (done) {
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_RECV_POSTED) && defined(ENABLE_NPKIT_EVENT_NET_RECV_DONE)
+          NpKit::GenerateAndCollectCpuEvent(
+              NPKIT_EVENT_NET_RECV_DONE, size, uint64_t(sub->requests+buffSlot)/sizeof(void*),
+              *(volatile uint64_t*)NpKit::GetCpuTimeStamp(),
+              &(sub->channel->npKitEvent), sub->channel->cpuNpKitEventCollectContext);
+#endif
+
           sub->received += args->sliceSteps;
           if (size > 0 && p == NCCL_PROTO_SIMPLE && resources->useGdr) {
             // Don't pass data to the GPU yet, flush first.

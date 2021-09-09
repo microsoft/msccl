@@ -16,6 +16,9 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -768,6 +771,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   NCCLCHECK(computeBuffSizes(comm));
 
+#if defined(ENABLE_NPKIT)
+  // Init NPKit before init channels
+  NCCLCHECK(NpKit::Init(rank));
+#endif
+
   // Connect with prev/next for each ring
   for (int c=0; c<comm->nChannels; c++) {
     struct ncclChannel* channel = comm->channels+c;
@@ -993,6 +1001,16 @@ static ncclResult_t commDestroy(ncclComm_t comm) {
     CUDACHECK(cudaSetDevice(savedDevice));
 
   TRACE(NCCL_INIT, "Destroyed comm %p rank %d", comm, comm->rank);
+
+#if defined(ENABLE_NPKIT)
+  // Dump NPKit events and shutdown
+  const char* npkitDumpDir = getenv("NPKIT_DUMP_DIR");
+  if (npkitDumpDir != nullptr) {
+    WARN("NPKIT_DUMP_DIR is empty");
+    NCCLCHECK(NpKit::Dump(npkitDumpDir));
+  }
+  NCCLCHECK(NpKit::Shutdown());
+#endif
 
   return ncclSuccess;
 }
