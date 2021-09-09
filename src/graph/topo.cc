@@ -842,13 +842,12 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
               }
             }
             sTB->channelId = channelId;
-            // setting type to none for all transfers to avoid transfering for non existing steps
-            for (int st=0; st<SCCL_MAX_NUM_STEPS; st++){
-              sTB->transfers[st].type = SCCL_NO_OP;
-            }
 
             // setting the summary of the sccl aglorithm in sccl channels
             scclChannelInfo* scclChannel = (sTB->channelId == -1) ? NULL : &scclAlgo->scclChannels[sTB->channelId];
+            int numDependences = 0;
+            int oldDependencePointer = 0; // inidcator of where the dependences started for nop
+            int numTransfers = 0;
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
               if (strcmp(stepNode->name, "step") == 0){
@@ -875,100 +874,113 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   WARN("SCCL: step must be positive: step %d", s);
                   return ncclInternalError;
                 }
-                struct scclTransfer* sccltran = &sTB->transfers[s];
 
-                sccltran->srcoffset = srcoffset;
-                NCCLCHECK(scclGetBufferType(srcbuffer, &sccltran->srcbuffer));
-                sccltran->srcoffset = srcoffset;
-                NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
-                sccltran->dstoffset = dstoffset;
-
-                if (count < 0 || count >= SCCL_MAX_COUNT){
-                  WARN("SCCL: count (%d) must be positive and less than %d", count, SCCL_MAX_COUNT);
-                  return ncclInternalError;
-                }
-
-                sccltran->count = count;
                 int hasSend = 0;
                 int hasRecv = 0;
                 int checkSrc = 0;
                 int checkDst = 0;
+                int transferType = -1; // -1 indicate a nop
                 if (strcmp(type, "s") == 0){
-                  sccltran->type = SCCL_SEND;
+                  transferType = SCCL_SEND;
                   hasSend = 1;
                   checkSrc = 1;
                 } else if (strcmp(type, "r") == 0) {
-                  sccltran->type = SCCL_RECV;
+                  transferType = SCCL_RECV;
                   hasRecv = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "rcs") == 0) {
-                  sccltran->type = SCCL_RECV_COPY_SEND;
+                  transferType = SCCL_RECV_COPY_SEND;
                   hasSend = 1;
                   hasRecv = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "rrs") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_SEND;
+                  transferType = SCCL_RECV_REDUCE_SEND;
                   hasSend = 1;
                   hasRecv = 1;
                   checkSrc = 1;
                 } else if (strcmp(type, "rrc") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_COPY;
+                  transferType = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
                 } else if (strcmp(type, "rrcs") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_COPY_SEND;
+                  transferType = SCCL_RECV_REDUCE_COPY_SEND;
                   hasRecv = 1;
                   hasSend = 1;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "cpy") == 0) {
-                  sccltran->type = SCCL_LOCAL_COPY;
+                  transferType = SCCL_LOCAL_COPY;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "re") == 0) {
-                  sccltran->type = SCCL_REDUCE;
+                  transferType = SCCL_REDUCE;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {
-                  sccltran->type = SCCL_NO_OP;
+                  transferType = -1;
                 } else {
                   WARN("SCCL: type of transfer is not supported: %s", type);
                   return ncclInternalError;
                 }
-                if (hasSend){
-                  if (sendpeer < 0){
-                    WARN("SCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
-                    return ncclInvalidUsage;
-                  }
-                  if (scclChannel == NULL) {
-                    WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+
+                if (depend_bid >= 0) {
+                  sTB->dependentBid[numDependences] = depend_bid;
+                  sTB->dependentStep[numDependences] = depend_step;
+                  numDependences++;
+                } 
+                if (transferType != -1) {
+                  struct scclTransfer* sccltran = &sTB->transfers[numTransfers];
+                  sccltran->type = transferType;
+                  sccltran->srcoffset = srcoffset;
+                  NCCLCHECK(scclGetBufferType(srcbuffer, &sccltran->srcbuffer));
+                  sccltran->srcoffset = srcoffset;
+                  NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
+                  sccltran->dstoffset = dstoffset;
+
+                  if (count < 0 || count >= SCCL_MAX_COUNT){
+                    WARN("SCCL: count (%d) must be positive and less than %d", count, SCCL_MAX_COUNT);
                     return ncclInternalError;
                   }
-                  scclChannel->nchunksForSendPeer[scclChannel->nsendPeers][count-1]++;
-                }
-                if (hasRecv){
-                  if (recvpeer < 0){
-                    WARN("SCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
-                    return ncclInvalidUsage;
+                  sccltran->count = count;
+
+                  if (hasSend){
+                    if (sendpeer < 0){
+                      WARN("SCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
+                      return ncclInvalidUsage;
+                    }
+                    if (scclChannel == NULL) {
+                      WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                      return ncclInternalError;
+                    }
+                    scclChannel->nchunksForSendPeer[scclChannel->nsendPeers][count-1]++;
                   }
-                  if (scclChannel == NULL) {
-                    WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                  if (hasRecv){
+                    if (recvpeer < 0){
+                      WARN("SCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
+                      return ncclInvalidUsage;
+                    }
+                    if (scclChannel == NULL) {
+                      WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                      return ncclInternalError;
+                    }
+                    scclChannel->nchunksForRecvPeer[scclChannel->nrecvPeers][count-1]++;
+                  }
+
+                  if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
+                  if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
+
+                  sccltran->depencePointer = oldDependencePointer;
+                  sccltran->numDependences = numDependences - oldDependencePointer;
+                  oldDependencePointer = numDependences;
+
+                  if (has_dependence != 0 && has_dependence != 1){
+                    WARN("SCCL: has_dependence needs to be 0 or 1, but it was %d", has_dependence);
                     return ncclInternalError;
                   }
-                  scclChannel->nchunksForRecvPeer[scclChannel->nrecvPeers][count-1]++;
+                  sccltran->has_dependence = has_dependence;
+
+                  numTransfers++;
+                  sTB->nsteps = numTransfers;
                 }
-
-                if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
-                if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
-
-                sccltran->dependentBid = depend_bid;
-                sccltran->dependentStep = depend_step;
-                if (has_dependence != 0 && has_dependence != 1){
-                  WARN("SCCL: has_dependence needs to be 0 or 1, but it was %d", has_dependence);
-                  return ncclInternalError;
-                }
-                sccltran->has_dependence = has_dependence;
-
-                sTB->nsteps = std::max(sTB->nsteps, (uint16_t)(s+1));
               }
             }
             sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
