@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+    - msccl/*
+
+jobs:
+  nccl-tests:
+    name: Build and run nccl tests
+    runs-on: [self-hosted, linux, x64, gpu]
+    container:
+      image: nvcr.io/nvidia/pytorch:19.12-py3
+      options: --privileged --ipc=host --gpus=all
+    steps:
+    - name: Checkout msccl
+      uses: actions/checkout@v2
+    - name: Checkout nccl-tests
+      uses: actions/checkout@v2
+      with:
+        repository: nvidia/nccl-tests
+        path: ./nccl-tests
+    - name: Build and install msccl
+      run: |
+        make src.build -j
+        make install
+    - name: Build nccl-tests
+      run: |
+        make MPI=1 MPI_HOME=/usr/local/mpi NCCL_HOME=../../build -j -C ./nccl-tests
+    - name: Test local all reduce
+      run: |
+        mpirun \
+          -allow-run-as-root -H localhost:4 -np 4 -mca btl ^openib \
+          -x LD_LIBRARY_PATH=/usr/local/lib -x NCCL_DEBUG=VERSION \
+          ./nccl-tests/build/all_reduce_perf -b 1K -e 256M -f 2 -g 1 -c 1 -w 20 -n 50
+    - name: Test local alltoall
+      run: |
+        mpirun \
+          -allow-run-as-root -H localhost:4 -np 4 -mca btl ^openib \
+          -x LD_LIBRARY_PATH=/usr/local/lib -x NCCL_DEBUG=VERSION \
+          ./nccl-tests/build/alltoall_perf -b 1K -e 256M -f 2 -g 1 -c 1 -w 20 -n 50
