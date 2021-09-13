@@ -493,7 +493,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   }
 
   // Compute nSteps for proxies
-  int chunkEffectiveSize = chunkSize;
+  size_t chunkEffectiveSize = chunkSize;
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
