@@ -899,8 +899,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
   }
   if (numValidSCCLAlgos > 0){
-    // We use ringGraph which uses channel % numIBsClosestToThisGPU for NET
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d SCCL algorithms", numValidSCCLAlgos);
   }
 
