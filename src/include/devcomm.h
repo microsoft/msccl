@@ -118,8 +118,8 @@ struct ncclRing {
 };
 
 #define SCCL_MAX_NUM_STEPS 512
-#define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
-#define SCCL_MAX_NUM_THREAD_BLOCKS 108 // set this to 108 which is the number of SMs on A100
+#define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 64
+#define SCCL_MAX_NUM_THREAD_BLOCKS 512 // set this to 108 which is the number of SMs on A100
 
 static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM_THREAD_BLOCKS);
 
@@ -269,13 +269,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[6];
+    uint64_t align[10];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (0x30*sizeof(int)), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {
