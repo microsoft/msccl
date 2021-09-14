@@ -1,7 +1,7 @@
 import math
 ngpus = 8
 
-nchunksperloop = 1
+nchunksperloop = 8
 print(f'<algo name="allreduce_small" nchunksperloop="{nchunksperloop}" nchannels="1" proto="LL" ngpus="{ngpus}" inplace="1" coll="allreduce" minBytes="8" maxBytes="262144">')
 
 for i in range(ngpus):
