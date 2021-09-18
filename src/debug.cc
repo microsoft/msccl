@@ -52,6 +52,8 @@ void ncclDebugInit() {
         mask = NCCL_COLL;
       } else if (strcasecmp(subsys, "P2P") == 0) {
         mask = NCCL_P2P;
+      } else if (strcasecmp(subsys, "SHMCPU") == 0) {
+        mask = NCCL_SHMCPU;
       } else if (strcasecmp(subsys, "SHM") == 0) {
         mask = NCCL_SHM;
       } else if (strcasecmp(subsys, "NET") == 0) {
