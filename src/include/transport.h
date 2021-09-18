@@ -13,10 +13,11 @@
 #include "core.h"
 #include "proxy.h"
 
-#define NTRANSPORTS 3
+#define NTRANSPORTS 4
 #define TRANSPORT_P2P 0
-#define TRANSPORT_SHM 1
-#define TRANSPORT_NET 2
+#define TRANSPORT_SHMCPU 1
+#define TRANSPORT_SHM 2
+#define TRANSPORT_NET 3
 
 extern struct ncclTransport ncclTransports[];
 
@@ -48,7 +49,7 @@ struct ncclTransportComm {
 };
 
 struct ncclTransport {
-  const char name[4];
+  const char name[10];
   ncclResult_t (*canConnect)(int*, struct ncclTopoSystem* topo, struct ncclTopoGraph* graph, struct ncclPeerInfo*, struct ncclPeerInfo*);
   struct ncclTransportComm send;
   struct ncclTransportComm recv;
