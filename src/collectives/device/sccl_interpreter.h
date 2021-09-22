@@ -50,6 +50,7 @@ class scclFunction {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
+        int step = 0;
         for (int i = 0; i < scclTB->nsteps; i++){
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
@@ -62,6 +63,7 @@ class scclFunction {
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
               while ((scclFlags + dependentBid)->flag < goalFlag){};
             }
+            step += sccltran->numDependences-1;
             __syncthreads();
           }
 
@@ -95,9 +97,10 @@ class scclFunction {
             __syncthreads();
           if (tid == nThreads-1 && sccltran->has_dependence){
             __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, i);
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
             scclFlags[bid].flag = curFlag;
           }
+          step++;
         }
       }
     }
