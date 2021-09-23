@@ -161,6 +161,15 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       elem->active[i] = 0;
   }
 
+  if (elem->scclAlgoIndex >= 0) {
+    for (int c=0; c<params->gridDim.x; c++) {
+      struct ncclChannel* channel = comm->channels+c;
+      struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
+      struct ncclWorkElem* elem = work->elems;
+      for (int i=0; i<elem->nActives; i++)
+        elem->active[i] = 0;
+    }
+  }
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
     comm->scclAlgoShared.flagsNeedReset = 1;
 
@@ -616,24 +625,18 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     struct ncclInfo* info = comm->asyncOps;
     info->nChannels = 0;
     NCCLCHECK(ncclSaveKernel(info));
+    if (info->algorithm == NCCL_ALGO_SCCL){
+        WARN("SCCL algorithms can only be used synchronously");
+        return ncclInternalError;
+    }
   } else {
     // Aggregation
     size_t channelSize = NCCL_AGG_CHANNEL_SIZE * comm->nRanks;  // scale channel size based on nranks as latency increases
     // Reduce the per-channel size if we cannot fully utilize the channels
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
-    // making sure whether all are SCCL algorithms or none at all.
-    int firstScclAlgoIndex = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL) ? comm->asyncOps[0].scclAlgoIndex : -1;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      if ((firstScclAlgoIndex >= 0) && (info->algorithm != NCCL_ALGO_SCCL || info->scclAlgoIndex != firstScclAlgoIndex)) {
-        WARN("SCCL algorithms can only be used asynchronously only with the same SCCL algorithm.");
-        return ncclInvalidUsage;
-      }
-      if (firstScclAlgoIndex == -1) {
-        info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
-      } else {
-        info->nChannels = comm->scclAlgos[firstScclAlgoIndex].nChannels;
-      }
+      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
     }
   }
@@ -743,9 +746,6 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
-  if (info->coll == ncclFuncCustomCollective) {
-    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgos[info->scclAlgoIndex].protocol] = 1.0f;
-  }
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;
