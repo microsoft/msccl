@@ -559,7 +559,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     return ncclSuccess;
   }
   // Alltoall needs a local copy and it has no allocated channel/threadblock. the corresponding chunk is transferred here
-  if (info->coll == ncclFuncAllToAll){
+/*  if (info->coll == ncclFuncAllToAll){
     if (info->sendbuff == info->recvbuff){
       WARN("Alltoall needs separate receive and send buffers.");
       return ncclInvalidArgument;
@@ -567,7 +567,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
     size_t rankOffset = info->comm->rank * nBytesPerRank;
     CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
-  }
+  }*/
 
   if (info->comm->scclAlgoShared.flagsNeedReset == 1){
     CUDACHECK(cudaMemsetAsync(info->comm->scclAlgoShared.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
