@@ -105,6 +105,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
+  if (!base) e->scclAlgoIndex = -1;
   if (!base) e->nActives = 1; // This only happens when it is a p2p case
   for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
