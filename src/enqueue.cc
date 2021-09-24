@@ -163,7 +163,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   }
 
   if (elem->scclAlgoIndex >= 0) {
-    for (int c=0; c<params->gridDim.x; c++) {
+    for (int c=0; c<comm->scclAlgos[elem->scclAlgoIndex].nChannels; c++) {
       struct ncclChannel* channel = comm->channels+c;
       struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
       struct ncclWorkElem* elem = work->elems;
