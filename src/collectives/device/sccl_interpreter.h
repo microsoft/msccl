@@ -327,7 +327,7 @@ class scclFunctionManual {
         T t = thisInput[myRank*sizePerChunk+j];
         for (int i = 0; i < 7; i++){
           T c = thisScratch[i*sizePerChunk+j];
-          t = c + t;
+          t = FUNC()(c, t);
         }
         thisInput[myRank*sizePerChunk+j] = t;
       }
