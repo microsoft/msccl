@@ -294,13 +294,28 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time, int* scclAlgoIndex, struct ncclComm* comm) {
   if (algorithm == NCCL_ALGO_SCCL){
-    for (int i=0; i<comm->numberOfSCCAlgorithms; i++){
-      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[i];
-      if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->protocol == protocol) && (scclAlgo->ngpus == info->comm->nRanks)
-          && ((info->count % scclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= scclAlgo->minBytes) && (info->nBytes < scclAlgo->maxBytes)) {
-        *time = 0.f;
-        *scclAlgoIndex = i;
-        return ncclSuccess;
+    if (comm->nScclRegistrations > 0) {
+      for (int i = 0; i < comm->nScclRegistrations; ++i) {
+        struct scclRegistration *reg = &comm->scclRegistrations[i];
+        if (reg->minsize <= info->nBytes && (info->nBytes < reg->maxsize || reg->maxsize == -1) && reg->protocol == protocol) {
+          struct scclAlgorithm* scclAlgo = &comm->scclAlgos[reg->algoIndex];
+          if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->ngpus == info->comm->nRanks)
+              && ((info->count % scclAlgo->nchunksPerLoop) == 0)) {
+            *time = 0.f;
+            *scclAlgoIndex = reg->algoIndex;
+            return ncclSuccess;
+          }
+        }
+      }
+    } else {
+      for (int i=0; i<comm->numberOfSCCAlgorithms; i++){
+        struct scclAlgorithm* scclAlgo = &comm->scclAlgos[i];
+        if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->protocol == protocol) && (scclAlgo->ngpus == info->comm->nRanks)
+            && ((info->count % scclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= scclAlgo->minBytes) && (info->nBytes < scclAlgo->maxBytes)) {
+          *time = 0.f;
+          *scclAlgoIndex = i;
+          return ncclSuccess;
+        }
       }
     }
   }
