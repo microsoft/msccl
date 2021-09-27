@@ -56,11 +56,20 @@ struct ncclRecvMem {
   char buff[1]; // Actually larger than that
 };
 
+struct scclRegistration {
+  int algoIndex;
+  int64_t minsize;
+  int64_t maxsize;
+  int protocol;
+};
+
 struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
   int numberOfSCCAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
   struct scclAlgorithmShared scclAlgoShared;
+  struct scclRegistration *scclRegistrations;
+  int nScclRegistrations;
 
   struct ncclPeerInfo* peerInfo;
   struct ncclTopoSystem* topo;

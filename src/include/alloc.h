@@ -37,6 +37,17 @@ static ncclResult_t ncclCalloc(T** ptr, size_t nelem) {
 }
 
 template <typename T>
+static ncclResult_t ncclRealloc(T** ptr, size_t nelem) {
+  void* p = realloc(*ptr, nelem*sizeof(T));
+  if (p == NULL) {
+    WARN("Failed to realloc %ld bytes", nelem*sizeof(T));
+    return ncclSystemError;
+  }
+  *ptr = (T*)p;
+  return ncclSuccess;
+}
+
+template <typename T>
 static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem) {
   CUDACHECK(cudaMalloc(ptr, nelem*sizeof(T)));
   CUDACHECK(cudaMemset(*ptr, 0, nelem*sizeof(T)));

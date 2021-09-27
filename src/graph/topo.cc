@@ -642,6 +642,20 @@ ncclResult_t scclCheckBufferBounds(int bufferType, int offset, int nInputChunks,
   return ncclSuccess;
 }
 
+ncclResult_t scclProtocolStrToId(const char *protocol, int *protocolId) {
+  if (strcmp(protocol, "Simple") == 0){
+    *protocolId = NCCL_PROTO_SIMPLE;
+  } else if (strcmp(protocol, "LL128") == 0){
+    *protocolId = NCCL_PROTO_LL128;
+  } else if (strcmp(protocol, "LL") == 0){
+    *protocolId = NCCL_PROTO_LL;
+  } else {
+    WARN("SCCL: protocol %s is not supported.", protocol);
+    return ncclInvalidUsage;
+  }
+  return ncclSuccess;
+}
+
 ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str, struct scclAlgorithm* scclAlgo) {
   INFO(NCCL_INIT, "SCCL: Parsing algorithm %s", str);
   struct ncclXml* xml;
@@ -695,16 +709,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
 
   const char* protocol;
   NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
-  if (strcmp(protocol, "Simple") == 0){
-    scclAlgo->protocol = NCCL_PROTO_SIMPLE;
-  } else if (strcmp(protocol, "LL128") == 0){
-    scclAlgo->protocol = NCCL_PROTO_LL128;
-  } else if (strcmp(protocol, "LL") == 0){
-    scclAlgo->protocol = NCCL_PROTO_LL;
-  } else {
-    WARN("SCCL: protocol %s is not supported.", protocol);
-    return ncclInvalidUsage;
-  }
+  NCCLCHECK(scclProtocolStrToId(protocol, &scclAlgo->protocol));
 
   int minBytesExists = 0;
   NCCLCHECK(xmlAttrExists(topNode, "minBytes", &minBytesExists));
@@ -1033,6 +1038,73 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
     token = strtok_r(NULL, ",", &tmpStr);
   }
   free(tokStr);
+  return ncclSuccess;
+}
+
+ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const char* str){
+  INFO(NCCL_INIT, "SCCL: Parsing config %s", str);
+  struct ncclXml* xml;
+
+  comm->scclRegistrations = NULL;
+  comm->nScclRegistrations = 0;
+
+  NCCLCHECK(ncclCalloc(&xml, 1));
+  NCCLCHECK(scclGetXmlConfigFromFile(str, xml));
+
+  struct ncclXmlNode* topNode;
+  NCCLCHECK(xmlFindTag(xml, "sccl_algos", &topNode));
+
+  for (int s=0; s < topNode->nSubs; s++) {
+    struct ncclXmlNode* node = topNode->subs[s];
+    if (strcmp(node->name, "load") == 0) {
+      if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
+        WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+        break;
+      }
+
+      const char *path;
+      NCCLCHECK(xmlGetAttrStr(node, "path", &path));
+
+      int hasMinsize = false;
+      NCCLCHECK(xmlAttrExists(node, "minsize", &hasMinsize));
+      int64_t minsize = 0;
+      if (hasMinsize) {
+        NCCLCHECK(xmlGetAttrInt64_t(node, "minsize", &minsize));
+      }
+
+      int hasMaxsize = false;
+      NCCLCHECK(xmlAttrExists(node, "maxsize", &hasMaxsize));
+      int64_t maxsize = -1; // Represents infinity
+      if (hasMaxsize) {
+        NCCLCHECK(xmlGetAttrInt64_t(node, "maxsize", &maxsize));
+      }
+
+      int hasProtocol = false;
+      NCCLCHECK(xmlAttrExists(node, "proto", &hasProtocol));
+      const char *protocol = NULL;
+      if (hasProtocol) {
+        NCCLCHECK(xmlGetAttrStr(node, "proto", &protocol));
+      }
+
+      int algoIndex = comm->numberOfSCCAlgorithms;
+      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[algoIndex];
+      if (scclGetAlgoFromXMLAndSetComm(comm, path, scclAlgo) == ncclSuccess){
+        comm->numberOfSCCAlgorithms++;
+        INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", path);
+
+        int regIndex = comm->nScclRegistrations++;
+        NCCLCHECK(ncclRealloc(&comm->scclRegistrations, comm->nScclRegistrations));
+        struct scclRegistration *scclReg = &comm->scclRegistrations[regIndex];
+        scclReg->algoIndex = algoIndex;
+        scclReg->minsize = minsize;
+        scclReg->maxsize = maxsize;
+        NCCLCHECK(scclProtocolStrToId(protocol, &scclReg->protocol));
+      } else {
+        WARN("SCCL: algorithm %s failed to initialize. Will be ignored.", path);
+      }
+    }
+  }
+  free(xml);
   return ncclSuccess;
 }
 
