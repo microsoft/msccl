@@ -198,7 +198,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   }
   
   // Disable SCCL if SCCL_XML_FILES is not specified
-  if (!getenv("SCCL_XML_FILES")){
+  if (!getenv("SCCL_XML_FILES") && !getenv("SCCL_CONFIG")){
     algoEnable[NCCL_ALGO_SCCL] = 0;
   }
 
