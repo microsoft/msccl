@@ -634,7 +634,7 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
       if (info->algorithm == NCCL_ALGO_SCCL){
-        WARN("SCCL algorithms can only be used synchronously");
+        WARN("SCCL algorithms can only be used asynchronously with one operation");
         return ncclInternalError;
       }
       info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
