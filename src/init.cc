@@ -15,6 +15,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "graph/topo.h"
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -773,11 +774,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
+  // Read SCCL algorithms first, but do not connect them yet.
   int scclMinRequireNChannels = 0;
   int numValidSCCLAlgos; // We only use this at connect site
-  if (getenv("SCCL_XML_FILES")){
-    // Read SCCL algorithms first, but do not connect them yet.
-    NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
+  if (getenv("SCCL_XML_FILES") || getenv("SCCL_CONFIG")) {
+    if (getenv("SCCL_XML_FILES")){
+      NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
+    }
+    if (getenv("SCCL_CONFIG")) {
+      NCCLCHECK(scclGetAllAlgoFromSCCLConfigAndSetComm(comm, getenv("SCCL_CONFIG")));
+    }
     for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){

@@ -140,6 +140,12 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 
 ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* ccMax);
 
+// SCCL get algorithms from XML file and set the communicator
+ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str);
+
+// Read SCCL config, get algorithms and set the communicator
+ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const char* str);
+
 static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, int64_t id, int* index) {
   *index = -1;
   for (int i=0; i<system->nodes[type].count; i++) {

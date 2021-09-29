@@ -841,3 +841,27 @@ ncclResult_t scclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xm
   fclose(file);
   return ncclSuccess;
 }
+
+ncclResult_t scclConfigXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, NULL, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scclConfigXmlScclAlgos(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+  struct xmlHandler handlers[] = { { "load", scclConfigXmlLoad } };
+  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  return ncclSuccess;
+}
+
+ncclResult_t scclGetXmlConfigFromFile(const char* xmlGraphFile, struct ncclXml* xml) {
+  FILE* file = fopen(xmlGraphFile, "r");
+  if (file == NULL) {
+    WARN("Could not open XML SCCL config file %s : %s", xmlGraphFile, strerror(errno));
+    return ncclSystemError;
+  }
+  struct xmlHandler handlers[] = { { "sccl_algos", scclConfigXmlScclAlgos } };
+  xml->maxIndex = 0;
+  NCCLCHECK(xmlLoadSub(file, xml, NULL, handlers, 1));
+  fclose(file);
+  return ncclSuccess;
+}
