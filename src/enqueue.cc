@@ -626,10 +626,6 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     struct ncclInfo* info = comm->asyncOps;
     info->nChannels = 0;
     NCCLCHECK(ncclSaveKernel(info));
-    if (info->algorithm == NCCL_ALGO_SCCL){
-        WARN("SCCL algorithms can only be used synchronously");
-        return ncclInternalError;
-    }
   } else {
     // Aggregation
     size_t channelSize = NCCL_AGG_CHANNEL_SIZE * comm->nRanks;  // scale channel size based on nranks as latency increases
@@ -637,6 +633,10 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
+      if (info->algorithm == NCCL_ALGO_SCCL){
+        WARN("SCCL algorithms can only be used synchronously");
+        return ncclInternalError;
+      }
       info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
     }
