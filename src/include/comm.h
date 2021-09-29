@@ -58,8 +58,8 @@ struct ncclRecvMem {
 
 struct scclRegistration {
   int algoIndex;
-  int64_t minsize;
-  int64_t maxsize;
+  int64_t minBytes;
+  int64_t maxBytes;
   int protocol;
 };
 

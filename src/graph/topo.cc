@@ -1065,18 +1065,18 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
       const char *path;
       NCCLCHECK(xmlGetAttrStr(node, "path", &path));
 
-      int hasMinsize = false;
-      NCCLCHECK(xmlAttrExists(node, "minsize", &hasMinsize));
-      int64_t minsize = 0;
-      if (hasMinsize) {
-        NCCLCHECK(xmlGetAttrInt64_t(node, "minsize", &minsize));
+      int hasMinBytes = false;
+      NCCLCHECK(xmlAttrExists(node, "minbytes", &hasMinBytes));
+      int64_t minBytes = 0;
+      if (hasMinBytes) {
+        NCCLCHECK(xmlGetAttrInt64_t(node, "minbytes", &minBytes));
       }
 
-      int hasMaxsize = false;
-      NCCLCHECK(xmlAttrExists(node, "maxsize", &hasMaxsize));
-      int64_t maxsize = -1; // Represents infinity
-      if (hasMaxsize) {
-        NCCLCHECK(xmlGetAttrInt64_t(node, "maxsize", &maxsize));
+      int hasMaxBytes = false;
+      NCCLCHECK(xmlAttrExists(node, "maxbytes", &hasMaxBytes));
+      int64_t maxBytes = -1; // Represents infinity
+      if (hasMaxBytes) {
+        NCCLCHECK(xmlGetAttrInt64_t(node, "maxbytes", &maxBytes));
       }
 
       int hasProtocol = false;
@@ -1096,8 +1096,8 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
         NCCLCHECK(ncclRealloc(&comm->scclRegistrations, comm->nScclRegistrations));
         struct scclRegistration *scclReg = &comm->scclRegistrations[regIndex];
         scclReg->algoIndex = algoIndex;
-        scclReg->minsize = minsize;
-        scclReg->maxsize = maxsize;
+        scclReg->minBytes = minBytes;
+        scclReg->maxBytes = maxBytes;
         NCCLCHECK(scclProtocolStrToId(protocol, &scclReg->protocol));
       } else {
         WARN("SCCL: algorithm %s failed to initialize. Will be ignored.", path);

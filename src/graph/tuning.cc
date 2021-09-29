@@ -297,7 +297,7 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
     if (comm->nScclRegistrations > 0) {
       for (int i = 0; i < comm->nScclRegistrations; ++i) {
         struct scclRegistration *reg = &comm->scclRegistrations[i];
-        if (reg->minsize <= info->nBytes && (info->nBytes < reg->maxsize || reg->maxsize == -1) && reg->protocol == protocol) {
+        if (reg->minBytes <= info->nBytes && (info->nBytes < reg->maxBytes || reg->maxBytes == -1) && reg->protocol == protocol) {
           struct scclAlgorithm* scclAlgo = &comm->scclAlgos[reg->algoIndex];
           if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->ngpus == info->comm->nRanks)
               && ((info->count % scclAlgo->nchunksPerLoop) == 0)) {
