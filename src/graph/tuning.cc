@@ -203,7 +203,7 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
   }
 
   if (algoEnable[NCCL_ALGO_SCCL] == 0) {
-   comm->numberOfSCCAlgorithms = 0;
+   comm->numberOfSCCLAlgorithms = 0;
   }
 
   for (int c=0; c<NCCL_NUM_FUNCTIONS; c++) for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
@@ -294,7 +294,7 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time, int* scclAlgoIndex, struct ncclComm* comm) {
   if (algorithm == NCCL_ALGO_SCCL){
-    for (int i=0; i<comm->numberOfSCCAlgorithms; i++){
+    for (int i=0; i<comm->numberOfSCCLAlgorithms; i++){
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[i];
       if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->protocol == protocol) && (scclAlgo->ngpus == info->comm->nRanks)
           && ((info->count % scclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= scclAlgo->minBytes) && (info->nBytes < scclAlgo->maxBytes)) {

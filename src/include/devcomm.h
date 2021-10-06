@@ -308,7 +308,7 @@ struct ncclDevComm {
   int buffSizes[NCCL_NUM_PROTOCOLS];
 
   // SCCL related elements
-  int numberOfSCCAlgorithms;
+  int numberOfSCCLAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
   struct scclAlgorithmShared scclAlgoShared;
 

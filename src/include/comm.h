@@ -58,7 +58,7 @@ struct ncclRecvMem {
 
 struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
-  int numberOfSCCAlgorithms;
+  int numberOfSCCLAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
   struct scclAlgorithmShared scclAlgoShared;
 

@@ -1029,15 +1029,15 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
   char* tokStr = strdup(str);
   char* tmpStr;
   char* token = strtok_r(tokStr, ":", &tmpStr);
-  comm->numberOfSCCAlgorithms = 0;
+  comm->numberOfSCCLAlgorithms = 0;
   while (token) {
-    if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
-      WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+    if (comm->numberOfSCCLAlgorithms == SCCL_MAX_NUM_ALGOS){
+      WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCLAlgorithms);
       break;
     }
-    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCAlgorithms];
+    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCLAlgorithms];
     if (scclGetAlgoFromXMLAndSetComm(comm, token, scclAlgo) == ncclSuccess){
-      comm->numberOfSCCAlgorithms++;
+      comm->numberOfSCCLAlgorithms++;
       INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", token);
     } else {
       WARN("SCCL: algorithm %s failed to initialize. Will be ignored.", token);
