@@ -275,6 +275,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
     memcpy(ringNext+c*nranks, ringNext+(c-nChannels)*nranks, nranks*sizeof(int));
     memcpy(comm->channels+c, comm->channels+c-nChannels, sizeof(struct ncclChannel));
   }
+  comm->nChannelsTreeRing = std::max(ncclMinNchannels(),nChannels);
   nChannels = comm->nChannels = c;
 
   // Create rings array and check all is fine

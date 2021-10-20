@@ -350,7 +350,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->nChannels > 0) ? info->nChannels :
-           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannels/2 : comm->nChannels; // CollNet uses one channel for up and one channel for down
+           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannelsTreeRing/2 : comm->nChannelsTreeRing; // CollNet uses one channel for up and one channel for down
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   while (info->nBytes < nc*nt*threadThreshold) {
@@ -637,7 +637,7 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
         WARN("SCCL algorithms can only be used asynchronously with one operation");
         return ncclInternalError;
       }
-      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
+      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
     }
   }
