@@ -92,7 +92,8 @@ struct ncclComm {
   uint64_t lastOpCount;
 
   // Channels for collectives
-  int nChannels;
+  int nChannels; // this is used for allocation of channels
+  int nChannelsTreeRing; // this is used for tree and ring algorithms
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;
