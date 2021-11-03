@@ -780,15 +780,16 @@ end:
     NCCLCHECK(PtrCheck(info->comm, info->opName, "comm"));
     NCCLCHECK(ArgsCheck(info));
     NCCLCHECK(checkSetStream(info));
-
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
-        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
-
     NCCLCHECK(ncclSaveKernel(info));
     NCCLCHECK(ncclBarrierEnqueue(info->comm));
+
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d algorithm %d numThreadBlocks %d threadBlocksSize %d protocol %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+        info->datatype, info->op, info->root, info->algorithm, info->comm->myParams->gridDim.x, info->comm->myParams->blockDim.x, info->protocol, info->comm, info->comm->nRanks, info->stream);
+
     NCCLCHECK(ncclBarrierEnqueueWait(info->comm));
     NCCLCHECK(ncclEnqueueEvents(info->comm));
+
     return ncclSuccess;
   }
 }
