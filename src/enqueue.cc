@@ -426,11 +426,23 @@ static ncclResult_t adjustSCCLScratchPad(struct ncclInfo* info) {
   struct scclAlgorithmShared* scclAlgoShared = &info->comm->scclAlgoShared;
   size_t sizeNeeded = info->nBytes * (size_t)DIVUP(scclAlgo->nScratchChunks, scclAlgo->nchunksPerLoop);
   if (sizeNeeded > scclAlgoShared->scratchBufferSize){
+    int savedDev = -1;
+    if (ncclAsyncMode()) {
+      CUDACHECK(cudaGetDevice(&savedDev));
+      CUDACHECK(cudaSetDevice(info->comm->cudaDev));
+    }
+    // we have to make sure that no other stream is using the scratch pad before we increase the size.
+    // this should happen very infreqeuntly and therefore not affecting the performance often
+    CUDACHECK(cudaDeviceSynchronize());
+
     if (scclAlgoShared->scratchBufferSize > 0 && scclAlgoShared->scratchBuffer != NULL){
       CUDACHECK(cudaFree(scclAlgoShared->scratchBuffer));
     }
     NCCLCHECK(ncclCudaCalloc((char**)&scclAlgoShared->scratchBuffer, sizeNeeded));
     scclAlgoShared->scratchBufferSize = sizeNeeded;
+    if (ncclAsyncMode()) {
+      CUDACHECK(cudaSetDevice(savedDev));
+    }
   }
   info->scratchbuff = scclAlgoShared->scratchBuffer;
   return ncclSuccess;
