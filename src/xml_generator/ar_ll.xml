@@ -1,4 +1,4 @@
-<algo name="allreduce_small" nchunksperloop="8" nchannels="1" proto="LL" ngpus="8" inplace="1" coll="allreduce" minBytes="8">
+<algo name="allreduce_small" nchunksperloop="8" nchannels="1" proto="LL" ngpus="8" inplace="1" coll="allreduce" minBytes="8" maxBytes="409600">
   <gpu id="0" i_chunks="8" o_chunks="8" s_chunks="8">
     <tb id="0" send="1" recv="1" chan="0">
       <step s="0" type="s" srcbuf="i" srcoff="1" dstbuf="s" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
