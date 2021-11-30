@@ -106,10 +106,10 @@ $ ls build/pkg/txz/
 
 ## Tests
 
-Tests for MSCCL are maintained separately at https://github.com/parasailteam/nccl-tests.
+Tests for MSCCL are maintained separately at https://github.com/nvidia/nccl-tests.
 
 ```shell
-$ git clone https://github.com/parasailteam/nccl-tests.git
+$ git clone https://github.com/nvidia/nccl-tests.git
 $ cd nccl-tests
 $ make
 $ ./build/all_reduce_perf -b 8 -e 256M -f 2 -g <ngpus>
