@@ -1,21 +1,29 @@
-# NCCL
+# MSCCL
 
-Optimized primitives for inter-GPU communication.
+Microsoft Collective Communication Library (MSCCL) is a platform to execute custom collective communication algorithms for multiple accelerators supported by Microsoft Azure.
 
 ## Introduction
 
-NCCL (pronounced "Nickel") is a stand-alone library of standard communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, reduce-scatter, as well as any send/receive based communication pattern. It has been optimized to achieve high bandwidth on platforms using PCIe, NVLink, NVswitch, as well as networking using InfiniBand Verbs or TCP/IP sockets. NCCL supports an arbitrary number of GPUs installed in a single node or across multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
+MSCCL is an inter-accelerator communication framework that is built on top of NCCL (https://github.com/nvidia/nccl) and uses its building blocks to execute custom-written collective communication algorithms. MSCCL vision is to provide a unified, efficient, and scalable framework for executing collective communication algorithms across multiple accelerators. To achieve this, MSCCL has multiple capabilities:
 
-For more information on NCCL usage, please refer to the [NCCL documentation](https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/index.html).
+- Programmibility: Inter-connection among accelerators have different latencies and bandwidths. Therefore, a generic collective communication algorithm does not necessarily well for all topologies and buffer sizes. MSCCL vision is to provide a unique collective communication algorithm for each topology and buffer size. In case no algorithm is available, MSCCL will automatically fall back to a NCCL's generic algorithm. For information regarding how to select a specific algorithm, please refer to [SCCL](https://github.com/microsoft/sccl).
+- Topology-Aware Drivers: each accelerator and type of inter-connect requires a driver to complete a primtive send and receive operation. MSCCL provides a link-specific driver for each Azure hardware to maximize the output of the connection.
+- Profiling: MSCCL has a profiling tool which provides detailed timeline for each primitive send and receive operation to understand the bottlenecks in a given collective communication algorithms.
+
+MSCCL is the product of many great researchers and interns at Microsoft Research. Below is a list of our publications:
+
+- [Synthesizing optimal collective algorithms](https://dl.acm.org/doi/10.1145/3437801.3441620) -- PPoPP'21 (Best Paper Award)
+- [Breaking the Computation and Communication Abstraction Barrier in Distributed Machine Learning Workloads](https://arxiv.org/abs/2105.05720) -- ASPLOS'22
+- [Synthesizing Collective Communication Algorithms for Heterogeneous Networks with TACCL](https://arxiv.org/abs/2111.04867) -- Under Review
+
+Please consider citing our work if you use MSCCL in your research. Also, please contact us if you have any questions or need an optimized collective communication algorithm for a specific topology.
 
 ## Build
-
-Note: the official and tested builds of NCCL can be downloaded from: https://developer.nvidia.com/nccl. You can skip the following build steps if you choose to use the official builds.
 
 To build the library :
 
 ```shell
-$ cd nccl
+$ cd msccl
 $ make -j src.build
 ```
 
@@ -25,16 +33,16 @@ If CUDA is not installed in the default /usr/local/cuda path, you can define the
 $ make src.build CUDA_HOME=<path to cuda install>
 ```
 
-NCCL will be compiled and installed in `build/` unless `BUILDDIR` is set.
+MSCCL will be compiled and installed in `build/` unless `BUILDDIR` is set.
 
-By default, NCCL is compiled for all supported architectures. To accelerate the compilation and reduce the binary size, consider redefining `NVCC_GENCODE` (defined in `makefiles/common.mk`) to only include the architecture of the target platform :
+By default, MSCCL is compiled for all supported architectures. To accelerate the compilation and reduce the binary size, consider redefining `NVCC_GENCODE` (defined in `makefiles/common.mk`) to only include the architecture of the target platform :
 ```shell
 $ make -j src.build NVCC_GENCODE="-gencode=arch=compute_70,code=sm_70"
 ```
 
 ## Install
 
-To install NCCL on the system, create a package then install it as root.
+To install MSCCL on the system, create a package then install it as root.
 
 Debian/Ubuntu :
 ```shell
@@ -62,10 +70,10 @@ $ ls build/pkg/txz/
 
 ## Tests
 
-Tests for NCCL are maintained separately at https://github.com/nvidia/nccl-tests.
+Tests for MSCCL are maintained separately at https://github.com/parasailteam/nccl-tests.
 
 ```shell
-$ git clone https://github.com/NVIDIA/nccl-tests.git
+$ git clone https://github.com/parasailteam/nccl-tests.git
 $ cd nccl-tests
 $ make
 $ ./build/all_reduce_perf -b 8 -e 256M -f 2 -g <ngpus>
