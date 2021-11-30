@@ -56,7 +56,7 @@ The two algorithms are the two XML files specified by `SCCL_XML_FILES` in the co
 
 ## Build
 
-To build the library :
+To build the library:
 
 ```shell
 $ cd msccl
