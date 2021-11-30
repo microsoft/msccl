@@ -18,6 +18,38 @@ MSCCL is the product of many great researchers and interns at Microsoft Research
 
 Please consider citing our work if you use MSCCL in your research. Also, please contact us if you have any questions or need an optimized collective communication algorithm for a specific topology.
 
+## Example
+
+In order to use MSCCL customized algorithms, you may follow these steps to use two different MSCCL algorithms for AllReduce on Azure NDv4 which has 8xA100 GPUs:
+
+Steps to install MSCCL:
+'''shell
+$ git clone -b lowlatency https://github.com/microsoft/msccl.git
+$ cd msccl/
+$ make -j src.build
+$ cd ../
+'''
+
+Then, follow these steps to install [nccl-tests](https://github.com/nvidia/nccl-tests) for performance evaluation:
+'''shell
+$ git clone https://github.com/nvidia/nccl-tests.git
+$ cd nccl-tests/
+$ make MPI=1 NCCL_HOME=../msccl/build/ -j 
+$ cd ../
+'''
+
+To evaluate the performance, execute the following command line on an Azure NDv4 node:
+'''shell
+mpirun -np 8 -mca pml ob1 --mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 -mca  coll_hcoll_enable 0  -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x NCCL_NET_SHARED_BUFFERS=0 -x SCCL_XML_FILES=msccl/src/xml_generator/ar_ll.xml:msccl/src/xml_generator/ar_ll128.xml -x NCCL_ALGO=SCCL,RING,TREE -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  nccl-tests/build/all_reduce_perf -b 128 -e 64MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
+'''
+
+If everything is installed correctly, you should see the following output in log:
+'''shell
+[0] NCCL INFO Connected 2 SCCL algorithms
+'''
+
+The two algorithms are the two XML files specified by 'SCCL_XML_FILES' in the command line. You may remove 'SCCL' among 'NCCL_ALGO' algorithms to disable the custom algorithms
+
 ## Build
 
 To build the library :
