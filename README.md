@@ -24,35 +24,35 @@ In order to use MSCCL customized algorithms, you may follow these steps to use t
 
 Steps to install MSCCL:
 
-'''shell
+```shell
 $ git clone -b lowlatency https://github.com/microsoft/msccl.git
 $ cd msccl/
 $ make -j src.build
 $ cd ../
-'''
+```
 
 Then, follow these steps to install [nccl-tests](https://github.com/nvidia/nccl-tests) for performance evaluation:
 
-'''shell
+```shell
 $ git clone https://github.com/nvidia/nccl-tests.git
 $ cd nccl-tests/
 $ make MPI=1 NCCL_HOME=../msccl/build/ -j 
 $ cd ../
-'''
+```
 
 To evaluate the performance, execute the following command line on an Azure NDv4 node:
 
-'''shell
+```shell
 $ mpirun -np 8 -mca pml ob1 --mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 -mca  coll_hcoll_enable 0  -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x NCCL_NET_SHARED_BUFFERS=0 -x SCCL_XML_FILES=msccl/src/xml_generator/ar_ll.xml:msccl/src/xml_generator/ar_ll128.xml -x NCCL_ALGO=SCCL,RING,TREE -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  nccl-tests/build/all_reduce_perf -b 128 -e 64MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
-'''
+```
 
 If everything is installed correctly, you should see the following output in log:
 
-'''shell
+```shell
 [0] NCCL INFO Connected 2 SCCL algorithms
-'''
+```
 
-The two algorithms are the two XML files specified by 'SCCL_XML_FILES' in the command line. You may remove 'SCCL' among 'NCCL_ALGO' algorithms to disable the custom algorithms
+The two algorithms are the two XML files specified by `SCCL_XML_FILES` in the command line. You may remove `SCCL` among `NCCL_ALGO` algorithms to disable the custom algorithms
 
 ## Build
 
