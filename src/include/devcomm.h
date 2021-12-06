@@ -119,7 +119,7 @@ struct ncclRing {
 
 #define SCCL_MAX_NUM_STEPS 512
 #define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
-#define SCCL_MAX_NUM_THREAD_BLOCKS 108 // set this to 108 which is the number of SMs on A100
+#define SCCL_MAX_NUM_THREAD_BLOCKS 512 // set this to 108 which is the number of SMs on A100
 
 static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM_THREAD_BLOCKS);
 
