@@ -46,8 +46,11 @@ class scclFunction {
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgoShared.flags;
 
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
+//      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
+	size_t gridOffset = 0;
+	size_t iter = 0;
+        size_t chunkOffset = 0;
+	prims.initIter(sizePerScclChunk, gridOffset);
         ssize_t srcoffset, dstoffset;
         T* srcPointer, * dstPointer;
         for (int i = 0; i < scclTB->nsteps; i++){
@@ -66,41 +69,18 @@ class scclFunction {
           srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
-          for (int c = 0; c < count; c += scclMaxAllowedCount) {
+	  int c = 0;
+//          for (int c = 0; c < count; c += scclMaxAllowedCount) {
             srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
             int thisCount = min(scclMaxAllowedCount, count-c);
-            switch (sccltran->type) {
-              case SCCL_SEND:
-                prims.send(srcPointer + srcoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV:
-                prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV_COPY_SEND:
-                prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
-                break;
-              case SCCL_RECV_REDUCE_SEND:
-                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
-                break;
-              case SCCL_RECV_REDUCE_COPY_SEND:
-                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_RECV_REDUCE_COPY:
-                prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_REDUCE:
-                prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_LOCAL_COPY:
-                prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-                break;
-              case SCCL_NO_OP:
-                break;
-              default:
-                return;
-            }
-          }
+	    if (sccltran->type == SCCL_SEND)
+              prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+            else if (sccltran->type == SCCL_RECV)
+              prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+            else if (sccltran->type == SCCL_LOCAL_COPY)
+              prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+//          }
           if (sccltran->has_dependence)
             __syncthreads();
           if (tid == sync_tid && sccltran->has_dependence){
@@ -109,7 +89,7 @@ class scclFunction {
             scclFlags[bid].flag = curFlag;
           }
         }
-      }
+//      }
     }
 };
 

@@ -161,6 +161,16 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       elem->active[i] = 0;
   }
 
+  if (elem->scclAlgoIndex >= 0) {
+    for (int c=0; c<comm->scclAlgos[elem->scclAlgoIndex].nChannels; c++) {
+      struct ncclChannel* channel = comm->channels+c;
+      struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
+      struct ncclWorkElem* elem = work->elems;
+      for (int i=0; i<elem->nActives; i++)
+        elem->active[i] = 0;
+    }
+  }
+
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
     comm->scclAlgoShared.flagsNeedReset = 1;
 
