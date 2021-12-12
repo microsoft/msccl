@@ -54,7 +54,7 @@ class scclFunction {
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int8_t dependentBid = sccltran->dependentBid;
-          int8_t dependentStep = sccltran->dependentStep;
+          int16_t dependentStep = sccltran->dependentStep;
           if (sccltran->dependentBid >= 0){
               if (tid == sync_tid){
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
