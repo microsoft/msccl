@@ -480,7 +480,7 @@ static int collNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGrap
   // setup
   struct ncclConnect myConnect;
   if (isMaster && ret > 0) {
-    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id));
+    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id, 0));
   }
   // prepare connect handles
   ncclResult_t res;
@@ -905,7 +905,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
   }
   if (numValidSCCLAlgos > 0){
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 1), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d SCCL algorithms", numValidSCCLAlgos);
   }
 
