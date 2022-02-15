@@ -1,4 +1,4 @@
-<algo name="allreduce_ring_4channelsperring" proto="LL128" nchannels="20" nchunksperloop="40" ngpus="8" coll="allreduce" inplace="1" minBytes="409600" maxBytes="4915200">
+<algo name="allreduce_ring_4channelsperring" proto="LL128" nchannels="20" nchunksperloop="40" ngpus="8" coll="allreduce" inplace="1" minBytes="409600" maxBytes="19988480">
   <gpu id="0" i_chunks="40" o_chunks="0" s_chunks="0">
     <tb id="0" send="1" recv="7" chan="0">
       <step s="0" type="s" srcbuf="i" srcoff="0" dstbuf="i" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
