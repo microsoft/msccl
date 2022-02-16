@@ -8,7 +8,7 @@ MSCCL is an inter-accelerator communication framework that is built on top of [N
 
 - Programmibility: Inter-connection among accelerators have different latencies and bandwidths. Therefore, a generic collective communication algorithm does not necessarily well for all topologies and buffer sizes. MSCCL vision is to provide a unique collective communication algorithm for each topology and buffer size. In case no algorithm is available, MSCCL will automatically fall back to a NCCL's generic algorithm. For information regarding how to select a specific algorithm, please refer to [SCCL](https://github.com/microsoft/sccl).
 - Topology-Aware Drivers: each accelerator and type of inter-connect requires a driver to complete a primtive send and receive operation. MSCCL provides a link-specific driver for each Azure hardware to maximize the output of the connection.
-- Profiling: MSCCL has a profiling tool which provides detailed timeline for each primitive send and receive operation to understand the bottlenecks in a given collective communication algorithms.
+- Profiling: MSCCL has a profiling tool [NPKit](https://github.com/microsoft/npkit) which provides detailed timeline for each primitive send and receive operation to understand the bottlenecks in a given collective communication algorithms.
 
 MSCCL is the product of many great researchers and interns at Microsoft Research. Below is a list of our publications:
 
