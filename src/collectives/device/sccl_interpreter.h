@@ -12,7 +12,7 @@
 
 // flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
-  SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
+  SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)(__WORKINDEX__) + ((uint64_t)(__GRIDOFFSET_ITER__) * SCCL_MAX_NUM_STEPS + (uint64_t)(__STEP__))
 
 template<typename T, typename PRIMS_WRAPPER>
 class scclFunction {
@@ -303,51 +303,65 @@ class scclFunctionManual {
       const ssize_t size = args->coll.count;
       const int sizePerChunk = size/8;
       const ssize_t loopSize = (ssize_t)prims.chunkSize;
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerChunk; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(sizePerChunk, gridOffset);
-
-        // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
-        // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
-        const int workIndex = args->index+1;
+      ssize_t gridOffset, iter;
+      for (int rept = 0; rept < 1000; rept++){
+        const int workIndex = (args->index+1)*1000+rept;
         volatile struct scclFlag* scclFlags = comm->scclAlgoShared.flags;
+        if (tid == sync_tid){
+          uint64_t goalFlag = COMPUTE_FLAG(workIndex, 0, 0);
+          while ((scclFlags + bid)->flag < goalFlag){};
+        }
+        __syncthreads();
+        for (gridOffset = 0, iter = 0; gridOffset < sizePerChunk; gridOffset += loopSize, iter++) {
+          size_t chunkOffset = prims.initIter(sizePerChunk, gridOffset);
 
-        prims.send(thisInput+chunkOffset+peer*sizePerChunk, peer*sizePerChunk+chunkOffset, 1);
-        prims.recv(thisScratch+chunkOffset+bid*sizePerChunk, bid*sizePerChunk+chunkOffset, 1);
+          // sccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
+          // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
+          
+          prims.send(thisInput+chunkOffset+peer*sizePerChunk, peer*sizePerChunk+chunkOffset, 1);
+          prims.recv(thisScratch+chunkOffset+bid*sizePerChunk, bid*sizePerChunk+chunkOffset, 1);
+          if (tid == sync_tid){
+            __threadfence();
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, 1);
+            scclFlags[bid].flag = curFlag;
+          }
+          if (tid < 7){
+            uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, 1);
+            while ((scclFlags + tid)->flag < goalFlag){};
+          }
+          __syncthreads();
+
+          const int nthreads = args->nThreads;
+          int upperBound = min(sizePerChunk-gridOffset,prims.chunkSize);
+          for (int j = bid*bdim+tid; j < upperBound; j += nthreads*7){
+            T t = thisInput[myRank*sizePerChunk+chunkOffset+j];
+            for (int i = 0; i < 7; i++){
+              T c = thisScratch[i*sizePerChunk+chunkOffset+j];
+              t = FUNC()(c, t);
+            }
+            thisInput[myRank*sizePerChunk+chunkOffset+j] = t;
+          }
+          __syncthreads();
+
+          if (bid*bdim < sizePerChunk && tid == sync_tid){
+            __threadfence();
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, 2);
+            scclFlags[bid].flag = curFlag;
+          }
+          if (tid*bdim < sizePerChunk && tid < 7){
+            uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, 2);
+            while ((scclFlags + tid)->flag < goalFlag){};
+          }
+          __syncthreads();
+          prims.send(thisInput+chunkOffset+myRank*sizePerChunk, myRank*sizePerChunk+chunkOffset, 1);
+          prims.recv(thisInput+chunkOffset+peer*sizePerChunk, peer*sizePerChunk+chunkOffset, 1);
+        }
         if (tid == sync_tid){
           __threadfence();
-          uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, 0);
+          uint64_t curFlag = COMPUTE_FLAG(workIndex, 0, 3);
           scclFlags[bid].flag = curFlag;
         }
-        if (tid < 7){
-          uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, 0);
-          while ((scclFlags + tid)->flag < goalFlag){};
-        }
         __syncthreads();
-
-        const int nthreads = args->nThreads;
-        int upperBound = min(sizePerChunk-gridOffset,prims.chunkSize);
-        for (int j = bid*bdim+tid; j < upperBound; j += nthreads*7){
-          T t = thisInput[myRank*sizePerChunk+chunkOffset+j];
-          for (int i = 0; i < 7; i++){
-            T c = thisScratch[i*sizePerChunk+chunkOffset+j];
-            t = FUNC()(c, t);
-          }
-          thisInput[myRank*sizePerChunk+chunkOffset+j] = t;
-        }
-        __syncthreads();
-
-        if (bid*bdim < sizePerChunk && tid == sync_tid){
-          __threadfence();
-          uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, 1);
-          scclFlags[bid].flag = curFlag;
-        }
-        if (tid*bdim < sizePerChunk && tid < 7){
-          uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, 1);
-          while ((scclFlags + tid)->flag < goalFlag){};
-        }
-        __syncthreads();
-        prims.send(thisInput+chunkOffset+myRank*sizePerChunk, myRank*sizePerChunk+chunkOffset, 1);
-        prims.recv(thisInput+chunkOffset+peer*sizePerChunk, peer*sizePerChunk+chunkOffset, 1);
       }
     }
 };

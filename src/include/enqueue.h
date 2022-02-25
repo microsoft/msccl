@@ -10,6 +10,7 @@
 #include "comm.h"
 #include "group.h"
 #include "collectives.h"
+#include "../collectives/device/synchronize.h"
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info);
 ncclResult_t ncclCpuBarrierIn(struct ncclComm* comm, int* isLast);
@@ -21,5 +22,6 @@ ncclResult_t ncclEnqueueEvents(struct ncclComm* comm);
 ncclResult_t ncclSaveKernel(struct ncclInfo* info);
 ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info);
 ncclResult_t ncclSaveCommKernels(struct ncclComm* comm);
+ncclResult_t synchronize(int workIndex, ncclComm* comm, cudaStream_t stream);
 
 #endif // End include guard
