@@ -180,6 +180,8 @@ struct scclFlag {
 
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
+  // name of the algorithm in the XML
+  char name[64];
   // a flag to specify if the SCCL algorithm is a valid one
   bool isValid;
   // the type of collective this algorithm is
