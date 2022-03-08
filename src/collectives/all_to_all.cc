@@ -60,6 +60,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
         struct scclAlgorithm *scclAlgo = &comm->scclAlgos[reg->algoIndex];
         if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % scclAlgo->nchunksPerLoop) == 0))
         {
+          // if it was the 2D algorithm, select it first.
           if (!strcmp(scclAlgo->name, "2D")) {
             return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
           } else {
@@ -85,6 +86,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
       struct scclAlgorithm *scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % comm->scclAlgos[scclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes))
       {
+        // if it was the 2D algorithm, select it first.
         if (!strcmp(scclAlgo->name, "2D")) {
           return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
         } else {
@@ -99,7 +101,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
     }
   }
 
-  // default p2p
+  // default p2p if all failed
   NCCLCHECK(ncclGroupStart());
   for (int r = 0; r < comm->nRanks; r++)
   {
