@@ -180,6 +180,8 @@ struct scclFlag {
 
 // gpuId is the one that is in comm->rank
 struct scclAlgorithm {
+  // name of the algorithm in the XML
+  char name[64];
   // a flag to specify if the SCCL algorithm is a valid one
   bool isValid;
   // the type of collective this algorithm is
@@ -317,5 +319,7 @@ struct ncclDevComm {
   // Channels, device side
   struct ncclChannel* channels;
 };
+
+cudaError_t strideMemcpyAsync(void* dst, const void* src, const size_t size, const int height, const int width, cudaStream_t stream);
 
 #endif
