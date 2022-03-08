@@ -49,7 +49,6 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
 
   size_t allcount = sendcount * comm->nRanks;
   size_t nbytes = allcount * ncclTypeSize(datatype);
-  int nGpus = comm->localRanks, nNodes = comm->nNodes;
 
   if (comm->nScclRegistrations > 0)
   {
@@ -61,7 +60,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
         struct scclAlgorithm *scclAlgo = &comm->scclAlgos[reg->algoIndex];
         if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % scclAlgo->nchunksPerLoop) == 0))
         {
-          if !strcmp(scclAlgo->name, "2D") {
+          if (!strcmp(scclAlgo->name, "2D")) {
             return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
           } else {
             NVTX3_FUNC_RANGE_IN(nccl_domain);
@@ -86,7 +85,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
       struct scclAlgorithm *scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % comm->scclAlgos[scclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes))
       {
-        if !strcmp(scclAlgo->name, "2D") {
+        if (!strcmp(scclAlgo->name, "2D")) {
           return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
         } else {
           NVTX3_FUNC_RANGE_IN(nccl_domain);
