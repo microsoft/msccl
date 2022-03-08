@@ -669,6 +669,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   scclAlgo->isValid = false; // set isValid to false until we hit the return ncclSuccess.
   struct ncclXmlNode* topNode;
   NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
+  const char* name;
+  NCCLCHECK(xmlGetAttrStr(topNode, "name", &name));
+  strcpy(scclAlgo->name, name);
+
   int ngpus;
   NCCLCHECK(xmlGetAttrInt(topNode, "ngpus", &ngpus));
   if (comm->nRanks != ngpus){
