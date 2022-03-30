@@ -93,13 +93,14 @@ class scclFunction {
             else
               return;
           }
-          if (sccltran->has_dependence)
-            __syncthreads();
-          if (tid == nThreads-1 && sccltran->has_dependence){
-            __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
-            scclFlags[bid].flag = curFlag;
-          }
+	  if (sccltran->has_dependence){
+	    __syncthreads();
+            if (tid == nThreads-1){
+              __threadfence();
+              uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
+              scclFlags[bid].flag = curFlag;
+            }
+	  }
           step++;
         }
       }
