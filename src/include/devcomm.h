@@ -145,6 +145,8 @@ struct scclTransfer {
   int16_t depencePointer; // index to the first dependence
   int16_t numDependences; // depencePointer+numDependences indicate the last dependence
   int8_t has_dependence;
+  int16_t numReductoins; // number of reductions with the same dst
+  int16_t reductionPointer; // where the reduction starts
   uint8_t type;
   uint8_t count;
 };
@@ -158,6 +160,8 @@ struct scclThreadBlock {
   // step is used to index into this array. transfers[step] is the addr to transfer.
   int8_t dependentBid[SCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
   int16_t dependentStep[SCCL_MAX_NUM_STEPS];
+  int16_t reductionSrcOffsets[SCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
+  int8_t reductionSrcBuffers[SCCL_MAX_NUM_STEPS]; // the buffer name for above
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 

@@ -78,6 +78,8 @@ class scclFunction {
               prims.send(srcPointer + srcoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV)
               prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+            else if (sccltran->type == SCCL_REDUCE)
+              prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_COPY_SEND)
               prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
@@ -86,8 +88,6 @@ class scclFunction {
               prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
               prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_REDUCE)
-              prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             else if (sccltran->type == SCCL_LOCAL_COPY)
               prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             else

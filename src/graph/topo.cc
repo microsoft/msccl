@@ -845,8 +845,15 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
 
             // setting the summary of the sccl aglorithm in sccl channels
             scclChannelInfo* scclChannel = (sTB->channelId == -1) ? NULL : &scclAlgo->scclChannels[sTB->channelId];
+
             int numDependences = 0;
             int oldDependencePointer = 0; // inidcator of where the dependences started for nop
+
+            int oldReductionDstBuffer = -1; // Indicator of last reduction buffer name; -1 means that last one wasn't a compatible reduction
+            int oldReductionDstIndex = -1; // Indicator of last reduction buffer index
+            int oldReductionPointer = 0; // indicator of the pointer into the reductionSrcBuffers and reductionSrcOffsets
+            int numReductions = 0;
+
             int numTransfers = 0;
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
@@ -926,7 +933,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   sTB->dependentBid[numDependences] = depend_bid;
                   sTB->dependentStep[numDependences] = depend_step;
                   numDependences++;
-                } 
+                }
+
                 if (transferType != -1) {
                   struct scclTransfer* sccltran = &sTB->transfers[numTransfers];
                   sccltran->type = transferType;
@@ -971,6 +979,19 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   sccltran->depencePointer = oldDependencePointer;
                   sccltran->numDependences = numDependences - oldDependencePointer;
                   oldDependencePointer = numDependences;
+
+                  // reduction related pointers
+                  if (transferType != SCCL_REDUCE){
+                    oldReductionDstBuffer = -1;
+                    oldReductionDstIndex = -1;
+                  } else {
+                    sTB->reductionSrcBuffers = sccltran->srcbuffer;
+                    sTB->reductionSrcOffsets = sccltran->srcoffset;
+
+                    sccltran->reductionPointer = oldReductionPointer;
+
+                  }
+
 
                   if (has_dependence != 0 && has_dependence != 1){
                     WARN("SCCL: has_dependence needs to be 0 or 1, but it was %d", has_dependence);
