@@ -934,8 +934,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   numDependences++;
                 }
 
-                int srcbufferInt = -1;
-                int dstbufferInt = -1;
+                uint8_t srcbufferInt = 0;
+                uint8_t dstbufferInt = 0;
                 NCCLCHECK(scclGetBufferType(srcbuffer, &srcbufferInt));
                 NCCLCHECK(scclGetBufferType(dstbuffer, &dstbufferInt));
 
@@ -950,7 +950,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   struct scclTransfer* sccltran = &sTB->transfers[numTransfers];
                   sccltran->type = transferType;
                   sccltran->srcoffset = srcoffset;
-                  sccltran->srcbuffer = srcBufferInt;
+                  sccltran->srcbuffer = srcbufferInt;
                   sccltran->srcoffset = srcoffset;
                   sccltran->dstbuffer = dstbufferInt;
                   sccltran->dstoffset = dstoffset;

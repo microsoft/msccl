@@ -14,7 +14,7 @@
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
-template<typename T, typename PRIMS_WRAPPER>
+template<class FUNC, typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
@@ -78,9 +78,19 @@ class scclFunction {
               prims.send(srcPointer + srcoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV)
               prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_REDUCE)
+            else if (sccltran->type == SCCL_REDUCE){
+              int numReductions = sccltran->numReductions;
+              int thisChunkSize = prims.nelem * thisCount;
+              for (int index = tid; tid < thisChunkSize; index += nThreads){
+                T c = dstPointer[dstoffset + index];
+                for (int r = 0; r < numReductions; r++){
+                  T t = srcPointer[scclTB->reductionSrcOffsets[sccltran->reductionPointer+r] + index];
+                  c = FUNC()(c, t);
+                }
+                dstPointer[dstoffset + index] = c;
+              }
               prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_COPY_SEND)
+            } else if (sccltran->type == SCCL_RECV_COPY_SEND)
               prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
               prims.recvReduceSend(srcPointer + srcoffset, thisCount);
@@ -164,7 +174,7 @@ struct SimpleWrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionSimple : public scclFunction<T, SimpleWrapper<FUNC, T, UNROLL>> {};
+class scclFunctionSimple : public scclFunction<FUNC, T, SimpleWrapper<FUNC, T, UNROLL>> {};
 
 #include "prims_ll128.h"
 template<class FUNC, typename T>
@@ -223,7 +233,7 @@ struct LL128Wrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL128 : public scclFunction<T, LL128Wrapper<FUNC, T>> {};
+class scclFunctionLL128 : public scclFunction<FUNC, T, LL128Wrapper<FUNC, T>> {};
 
 template<class FUNC, typename T>
 struct LLWrapper {
@@ -278,7 +288,7 @@ struct LLWrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL : public scclFunction<T, LLWrapper<FUNC, T>> {};
+class scclFunctionLL : public scclFunction<FUNC, T, LLWrapper<FUNC, T>> {};
 
 // Manually written functions
 

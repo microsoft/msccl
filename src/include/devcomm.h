@@ -145,7 +145,7 @@ struct scclTransfer {
   int16_t depencePointer; // index to the first dependence
   int16_t numDependences; // depencePointer+numDependences indicate the last dependence
   int8_t has_dependence;
-  int16_t numReductoins; // number of reductions with the same dst
+  int16_t numReductions; // number of reductions with the same dst
   int16_t reductionPointer; // where the reduction starts
   uint8_t type;
   uint8_t count;
