@@ -161,7 +161,6 @@ struct scclThreadBlock {
   int8_t dependentBid[SCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
   int16_t dependentStep[SCCL_MAX_NUM_STEPS];
   int16_t reductionSrcOffsets[SCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
-  int8_t reductionSrcBuffers[SCCL_MAX_NUM_STEPS]; // the buffer name for above
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 

@@ -851,6 +851,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
 
             int oldReductionDstBuffer = -1; // Indicator of last reduction buffer name; -1 means that last one wasn't a compatible reduction
             int oldReductionDstOffset = -1; // Indicator of last reduction buffer index
+            int oldReductionSrcBuffer = -1; // 
             int numReductions = 0;
 
             int numTransfers = 0;
@@ -941,7 +942,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
 
 
                 // Analyze to see if this is in the same list of reductions for them to be chained
-                if (oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && depend_bid == -1){
+                if (oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
                   numTransfers--; // reuse the same transfer
                 }
 
@@ -995,11 +996,11 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   if (transferType != SCCL_REDUCE){
                     oldReductionDstBuffer = -1;
                     oldReductionDstOffset = -1;
+                    oldReductionSrcBuffer = -1;
                   } else {
                     if (oldReductionDstBuffer == -1) { // if this is the first reduction
                       sccltran->reductionPointer = numReductions;
                     }
-                    sTB->reductionSrcBuffers[numReductions] = sccltran->srcbuffer;
                     sTB->reductionSrcOffsets[numReductions] = sccltran->srcoffset;
                     numReductions++;
                     sccltran->numReductions = numReductions - sccltran->reductionPointer;

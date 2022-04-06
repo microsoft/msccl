@@ -81,15 +81,16 @@ class scclFunction {
             else if (sccltran->type == SCCL_REDUCE){
               int numReductions = sccltran->numReductions;
               int thisChunkSize = prims.nelem * thisCount;
-              for (int index = tid; tid < thisChunkSize; index += nThreads){
-                T c = dstPointer[dstoffset + index];
-                for (int r = 0; r < numReductions; r++){
-                  T t = srcPointer[scclTB->reductionSrcOffsets[sccltran->reductionPointer+r] + index];
-                  c = FUNC()(c, t);
-                }
-                dstPointer[dstoffset + index] = c;
-              }
-              prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              // for (int index = tid; tid < thisChunkSize; index += nThreads){
+              //   T c = dstPointer[dstoffset + index];
+              //   for (int r = 0; r < numReductions; r++){
+              //     T t = srcPointer[scclTB->reductionSrcOffsets[sccltran->reductionPointer+r] + index];
+              //     c = FUNC()(c, t);
+              //   }
+              //   dstPointer[dstoffset + index] = c;
+              // }
+              step += numReductions-1;
+              //prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             } else if (sccltran->type == SCCL_RECV_COPY_SEND)
               prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
             else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
