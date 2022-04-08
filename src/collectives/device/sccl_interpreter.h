@@ -74,14 +74,14 @@ class scclFunction {
             int numReductions = sccltran->numReductions;
             int thisChunkSize = prims.nelem * count;
             dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset) * sizePerScclChunk;
-            for (int r = 0; r < numReductions; r++){
-              srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk;
-              for (int index = tid; index < thisChunkSize; index += nThreads){
-                T c = dstPointer[dstoffset + index];
+            for (int index = tid; index < thisChunkSize; index += nThreads){
+              T c = dstPointer[dstoffset + index];
+              for (int r = 0; r < numReductions; r++){
+                srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk;
                 T t = srcPointer[srcoffset + index];
                 c = FUNC()(c, t);
-                dstPointer[dstoffset + index] = c;
               }
+              dstPointer[dstoffset + index] = c;
             }
             step += numReductions-1;
           } else {
