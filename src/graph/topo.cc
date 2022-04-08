@@ -940,11 +940,11 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                 NCCLCHECK(scclGetBufferType(srcbuffer, &srcbufferInt));
                 NCCLCHECK(scclGetBufferType(dstbuffer, &dstbufferInt));
 
-
+                int continuationOfReductions = 0;
                 // Analyze to see if this is in the same list of reductions for them to be chained
                 if (transferType == SCCL_REDUCE && oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
                   numTransfers--; // reuse the same transfer
-                  printf("are we here?\n");
+                  continuationOfReductions = 1;
                 }
 
 
@@ -989,9 +989,11 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
                   if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
 
-                  sccltran->depencePointer = oldDependencePointer;
-                  sccltran->numDependences = numDependences - oldDependencePointer;
-                  oldDependencePointer = numDependences;
+                  if (!continuationOfReductions){
+                    sccltran->depencePointer = oldDependencePointer;
+                    sccltran->numDependences = numDependences - oldDependencePointer;
+                    oldDependencePointer = numDependences;
+                  }
 
                   // reduction related pointers
                   if (transferType != SCCL_REDUCE){

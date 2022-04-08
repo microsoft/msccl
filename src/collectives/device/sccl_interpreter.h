@@ -52,9 +52,6 @@ class scclFunction {
         T* srcPointer, * dstPointer;
         int step = 0;
         for (int i = 0; i < scclTB->nsteps; i++){
-          if (tid == 0) {
-            printf("workIndex %d bid = %d i = %d step = %d\n", workIndex, bid, i, step);
-          }
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int16_t dependentPointer = sccltran->depencePointer;
@@ -64,62 +61,64 @@ class scclFunction {
               int8_t dependentBid = scclTB->dependentBid[dependentPointer+index];
               int16_t dependentStep = scclTB->dependentStep[dependentPointer+index];
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              printf("dependence bid = %d tid = %d i = %d dep_bid = %d dep_step = %d\n", bid, tid, i, (int) dependentBid, (int) dependentStep);
               while ((scclFlags + dependentBid)->flag < goalFlag){};
             }
             step += sccltran->numDependences-1;
-            if (tid == 0) printf("--> dependence bid = %d tid = %d i = %d step = %d\n", bid, tid, i, step);
             __syncthreads();
           }
 
           srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
-          for (int c = 0; c < count; c += scclMaxAllowedCount) {
-            srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
-            dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
-            int thisCount = min(scclMaxAllowedCount, count-c);
-            if (sccltran->type == SCCL_SEND)
-              prims.send(srcPointer + srcoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV)
-              prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_REDUCE){
-              int numReductions = sccltran->numReductions;
-              int thisChunkSize = prims.nelem * thisCount;
-              if (tid == 0) {
-                for (int r = 0; r < numReductions; r++){
-                  printf("i %d workIndex %d r %d bid = %d srcoffset %d\n", (int)i, (int) workIndex, (int) r, (int) bid, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
-                }
-              }
+          if (sccltran->type == SCCL_REDUCE){
+            int numReductions = sccltran->numReductions;
+            int thisChunkSize = prims.nelem * count;
+            dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset) * sizePerScclChunk;
+            for (int r = 0; r < numReductions; r++){
+              srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk;
               for (int index = tid; index < thisChunkSize; index += nThreads){
                 T c = dstPointer[dstoffset + index];
-                for (int r = 0; r < numReductions; r++){
-                  // if (tid == 0) printf("bid %d index %d\n", (int)bid, (int)(scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
-                  srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk + index;
-                  // if (tid == 0) printf("srcpointer %d srcoffset %d chunkSize %d chunkOffset %d math %d\n", (int) sccltran->srcbuffer, (int) srcoffset, 
-                  //                         (int) sizePerScclChunk, (int) chunkOffset, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
-                  T t = srcPointer[srcoffset];
-                  c = FUNC()(c, t);
-                }
+                T t = srcPointer[srcoffset + index];
+                c = FUNC()(c, t);
                 dstPointer[dstoffset + index] = c;
               }
-              step += numReductions-1;
-              if (tid == 0) {
-                printf("Post reductio i %d workIndex %d bid = %d step = %d\n", (int)i, (int) workIndex, (int) bid, (int) step);
-              }
-              //prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            } else if (sccltran->type == SCCL_RECV_COPY_SEND)
-              prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
-              prims.recvReduceSend(srcPointer + srcoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_COPY_SEND)
-              prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
-              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_LOCAL_COPY)
-              prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else
-              return;
+            }
+            step += numReductions-1;
+          } else {
+            for (int c = 0; c < count; c += scclMaxAllowedCount) {
+              srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
+              dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
+              int thisCount = min(scclMaxAllowedCount, count-c);
+              if (sccltran->type == SCCL_SEND)
+                prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV)
+                prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_REDUCE){
+                int numReductions = sccltran->numReductions;
+                int thisChunkSize = prims.nelem * thisCount;
+                for (int index = tid; index < thisChunkSize; index += nThreads){
+                  T c = dstPointer[dstoffset + index];
+                  for (int r = 0; r < numReductions; r++){
+                    srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk + index;
+                    T t = srcPointer[srcoffset];
+                    c = FUNC()(c, t);
+                  }
+                  dstPointer[dstoffset + index] = c;
+                }
+                step += numReductions-1;
+              } else if (sccltran->type == SCCL_RECV_COPY_SEND)
+                prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
+                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_COPY_SEND)
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
+                prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else if (sccltran->type == SCCL_LOCAL_COPY)
+                prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else
+                return;
+            }
           }
           if (sccltran->has_dependence){
             __syncthreads();
