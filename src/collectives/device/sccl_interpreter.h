@@ -81,14 +81,22 @@ class scclFunction {
             else if (sccltran->type == SCCL_REDUCE){
               int numReductions = sccltran->numReductions;
               int thisChunkSize = prims.nelem * thisCount;
-              // for (int index = tid; tid < thisChunkSize; index += nThreads){
-              //   T c = dstPointer[dstoffset + index];
-              //   for (int r = 0; r < numReductions; r++){
-              //     T t = srcPointer[scclTB->reductionSrcOffsets[sccltran->reductionPointer+r] + index];
-              //     c = FUNC()(c, t);
-              //   }
-              //   dstPointer[dstoffset + index] = c;
-              // }
+              if (tid == 0)
+                for (int r = 0; r < numReductions; r++){
+                  printf("r %d bid = %d srcoffset %d\n", r, (int) bid, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
+                }
+              for (int index = tid; index < thisChunkSize; index += nThreads){
+                T c = dstPointer[dstoffset + index];
+                for (int r = 0; r < numReductions; r++){
+                  // if (tid == 0) printf("bid %d index %d\n", (int)bid, (int)(scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
+                  srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk + index;
+                  // if (tid == 0) printf("srcpointer %d srcoffset %d chunkSize %d chunkOffset %d math %d\n", (int) sccltran->srcbuffer, (int) srcoffset, 
+                  //                         (int) sizePerScclChunk, (int) chunkOffset, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
+                  T t = srcPointer[srcoffset];
+                  c = FUNC()(c, t);
+                }
+                dstPointer[dstoffset + index] = c;
+              }
               step += numReductions-1;
               //prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             } else if (sccltran->type == SCCL_RECV_COPY_SEND)
