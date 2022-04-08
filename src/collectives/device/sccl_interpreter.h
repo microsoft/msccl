@@ -68,6 +68,7 @@ class scclFunction {
               while ((scclFlags + dependentBid)->flag < goalFlag){};
             }
             step += sccltran->numDependences-1;
+            if (tid == 0) printf("--> dependence bid = %d tid = %d i = %d step = %d\n", bid, tid, i, step);
             __syncthreads();
           }
 
