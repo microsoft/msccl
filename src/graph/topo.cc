@@ -944,6 +944,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                 // Analyze to see if this is in the same list of reductions for them to be chained
                 if (oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
                   numTransfers--; // reuse the same transfer
+                  printf("are we here?\n");
                 }
 
 
@@ -1011,6 +1012,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                     } else {
                       oldReductionDstBuffer = sccltran->dstbuffer;
                       oldReductionDstOffset = sccltran->dstoffset;
+                      oldReductionSrcBuffer = sccltran->srcbuffer;
                     }
                   }
 

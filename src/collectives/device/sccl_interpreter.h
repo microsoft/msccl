@@ -52,6 +52,9 @@ class scclFunction {
         T* srcPointer, * dstPointer;
         int step = 0;
         for (int i = 0; i < scclTB->nsteps; i++){
+          if (tid == 0) {
+            printf("workIndex %d bid = %d i = %d step = %d\n", workIndex, bid, i, step);
+          }
           struct scclTransfer* sccltran = &scclTB->transfers[i];
           // first wait if there is a dependence
           int16_t dependentPointer = sccltran->depencePointer;
@@ -61,6 +64,7 @@ class scclFunction {
               int8_t dependentBid = scclTB->dependentBid[dependentPointer+index];
               int16_t dependentStep = scclTB->dependentStep[dependentPointer+index];
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+              printf("dependence bid = %d tid = %d i = %d dep_bid = %d dep_step = %d\n", bid, tid, i, (int) dependentBid, (int) dependentStep);
               while ((scclFlags + dependentBid)->flag < goalFlag){};
             }
             step += sccltran->numDependences-1;
@@ -81,10 +85,11 @@ class scclFunction {
             else if (sccltran->type == SCCL_REDUCE){
               int numReductions = sccltran->numReductions;
               int thisChunkSize = prims.nelem * thisCount;
-              if (tid == 0)
+              if (tid == 0) {
                 for (int r = 0; r < numReductions; r++){
-                  printf("r %d bid = %d srcoffset %d\n", r, (int) bid, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
+                  printf("i %d workIndex %d r %d bid = %d srcoffset %d\n", (int)i, (int) workIndex, (int) r, (int) bid, (int) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]));
                 }
+              }
               for (int index = tid; index < thisChunkSize; index += nThreads){
                 T c = dstPointer[dstoffset + index];
                 for (int r = 0; r < numReductions; r++){
@@ -98,6 +103,9 @@ class scclFunction {
                 dstPointer[dstoffset + index] = c;
               }
               step += numReductions-1;
+              if (tid == 0) {
+                printf("Post reductio i %d workIndex %d bid = %d step = %d\n", (int)i, (int) workIndex, (int) bid, (int) step);
+              }
               //prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
             } else if (sccltran->type == SCCL_RECV_COPY_SEND)
               prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
@@ -112,14 +120,14 @@ class scclFunction {
             else
               return;
           }
-	  if (sccltran->has_dependence){
-	    __syncthreads();
+          if (sccltran->has_dependence){
+            __syncthreads();
             if (tid == nThreads-1){
               __threadfence();
               uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
               scclFlags[bid].flag = curFlag;
             }
-	  }
+          }
           step++;
         }
       }
