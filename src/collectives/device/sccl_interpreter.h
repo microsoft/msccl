@@ -14,7 +14,7 @@
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   SCCL_MAX_ITER*SCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * SCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
-template<typename T, typename PRIMS_WRAPPER>
+template<class FUNC, typename T, typename PRIMS_WRAPPER>
 class scclFunction {
   public:
     __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
@@ -70,35 +70,63 @@ class scclFunction {
           srcPointer = (sccltran->srcbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->srcbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           dstPointer = (sccltran->dstbuffer == SCCL_INPUT_BUFFER) ? thisInput : ((sccltran->dstbuffer == SCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
           int count = sccltran->count;
-          for (int c = 0; c < count; c += scclMaxAllowedCount) {
-            srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
-            dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
-            int thisCount = min(scclMaxAllowedCount, count-c);
-            if (sccltran->type == SCCL_SEND)
-              prims.send(srcPointer + srcoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV)
-              prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_COPY_SEND)
-              prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
-              prims.recvReduceSend(srcPointer + srcoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_COPY_SEND)
-              prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
-              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_REDUCE)
-              prims.reduce(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (sccltran->type == SCCL_LOCAL_COPY)
-              prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else
-              return;
+          if (sccltran->type == SCCL_REDUCE){
+            int numReductions = sccltran->numReductions;
+            int thisChunkSize = prims.nelem * count;
+            dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset) * sizePerScclChunk;
+            for (int index = tid; index < thisChunkSize; index += nThreads){
+              T c = dstPointer[dstoffset + index];
+              for (int r = 0; r < numReductions; r++){
+                srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk;
+                T t = srcPointer[srcoffset + index];
+                c = FUNC()(c, t);
+              }
+              dstPointer[dstoffset + index] = c;
+            }
+            step += numReductions-1;
+          } else {
+            for (int c = 0; c < count; c += scclMaxAllowedCount) {
+              srcoffset = chunkOffset + (ssize_t) (sccltran->srcoffset+c) * sizePerScclChunk;
+              dstoffset = chunkOffset + (ssize_t) (sccltran->dstoffset+c) * sizePerScclChunk;
+              int thisCount = min(scclMaxAllowedCount, count-c);
+              if (sccltran->type == SCCL_SEND)
+                prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV)
+                prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_REDUCE){
+                int numReductions = sccltran->numReductions;
+                int thisChunkSize = prims.nelem * thisCount;
+                for (int index = tid; index < thisChunkSize; index += nThreads){
+                  T c = dstPointer[dstoffset + index];
+                  for (int r = 0; r < numReductions; r++){
+                    srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk + index;
+                    T t = srcPointer[srcoffset];
+                    c = FUNC()(c, t);
+                  }
+                  dstPointer[dstoffset + index] = c;
+                }
+                step += numReductions-1;
+              } else if (sccltran->type == SCCL_RECV_COPY_SEND)
+                prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
+                prims.recvReduceSend(srcPointer + srcoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_COPY_SEND)
+                prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else if (sccltran->type == SCCL_RECV_REDUCE_COPY)
+                prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else if (sccltran->type == SCCL_LOCAL_COPY)
+                prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+              else
+                return;
+            }
           }
-          if (sccltran->has_dependence)
+          if (sccltran->has_dependence){
             __syncthreads();
-          if (tid == nThreads-1 && sccltran->has_dependence){
-            __threadfence();
-            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
-            scclFlags[bid].flag = curFlag;
+            if (tid == nThreads-1){
+              __threadfence();
+              uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
+              scclFlags[bid].flag = curFlag;
+            }
           }
           step++;
         }
@@ -163,7 +191,7 @@ struct SimpleWrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionSimple : public scclFunction<T, SimpleWrapper<FUNC, T, UNROLL>> {};
+class scclFunctionSimple : public scclFunction<FUNC, T, SimpleWrapper<FUNC, T, UNROLL>> {};
 
 #include "prims_ll128.h"
 template<class FUNC, typename T>
@@ -222,7 +250,7 @@ struct LL128Wrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL128 : public scclFunction<T, LL128Wrapper<FUNC, T>> {};
+class scclFunctionLL128 : public scclFunction<FUNC, T, LL128Wrapper<FUNC, T>> {};
 
 template<class FUNC, typename T>
 struct LLWrapper {
@@ -277,7 +305,7 @@ struct LLWrapper {
 };
 
 template<class FUNC, typename T, int UNROLL>
-class scclFunctionLL : public scclFunction<T, LLWrapper<FUNC, T>> {};
+class scclFunctionLL : public scclFunction<FUNC, T, LLWrapper<FUNC, T>> {};
 
 // Manually written functions
 
