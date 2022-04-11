@@ -15,6 +15,7 @@
 #include "enqueue.h"
 #include "graph.h"
 #include "argcheck.h"
+#include "graph/topo.h"
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -479,7 +480,7 @@ static int collNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGrap
   // setup
   struct ncclConnect myConnect;
   if (isMaster && ret > 0) {
-    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id));
+    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id, 0));
   }
   // prepare connect handles
   ncclResult_t res;
@@ -773,13 +774,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
+  // Read SCCL algorithms first, but do not connect them yet.
   int scclMinRequireNChannels = 0;
   int numValidSCCLAlgos; // We only use this at connect site
-  if (getenv("SCCL_XML_FILES")){
-    scclMinRequireNChannels = comm->nChannels;
-    // Read SCCL algorithms first, but do not connect them yet.
-    NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
+  if (getenv("SCCL_XML_FILES") || getenv("SCCL_CONFIG")) {
+    if (getenv("SCCL_XML_FILES")){
+      NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
+    }
+    if (getenv("SCCL_CONFIG")) {
+      NCCLCHECK(scclGetAllAlgoFromSCCLConfigAndSetComm(comm, getenv("SCCL_CONFIG")));
+    }
+    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){
         // Make sure SCCL at least has scclAlgo->nChannels
@@ -900,8 +905,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     }
   }
   if (numValidSCCLAlgos > 0){
-    // We use ringGraph which uses channel % numIBsClosestToThisGPU for NET
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 1), ret, affinity_restore);
     INFO(NCCL_INIT, "Connected %d SCCL algorithms", numValidSCCLAlgos);
   }
 

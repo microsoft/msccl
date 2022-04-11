@@ -12,7 +12,7 @@ OBJDIR := $(BUILDDIR)/obj/collectives/device
 
 LIBSRCFILES := all_reduce.cu broadcast.cu reduce.cu all_gather.cu reduce_scatter.cu all_to_all.cu sendrecv.cu
 
-LIBSRCFILES += functions.cu
+LIBSRCFILES += functions.cu stride_copy.cu
 
 DEPFILES   := $(patsubst %.cu, $(OBJDIR)/%.d, $(LIBSRCFILES))
 DEPENDFILES:= $(DEPFILES:%.d=%.dep)
@@ -36,7 +36,7 @@ $(RULESFILE) :
 
 -include $(RULESFILE)
 
-LIBOBJ     := $(GENOBJS) $(OBJDIR)/functions.o
+LIBOBJ     := $(GENOBJS) $(OBJDIR)/functions.o $(OBJDIR)/stride_copy.o
 
 -include $(DEPFILES)
 
@@ -59,6 +59,11 @@ $(OBJDIR)/%.dep : %.cu
 
 # Compiled kernels and collectives with relocatable device code ...
 $(OBJDIR)/functions.o : functions.cu $(OBJDIR)/functions.dep
+	@printf "Compiling  %-35s > %s\n" $< $@
+	mkdir -p `dirname $@`
+	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
+
+$(OBJDIR)/stride_copy.o : stride_copy.cu $(OBJDIR)/stride_copy.dep
 	@printf "Compiling  %-35s > %s\n" $< $@
 	mkdir -p `dirname $@`
 	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
