@@ -1001,6 +1001,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   if (!continuationOfReductions){
                     sccltran->depencePointer = oldDependencePointer;
                     sccltran->numDependences = numDependences - oldDependencePointer;
+                    if (sccltran->numDependences > 0 && depend_bid < 0){
+                      WARN("SCCL: when there is a chain of dependences, the last reduction must be a part of the first immediate instruction. Detected for GPU %d, threadblock %d, and step %d. XML will be ignored.", id, bid, s);
+                      return ncclInvalidUsage;
+                    }
                     oldDependencePointer = numDependences;
                   }
 
