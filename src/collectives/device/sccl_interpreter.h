@@ -181,10 +181,6 @@ struct SimpleWrapper {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
-  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
@@ -240,10 +236,6 @@ struct LL128Wrapper {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
-  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.localCopy(srcChunkPointer, dstChunkPointer, nelem*count);
   }
@@ -293,10 +285,6 @@ struct LLWrapper {
 
   __device__ void recvReduceCopySend(T * srcChunkPointer, T * dstChunkPointer, int count) {
     prims.recvReduceCopySend(srcChunkPointer, dstChunkPointer, nelem*count);
-  }
-
-  __device__ void reduce(T * srcChunkPointer, T * dstChunkPointer, int count) {
-    prims.reduce(srcChunkPointer, dstChunkPointer, nelem*count);
   }
 
   __device__ void localCopy(T * srcChunkPointer, T * dstChunkPointer, int count) {

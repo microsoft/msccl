@@ -321,10 +321,6 @@ class ncclPrimitives {
   localCopy(const T* src, T* dst, int nelem) {
     GenericOp<0, 0, 0, 0, 1, 1>(src, dst, nelem, 0);
   }
-  __device__ __forceinline__ void
-  reduce(const T* src, T* dst, int nelem) {
-    GenericOp<0, 0, 0, 0, 2, 1>(src, dst, nelem, 0);
-  }  
 
   __device__ __forceinline__ ~ncclPrimitives() {
     // Save steps for the next operation
