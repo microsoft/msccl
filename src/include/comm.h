@@ -65,7 +65,7 @@ struct scclRegistration {
 
 struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
-  int numberOfSCCAlgorithms;
+  int numberOfSCCLAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
   struct scclAlgorithmShared scclAlgoShared;
   struct scclRegistration *scclRegistrations;
@@ -101,7 +101,8 @@ struct ncclComm {
   uint64_t lastOpCount;
 
   // Channels for collectives
-  int nChannels;
+  int nChannels; // this is used for allocation of channels
+  int nChannelsTreeRing; // this is used for tree and ring algorithms
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;

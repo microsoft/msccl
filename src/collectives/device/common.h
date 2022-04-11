@@ -91,7 +91,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   uint16_t index = first.index;
 
   /* To optimize for latency, (only) the first operation is passed as argument.*/
-  if (channelId == 0 && first.funcIndex != FUNC_INDEX_P2P) w = &first;
+  if ((channelId == 0 || ALGO == NCCL_ALGO_SCCL) && first.funcIndex != FUNC_INDEX_P2P) w = &first;
   int wrappedAround = 0;
   while (1) {
     if (w == NULL) {

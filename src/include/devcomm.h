@@ -135,7 +135,6 @@ static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM
 #define SCCL_RECV_REDUCE_COPY_SEND 5
 #define SCCL_LOCAL_COPY 6
 #define SCCL_REDUCE 7
-#define SCCL_NO_OP 8
 
 // TODO: compress this by a lot!
 struct scclTransfer {
@@ -143,9 +142,11 @@ struct scclTransfer {
   int16_t dstoffset;
   uint8_t srcbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
   uint8_t dstbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
-  int8_t dependentBid; // -1 if not dependent on any threadblock
-  int16_t dependentStep;
+  int16_t depencePointer; // index to the first dependence
+  int16_t numDependences; // depencePointer+numDependences indicate the last dependence
   int8_t has_dependence;
+  int16_t numReductions; // number of reductions with the same dst
+  int16_t reductionPointer; // where the reduction starts
   uint8_t type;
   uint8_t count;
 };
@@ -157,6 +158,9 @@ struct scclThreadBlock {
   int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
+  int8_t dependentBid[SCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
+  int16_t dependentStep[SCCL_MAX_NUM_STEPS];
+  int16_t reductionSrcOffsets[SCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
   struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
 };
 
@@ -309,7 +313,7 @@ struct ncclDevComm {
   int buffSizes[NCCL_NUM_PROTOCOLS];
 
   // SCCL related elements
-  int numberOfSCCAlgorithms;
+  int numberOfSCCLAlgorithms;
   struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
   struct scclAlgorithmShared scclAlgoShared;
 

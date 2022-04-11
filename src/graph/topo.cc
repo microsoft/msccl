@@ -851,13 +851,19 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
               }
             }
             sTB->channelId = channelId;
-            // setting type to none for all transfers to avoid transfering for non existing steps
-            for (int st=0; st<SCCL_MAX_NUM_STEPS; st++){
-              sTB->transfers[st].type = SCCL_NO_OP;
-            }
 
             // setting the summary of the sccl aglorithm in sccl channels
             scclChannelInfo* scclChannel = (sTB->channelId == -1) ? NULL : &scclAlgo->scclChannels[sTB->channelId];
+
+            int numDependences = 0;
+            int oldDependencePointer = 0; // inidcator of where the dependences started for nop
+
+            int oldReductionDstBuffer = -1; // Indicator of last reduction buffer name; -1 means that last one wasn't a compatible reduction
+            int oldReductionDstOffset = -1; // Indicator of last reduction buffer index
+            int oldReductionSrcBuffer = -1; // 
+            int numReductions = 0;
+
+            int numTransfers = 0;
             for (int st=0; st<threadblockNode->nSubs; st++) {
               struct ncclXmlNode* stepNode = threadblockNode->subs[st];
               if (strcmp(stepNode->name, "step") == 0){
@@ -884,100 +890,157 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   WARN("SCCL: step must be positive: step %d", s);
                   return ncclInternalError;
                 }
-                struct scclTransfer* sccltran = &sTB->transfers[s];
 
-                sccltran->srcoffset = srcoffset;
-                NCCLCHECK(scclGetBufferType(srcbuffer, &sccltran->srcbuffer));
-                sccltran->srcoffset = srcoffset;
-                NCCLCHECK(scclGetBufferType(dstbuffer, &sccltran->dstbuffer));
-                sccltran->dstoffset = dstoffset;
-
-                if (count < 0 || count >= SCCL_MAX_COUNT){
-                  WARN("SCCL: count (%d) must be positive and less than %d", count, SCCL_MAX_COUNT);
-                  return ncclInternalError;
-                }
-
-                sccltran->count = count;
                 int hasSend = 0;
                 int hasRecv = 0;
                 int checkSrc = 0;
                 int checkDst = 0;
+                int transferType = -1; // -1 indicate a nop
                 if (strcmp(type, "s") == 0){
-                  sccltran->type = SCCL_SEND;
+                  transferType = SCCL_SEND;
                   hasSend = 1;
                   checkSrc = 1;
                 } else if (strcmp(type, "r") == 0) {
-                  sccltran->type = SCCL_RECV;
+                  transferType = SCCL_RECV;
                   hasRecv = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "rcs") == 0) {
-                  sccltran->type = SCCL_RECV_COPY_SEND;
+                  transferType = SCCL_RECV_COPY_SEND;
                   hasSend = 1;
                   hasRecv = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "rrs") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_SEND;
+                  transferType = SCCL_RECV_REDUCE_SEND;
                   hasSend = 1;
                   hasRecv = 1;
                   checkSrc = 1;
                 } else if (strcmp(type, "rrc") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_COPY;
+                  transferType = SCCL_RECV_REDUCE_COPY;
                   hasRecv = 1;
                 } else if (strcmp(type, "rrcs") == 0) {
-                  sccltran->type = SCCL_RECV_REDUCE_COPY_SEND;
+                  transferType = SCCL_RECV_REDUCE_COPY_SEND;
                   hasRecv = 1;
                   hasSend = 1;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "cpy") == 0) {
-                  sccltran->type = SCCL_LOCAL_COPY;
+                  transferType = SCCL_LOCAL_COPY;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "re") == 0) {
-                  sccltran->type = SCCL_REDUCE;
+                  transferType = SCCL_REDUCE;
                   checkSrc = 1;
                   checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {
-                  sccltran->type = SCCL_NO_OP;
+                  transferType = -1;
                 } else {
                   WARN("SCCL: type of transfer is not supported: %s", type);
                   return ncclInternalError;
                 }
-                if (hasSend){
-                  if (sendpeer < 0){
-                    WARN("SCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
-                    return ncclInvalidUsage;
-                  }
-                  if (scclChannel == NULL) {
-                    WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+
+                if (depend_bid >= 0) {
+                  sTB->dependentBid[numDependences] = depend_bid;
+                  sTB->dependentStep[numDependences] = depend_step;
+                  numDependences++;
+                }
+
+                uint8_t srcbufferInt = 0;
+                uint8_t dstbufferInt = 0;
+                NCCLCHECK(scclGetBufferType(srcbuffer, &srcbufferInt));
+                NCCLCHECK(scclGetBufferType(dstbuffer, &dstbufferInt));
+
+                int continuationOfReductions = 0;
+                // Analyze to see if this is in the same list of reductions for them to be chained
+                if (transferType == SCCL_REDUCE && oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
+                  numTransfers--; // reuse the same transfer
+                  continuationOfReductions = 1;
+                }
+
+
+                if (transferType != -1) {
+                  struct scclTransfer* sccltran = &sTB->transfers[numTransfers];
+                  sccltran->type = transferType;
+                  sccltran->srcoffset = srcoffset;
+                  sccltran->srcbuffer = srcbufferInt;
+                  sccltran->srcoffset = srcoffset;
+                  sccltran->dstbuffer = dstbufferInt;
+                  sccltran->dstoffset = dstoffset;
+
+                  if (count < 0 || count >= SCCL_MAX_COUNT){
+                    WARN("SCCL: count (%d) must be positive and less than %d", count, SCCL_MAX_COUNT);
                     return ncclInternalError;
                   }
-                  scclChannel->nchunksForSendPeer[scclChannel->nsendPeers][count-1]++;
-                }
-                if (hasRecv){
-                  if (recvpeer < 0){
-                    WARN("SCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
-                    return ncclInvalidUsage;
+                  sccltran->count = count;
+
+                  if (hasSend){
+                    if (sendpeer < 0){
+                      WARN("SCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
+                      return ncclInvalidUsage;
+                    }
+                    if (scclChannel == NULL) {
+                      WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                      return ncclInternalError;
+                    }
+                    scclChannel->nchunksForSendPeer[scclChannel->nsendPeers][count-1]++;
                   }
-                  if (scclChannel == NULL) {
-                    WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                  if (hasRecv){
+                    if (recvpeer < 0){
+                      WARN("SCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
+                      return ncclInvalidUsage;
+                    }
+                    if (scclChannel == NULL) {
+                      WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
+                      return ncclInternalError;
+                    }
+                    scclChannel->nchunksForRecvPeer[scclChannel->nrecvPeers][count-1]++;
+                  }
+
+                  if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
+                  if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
+
+                  if (!continuationOfReductions){
+                    sccltran->depencePointer = oldDependencePointer;
+                    sccltran->numDependences = numDependences - oldDependencePointer;
+                    if (sccltran->numDependences > 0 && depend_bid < 0){
+                      WARN("SCCL: when there is a chain of dependences, the last reduction must be a part of the first immediate instruction. Detected for GPU %d, threadblock %d, and step %d. XML will be ignored.", id, bid, s);
+                      return ncclInvalidUsage;
+                    }
+                    oldDependencePointer = numDependences;
+                  }
+
+                  // reduction related pointers
+                  if (transferType != SCCL_REDUCE){
+                    oldReductionDstBuffer = -1;
+                    oldReductionDstOffset = -1;
+                    oldReductionSrcBuffer = -1;
+                  } else {
+                    if (oldReductionDstBuffer == -1) { // if this is the first reduction
+                      sccltran->reductionPointer = numReductions;
+                    }
+                    sTB->reductionSrcOffsets[numReductions] = sccltran->srcoffset;
+                    numReductions++;
+                    sccltran->numReductions = numReductions - sccltran->reductionPointer;
+
+                    if (has_dependence){
+                      oldReductionDstBuffer = -1;
+                      oldReductionDstOffset = -1;
+                    } else {
+                      oldReductionDstBuffer = sccltran->dstbuffer;
+                      oldReductionDstOffset = sccltran->dstoffset;
+                      oldReductionSrcBuffer = sccltran->srcbuffer;
+                    }
+                  }
+
+
+                  if (has_dependence != 0 && has_dependence != 1){
+                    WARN("SCCL: has_dependence needs to be 0 or 1, but it was %d", has_dependence);
                     return ncclInternalError;
                   }
-                  scclChannel->nchunksForRecvPeer[scclChannel->nrecvPeers][count-1]++;
+                  sccltran->has_dependence = has_dependence;
+
+                  numTransfers++;
+                  sTB->nsteps = numTransfers;
                 }
-
-                if (checkSrc) NCCLCHECK(scclCheckBufferBounds(sccltran->srcbuffer, sccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
-                if (checkDst) NCCLCHECK(scclCheckBufferBounds(sccltran->dstbuffer, sccltran->dstoffset, nInputChunks, nOutputChunks, nScratchChunks));
-
-                sccltran->dependentBid = depend_bid;
-                sccltran->dependentStep = depend_step;
-                if (has_dependence != 0 && has_dependence != 1){
-                  WARN("SCCL: has_dependence needs to be 0 or 1, but it was %d", has_dependence);
-                  return ncclInternalError;
-                }
-                sccltran->has_dependence = has_dependence;
-
-                sTB->nsteps = std::max(sTB->nsteps, (uint16_t)(s+1));
               }
             }
             sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
@@ -1026,15 +1089,15 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
   char* tokStr = strdup(str);
   char* tmpStr;
   char* token = strtok_r(tokStr, ":", &tmpStr);
-  comm->numberOfSCCAlgorithms = 0;
+  comm->numberOfSCCLAlgorithms = 0;
   while (token) {
-    if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
-      WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+    if (comm->numberOfSCCLAlgorithms == SCCL_MAX_NUM_ALGOS){
+      WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCLAlgorithms);
       break;
     }
-    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCAlgorithms];
+    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[comm->numberOfSCCLAlgorithms];
     if (scclGetAlgoFromXMLAndSetComm(comm, token, scclAlgo) == ncclSuccess){
-      comm->numberOfSCCAlgorithms++;
+      comm->numberOfSCCLAlgorithms++;
       INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", token);
     } else {
       WARN("SCCL: algorithm %s failed to initialize. Will be ignored.", token);
@@ -1061,8 +1124,8 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
   for (int s=0; s < topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "load") == 0) {
-      if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
-        WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+      if (comm->numberOfSCCLAlgorithms == SCCL_MAX_NUM_ALGOS){
+        WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCLAlgorithms);
         break;
       }
 
@@ -1090,10 +1153,10 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
         NCCLCHECK(xmlGetAttrStr(node, "proto", &protocol));
       }
 
-      int algoIndex = comm->numberOfSCCAlgorithms;
+      int algoIndex = comm->numberOfSCCLAlgorithms;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[algoIndex];
       if (scclGetAlgoFromXMLAndSetComm(comm, path, scclAlgo) == ncclSuccess){
-        comm->numberOfSCCAlgorithms++;
+        comm->numberOfSCCLAlgorithms++;
         INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", path);
 
         int regIndex = comm->nScclRegistrations++;

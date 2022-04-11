@@ -284,10 +284,10 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 
   NCCLCHECK(ncclCudaCalloc(&comm->scclAlgoShared.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
   // SCCL algo is copied to the device side
-  for (int i = 0; i < comm->numberOfSCCAlgorithms; i++)
+  for (int i = 0; i < comm->numberOfSCCLAlgorithms; i++)
     comm->hostDevComm.scclAlgos[i] = comm->scclAlgos[i];
   comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
-  comm->hostDevComm.numberOfSCCAlgorithms = comm->numberOfSCCAlgorithms;
+  comm->hostDevComm.numberOfSCCLAlgorithms = comm->numberOfSCCLAlgorithms;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
@@ -784,11 +784,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     if (getenv("SCCL_CONFIG")) {
       NCCLCHECK(scclGetAllAlgoFromSCCLConfigAndSetComm(comm, getenv("SCCL_CONFIG")));
     }
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
+    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){
         // Make sure SCCL at least has scclAlgo->nChannels
-        scclMinRequireNChannels = std::max(comm->nChannels, scclAlgo->nChannels);
+        scclMinRequireNChannels = std::max(scclMinRequireNChannels, scclAlgo->nChannels);
       }
     }
   }
@@ -887,7 +887,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   numValidSCCLAlgos = 0;
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-  for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
+  for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
     struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
     if (scclAlgo->isValid){
       if (scclAlgo->nChannels > comm->nChannels){

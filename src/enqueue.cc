@@ -105,6 +105,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
+  if (!base) e->scclAlgoIndex = -1;
   if (!base) e->nActives = 1; // This only happens when it is a p2p case
   for (int i=0; i<e->nActives; i++){
     e->active[i] = 1;
@@ -161,6 +162,15 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       elem->active[i] = 0;
   }
 
+  if (elem->scclAlgoIndex >= 0) {
+    for (int c=0; c<comm->scclAlgos[elem->scclAlgoIndex].nChannels; c++) {
+      struct ncclChannel* channel = comm->channels+c;
+      struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
+      struct ncclWorkElem* elem = work->elems;
+      for (int i=0; i<elem->nActives; i++)
+        elem->active[i] = 0;
+    }
+  }
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
     comm->scclAlgoShared.flagsNeedReset = 1;
 
@@ -340,7 +350,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
 
   int nc = (info->nChannels > 0) ? info->nChannels :
-           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannels/2 : comm->nChannels; // CollNet uses one channel for up and one channel for down
+           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannelsTreeRing/2 : comm->nChannelsTreeRing; // CollNet uses one channel for up and one channel for down
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
   while (info->nBytes < nc*nt*threadThreshold) {
@@ -550,7 +560,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     return ncclSuccess;
   }
   // Alltoall needs a local copy and it has no allocated channel/threadblock. the corresponding chunk is transferred here
-  if (info->coll == ncclFuncAllToAll){
+/*  if (info->coll == ncclFuncAllToAll){
     if (info->sendbuff == info->recvbuff){
       WARN("Alltoall needs separate receive and send buffers.");
       return ncclInvalidArgument;
@@ -558,7 +568,7 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
     size_t rankOffset = info->comm->rank * nBytesPerRank;
     CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
-  }
+  }*/
 
   if (info->comm->scclAlgoShared.flagsNeedReset == 1){
     CUDACHECK(cudaMemsetAsync(info->comm->scclAlgoShared.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
@@ -621,19 +631,13 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     size_t channelSize = NCCL_AGG_CHANNEL_SIZE * comm->nRanks;  // scale channel size based on nranks as latency increases
     // Reduce the per-channel size if we cannot fully utilize the channels
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
-    // making sure whether all are SCCL algorithms or none at all.
-    int firstScclAlgoIndex = (comm->asyncOps[0].algorithm == NCCL_ALGO_SCCL) ? comm->asyncOps[0].scclAlgoIndex : -1;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      if ((firstScclAlgoIndex >= 0) && (info->algorithm != NCCL_ALGO_SCCL || info->scclAlgoIndex != firstScclAlgoIndex)) {
-        WARN("SCCL algorithms can only be used asynchronously only with the same SCCL algorithm.");
-        return ncclInvalidUsage;
+      if (info->algorithm == NCCL_ALGO_SCCL){
+        WARN("SCCL algorithms can only be used asynchronously with one operation");
+        return ncclInternalError;
       }
-      if (firstScclAlgoIndex == -1) {
-        info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannels); // assign number of channels
-      } else {
-        info->nChannels = comm->scclAlgos[firstScclAlgoIndex].nChannels;
-      }
+      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
     }
   }
@@ -743,9 +747,6 @@ ncclResult_t ncclSaveP2pKernel(struct ncclInfo* info) {
 }
 
 ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
-  if (info->coll == ncclFuncCustomCollective) {
-    info->comm->bandwidths[ncclFuncCustomCollective][NCCL_ALGO_SCCL][info->comm->scclAlgos[info->scclAlgoIndex].protocol] = 1.0f;
-  }
   // Launch asynchronously if needed
   if (ncclAsyncMode()) {
     ncclResult_t ret = ncclSuccess;
@@ -779,15 +780,16 @@ end:
     NCCLCHECK(PtrCheck(info->comm, info->opName, "comm"));
     NCCLCHECK(ArgsCheck(info));
     NCCLCHECK(checkSetStream(info));
-
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
-        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
-        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
-
     NCCLCHECK(ncclSaveKernel(info));
     NCCLCHECK(ncclBarrierEnqueue(info->comm));
+
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d algorithm %d numThreadBlocks %d threadBlocksSize %d protocol %d comm %p [nranks=%d] stream %p",
+        info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
+        info->datatype, info->op, info->root, info->algorithm, info->comm->myParams->gridDim.x, info->comm->myParams->blockDim.x, info->protocol, info->comm, info->comm->nRanks, info->stream);
+
     NCCLCHECK(ncclBarrierEnqueueWait(info->comm));
     NCCLCHECK(ncclEnqueueEvents(info->comm));
+
     return ncclSuccess;
   }
 }
