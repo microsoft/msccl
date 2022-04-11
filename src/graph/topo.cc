@@ -1120,8 +1120,8 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
   for (int s=0; s < topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "load") == 0) {
-      if (comm->numberOfSCCAlgorithms == SCCL_MAX_NUM_ALGOS){
-        WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCAlgorithms);
+      if (comm->numberOfSCCLAlgorithms == SCCL_MAX_NUM_ALGOS){
+        WARN("SCCL: too many algorithms (%d) specified in environment variable SCCL_XML_FILES. The rest will be ignored.", comm->numberOfSCCLAlgorithms);
         break;
       }
 
@@ -1149,10 +1149,10 @@ ncclResult_t scclGetAllAlgoFromSCCLConfigAndSetComm(struct ncclComm* comm, const
         NCCLCHECK(xmlGetAttrStr(node, "proto", &protocol));
       }
 
-      int algoIndex = comm->numberOfSCCAlgorithms;
+      int algoIndex = comm->numberOfSCCLAlgorithms;
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[algoIndex];
       if (scclGetAlgoFromXMLAndSetComm(comm, path, scclAlgo) == ncclSuccess){
-        comm->numberOfSCCAlgorithms++;
+        comm->numberOfSCCLAlgorithms++;
         INFO(NCCL_INIT, "Parsed SCCL Algorithm %s successfully.", path);
 
         int regIndex = comm->nScclRegistrations++;

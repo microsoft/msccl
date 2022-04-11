@@ -308,7 +308,7 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
         }
       }
     } else {
-      for (int i=0; i<comm->numberOfSCCAlgorithms; i++){
+      for (int i=0; i<comm->numberOfSCCLAlgorithms; i++){
         struct scclAlgorithm* scclAlgo = &comm->scclAlgos[i];
         if ((scclAlgo->isValid) && (scclAlgo->collectiveType == info->coll) && (info->inplace == scclAlgo->inPlace) && (scclAlgo->protocol == protocol) && (scclAlgo->ngpus == info->comm->nRanks)
             && ((info->count % scclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= scclAlgo->minBytes) && (info->nBytes < scclAlgo->maxBytes)) {

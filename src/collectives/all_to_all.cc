@@ -81,7 +81,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
   }
   else
   {
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++)
+    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++)
     {
       struct scclAlgorithm *scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % comm->scclAlgos[scclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes))

@@ -784,7 +784,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     if (getenv("SCCL_CONFIG")) {
       NCCLCHECK(scclGetAllAlgoFromSCCLConfigAndSetComm(comm, getenv("SCCL_CONFIG")));
     }
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCAlgorithms; scclAlgoIndex++){
+    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
       struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
       if (scclAlgo->isValid){
         // Make sure SCCL at least has scclAlgo->nChannels
