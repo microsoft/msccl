@@ -84,7 +84,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   int activeId = 0;
   if (ALGO == NCCL_ALGO_SCCL){
     channelId = comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].channelId;
-    activeId = comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].rid;
+    activeId = 0; //comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].rid;
   }
   struct ncclChannel* channel = comm->channels+channelId;
   struct ncclWorkElem* w = NULL;
