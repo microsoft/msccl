@@ -98,18 +98,13 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   int opIndex = channel->workFifoTail%NCCL_MAX_OPS;
   struct ncclWork* w = channel->workFifo+opIndex;
   struct ncclWorkElem* e = w->elems;
-  for (int i=0; i<e->nActives; i++){
-    volatile uint8_t* activePtr = (volatile uint8_t*)&e->active[i];
-    while (activePtr[0] != 0) sched_yield();
-  }
+  volatile uint8_t* activePtr = (volatile uint8_t*)&e->active;
+  while (activePtr[0] != 0) sched_yield();
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
   if (!base) e->scclAlgoIndex = -1;
-  if (!base) e->nActives = 1; // This only happens when it is a p2p case
-  for (int i=0; i<e->nActives; i++){
-    e->active[i] = 1;
-  }
+  e->active = 1;
   e->index = (setOpIndex == -1) ? opIndex : setOpIndex;
   if (base) base->index = e->index;
   channel->workFifoTail++;
@@ -125,7 +120,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   }
 
   // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
-  // SCCL: this loop sets number of active elements according to SCCL aglo. Also total number of threadblocks are calculated here.
+  // SCCL: Total number of threadblocks are calculated here.
   int totalNBlocks = 0;
   for (int c=0; c<params->gridDim.x; c++) {
     struct ncclChannel* channel = comm->channels+c;
@@ -138,11 +133,18 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       e->p2p.nThreads = 0;
     }
     int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
-    int nActives = channel->workFifo[channelTailIndex].elems[0].nActives;
-    for (int i=0; i<nActives; i++) {
-      channel->workFifo[channelTailIndex].elems[0].active[i] = 2;
+    struct ncclWorkElem* lastElem = channel->workFifo[channelTailIndex].elems;
+    channel->workFifo[channelTailIndex].elems[0].active = 2;
+    if (lastElem->scclAlgoIndex >= 0){
+      struct scclAlgorithm* scclAglo = &comm->scclAlgos[lastElem->scclAlgoIndex];
+      if (c >= scclAglo->nChannels){
+        WARN("SCCL algorithm's nchannels is less than the gridDim.x size!");
+        return ncclInternalError;
+      }
+      totalNBlocks += scclAglo->scclChannels[c].nBlocksForChannel;
+    } else {
+      totalNBlocks++;
     }
-    totalNBlocks += nActives;
   }
 
   // set the gridDim accordingly to the number of active elements. if the algorithm is non-SCCL, 
@@ -158,8 +160,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   memcpy(&comm->args, elem, sizeof(struct ncclWorkElem));
   // As we inline the first coll directly, we can free it immediately.
   if (elem->funcIndex != FUNC_INDEX_P2P){
-    for (int i=0; i<elem->nActives; i++)
-      elem->active[i] = 0;
+    elem->active = 0;
   }
 
   if (elem->scclAlgoIndex >= 0) {
@@ -167,8 +168,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
       struct ncclChannel* channel = comm->channels+c;
       struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
       struct ncclWorkElem* elem = work->elems;
-      for (int i=0; i<elem->nActives; i++)
-        elem->active[i] = 0;
+      elem->active = 0;
     }
   }
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
@@ -597,7 +597,10 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-    work.nActives = (info->algorithm == NCCL_ALGO_SCCL) ? scclAlgo->scclChannels[channelId % scclAlgo->nChannels].nBlocksForChannel : 1;
+    if (info->algorithm == NCCL_ALGO_SCCL && channelId >= scclAlgo->nChannels) {
+      WARN("channelId must be always within the range of scclAlgo nchannels!\n");
+      return ncclInternalError;
+    }
     // Proxy
     proxyArgs.channel = channel;
     // Adjust pattern for CollNet based on channel index
@@ -712,7 +715,6 @@ static ncclResult_t saveP2pOp(struct ncclInfo* info /* input */, struct ncclWork
   elem->p2p.sendCount = info->sendbytes;
   elem->p2p.recvCount = info->recvbytes;
   elem->p2p.delta = info->delta;
-  elem->nActives = 1;
   const int nsegments = s+1;
   int nThreads = 512;
   while (nsegments*nThreads > 512) nThreads /= 2;

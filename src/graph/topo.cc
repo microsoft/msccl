@@ -781,11 +781,8 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   for (int s=0; s<topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "gpu") == 0){
-      int channelCurrentRelativeThreadBlockIndex[MAXCHANNELS];
-      memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
       int blockExists[SCCL_MAX_NUM_THREAD_BLOCKS];
       memset(blockExists, 0, sizeof(int[SCCL_MAX_NUM_THREAD_BLOCKS]));
-      memset(channelCurrentRelativeThreadBlockIndex, 0, sizeof(int[MAXCHANNELS]));
       int id, nScratchChunks, nInputChunks, nOutputChunks;
       NCCLCHECK(xmlGetAttrInt(node, "id", &id));
       if (id == rank){
@@ -1043,7 +1040,6 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                 }
               }
             }
-            sTB->rid = channelCurrentRelativeThreadBlockIndex[sTB->channelId]++;
             if (sTB->sendpeer >= 0){
               if (scclChannel == NULL) {
                 WARN("SCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
@@ -1061,7 +1057,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
               scclChannel->nrecvPeers++;
             }
             if (scclChannel) {
-              scclChannel->nBlocksForChannel = std::max(scclChannel->nBlocksForChannel, sTB->rid+1);
+              scclChannel->nBlocksForChannel++;
               if (scclChannel->nBlocksForChannel > SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
                 WARN("SCCL: too many sends/recv per channel. Max allowed %d", SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
                 return ncclInvalidUsage;
