@@ -633,12 +633,12 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
     while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
+      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
+      NCCLCHECK(ncclSaveKernel(info));
       if (info->algorithm == NCCL_ALGO_SCCL){
         WARN("SCCL algorithms can only be used asynchronously with one operation");
         return ncclInternalError;
       }
-      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
-      NCCLCHECK(ncclSaveKernel(info));
     }
   }
   // Reset counters
