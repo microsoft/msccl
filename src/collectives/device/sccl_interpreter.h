@@ -93,20 +93,7 @@ class scclFunction {
                 prims.send(srcPointer + srcoffset, dstoffset, thisCount);
               else if (sccltran->type == SCCL_RECV)
                 prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-              else if (sccltran->type == SCCL_REDUCE){
-                int numReductions = sccltran->numReductions;
-                int thisChunkSize = prims.nelem * thisCount;
-                for (int index = tid; index < thisChunkSize; index += nThreads){
-                  T c = dstPointer[dstoffset + index];
-                  for (int r = 0; r < numReductions; r++){
-                    srcoffset = chunkOffset + (ssize_t) (scclTB->reductionSrcOffsets[sccltran->reductionPointer+r]) * sizePerScclChunk + index;
-                    T t = srcPointer[srcoffset];
-                    c = FUNC()(c, t);
-                  }
-                  dstPointer[dstoffset + index] = c;
-                }
-                step += numReductions-1;
-              } else if (sccltran->type == SCCL_RECV_COPY_SEND)
+              else if (sccltran->type == SCCL_RECV_COPY_SEND)
                 prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
               else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
                 prims.recvReduceSend(srcPointer + srcoffset, thisCount);
