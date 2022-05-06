@@ -276,7 +276,7 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
  * Value of count is the maximum of elements send per rank and elements receive per rank.
  */
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int scclAlgorithmIndex, ncclComm* comm, cudaStream_t stream);
+    ncclDataType_t datatype, int scclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream);
 
 /*
  * Group semantics
