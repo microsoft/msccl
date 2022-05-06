@@ -41,13 +41,13 @@ static __device__ void load_parallel(void* dst, void* src, size_t size, int tid)
   int* s = (int*)src;
   for (int o = tid; o < (size/sizeof(int)); o += blockDim.x) d[o] = s[o];
 }
-static __device__ void load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm, int activeId) {
+static __device__ void load_coll(struct ncclWork* localWork, struct ncclWork* hostWork, int tid, struct ncclDevComm* comm) {
   __syncthreads();
   load_parallel(localWork, hostWork, sizeof(struct ncclWork), tid);
   // Check whether the last operation was aborted and make sure all threads exit
   int abort = tid == 0 ? *(comm->abortFlag) : 0;
   exitIfAbortBarrier(abort);
-  if (tid == 0) hostWork->elems[0].active[activeId] = 0;
+  if (tid == 0) hostWork->elems[0].active = 0;
 }
 
 template <ncclFunc_t FUNCTION, int ALGO, int PROTO, class REDOP, typename T, int UNROLL>
@@ -81,10 +81,8 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 
   struct ncclDevComm* comm = first.comm;
   int channelId = bid;
-  int activeId = 0;
   if (ALGO == NCCL_ALGO_SCCL){
     channelId = comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].channelId;
-    activeId = 0; //comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].rid;
   }
   struct ncclChannel* channel = comm->channels+channelId;
   struct ncclWorkElem* w = NULL;
@@ -96,7 +94,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
   while (1) {
     if (w == NULL) {
       w = shmem.localWork.elems;
-      load_coll(&shmem.localWork, channel->workFifo+index, tid, comm, activeId);
+      load_coll(&shmem.localWork, channel->workFifo+index, tid, comm);
     }
     if (tid < w->nThreads) {
       // SCCL uses w->index as an indicator for the progress this threadblock has made. in case index wraps around due to overflow, w->index is increament so that the progress invariant is still true
@@ -115,7 +113,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
     }
     if (index == NCCL_MAX_OPS-1) wrappedAround = 1;
     index = (index+1) % NCCL_MAX_OPS;
-    if (w->active[activeId] == 2) {
+    if (w->active == 2) {
       return;
     }
     w = NULL;

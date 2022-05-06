@@ -156,7 +156,6 @@ struct scclThreadBlock {
   int16_t recvpeer;
   uint16_t nsteps;
   int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
-  uint16_t rid; // relative id of this thread block to the channel
   // step is used to index into this array. transfers[step] is the addr to transfer.
   int8_t dependentBid[SCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
   int16_t dependentStep[SCCL_MAX_NUM_STEPS];
@@ -250,9 +249,8 @@ struct ncclWorkElem {
   uint16_t funcIndex;
   uint16_t index;
 
-  // in SCCL algorithms, ncclWorkElem.active element from workFifo is replicated for for all other thread blocks
-  uint8_t active[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  uint8_t nActives; // if it is a sccl algorithm, it must be set to associated channel number of thread blocks. if not a sccl algorithm, it is 1.
+  // in SCCL algorithms, only one workelem at a time is allowed.
+  uint8_t active;
   uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int scclAlgoIndex; // taken from info->scclAlgoIndex
 
@@ -275,13 +273,13 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    uint64_t align[6];
+    int8_t align[80];
   };
 };
 struct ncclWork {
   struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
 };
-static_assert(sizeof(struct ncclWorkElem) == (0x20*sizeof(int)), "ncclWorkElem must have a pow2 size");
+static_assert(sizeof(struct ncclWorkElem) == (128), "ncclWorkElem must have a pow2 size");
 
 struct ncclChannel {
   union {
