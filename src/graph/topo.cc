@@ -671,7 +671,7 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
   NCCLCHECK(xmlFindTag(xml, "algo", &topNode));
   const char* name;
   NCCLCHECK(xmlGetAttrStr(topNode, "name", &name));
-  strcpy(scclAlgo->name, name);
+  strncpy(scclAlgo->name, name, SCCL_MAX_ALGO_NAME);
 
   int ngpus;
   NCCLCHECK(xmlGetAttrInt(topNode, "ngpus", &ngpus));
