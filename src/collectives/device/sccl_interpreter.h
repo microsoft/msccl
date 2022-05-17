@@ -57,7 +57,8 @@ class scclFunction {
           int16_t dependentPointer = sccltran->depencePointer;
           int16_t numDependences = sccltran->numDependences;
           if (sccltran->numDependences > 0){
-            for (int index = tid; index < numDependences; index += nThreads) {
+            int index = tid;
+	          if (index < numDependences){
               int8_t dependentBid = scclTB->dependentBid[dependentPointer+index];
               int16_t dependentStep = scclTB->dependentStep[dependentPointer+index];
               uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);

@@ -117,11 +117,12 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCCL_MAX_NUM_STEPS 512
+#define SCCL_MAX_NUM_STEPS 256
 #define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
 #define SCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
 
 static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM_THREAD_BLOCKS);
+static_assert(SCCL_MAX_NUM_STEPS <= 256, "SCCL interpreter doesn't allow for more than nthreads dependences");
 
 #define SCCL_INPUT_BUFFER 0
 #define SCCL_OUTPUT_BUFFER 1
