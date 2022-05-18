@@ -45,6 +45,7 @@ class scclFunction {
       // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
       const int workIndex = args->index+1;
       volatile struct scclFlag* scclFlags = comm->scclAlgoShared.flags;
+      scclComputeOp_t* scclComputeOp = &args->scclComputeOp;
 
       for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerScclChunk; gridOffset += loopSize, iter++) {
         size_t chunkOffset = prims.initIter(sizePerScclChunk, gridOffset);
@@ -94,7 +95,18 @@ class scclFunction {
                 prims.send(srcPointer + srcoffset, dstoffset, thisCount);
               else if (sccltran->type == SCCL_RECV)
                 prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-              else if (sccltran->type == SCCL_RECV_COPY_SEND)
+              else if (sccltran->type == SCCL_RES_ADD){
+                int thisChunkSize = prims.nelem * count;
+                T* resPtr1 = (T*)scclComputeOp->residualAddOp.residual1;
+                T* resPtr2 = (T*)scclComputeOp->residualAddOp.residual2;
+                for (int index = tid; index < thisChunkSize; index += nThreads){
+                  T r1 = resPtr1[srcoffset+index];
+                  T r2 = resPtr2[srcoffset+index];
+                  T o  = dstPointer[dstoffset+index];
+                  o = FUNC()(o,FUNC()(r1,r2));
+                  dstPointer[dstoffset+index] = o;
+                }
+              } else if (sccltran->type == SCCL_RECV_COPY_SEND)
                 prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
               else if (sccltran->type == SCCL_RECV_REDUCE_SEND)
                 prims.recvReduceSend(srcPointer + srcoffset, thisCount);
