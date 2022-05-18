@@ -7,14 +7,15 @@
 #include "enqueue.h"
 
 NCCL_API(ncclResult_t, ncclCustomCollective, const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int scclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int scclAlgorithmIndex, scclComputeOp_t scclComputeOp, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int scclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream) {
+    ncclDataType_t datatype, int scclAlgorithmIndex, scclComputeOp_t scclComputeOp, ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   
   struct ncclInfo info = { ncclFuncCustomCollective, "CustomCollective",
     sendbuff, recvbuff, (recvbuff == sendbuff), count, datatype, comm->scclAlgos[scclAlgorithmIndex].redOp, 0, comm, stream, /* Args */
     SCCL_CHUNKSTEPS, SCCL_SLICESTEPS };
   info.scclAlgoIndex = scclAlgorithmIndex;
+  info.scclComputeOp = scclComputeOp;
   return ncclEnqueueCheck(&info);
 }

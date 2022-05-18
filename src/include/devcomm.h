@@ -136,6 +136,7 @@ static_assert(SCCL_MAX_NUM_STEPS <= 256, "SCCL interpreter doesn't allow for mor
 #define SCCL_RECV_REDUCE_COPY_SEND 5
 #define SCCL_LOCAL_COPY 6
 #define SCCL_REDUCE 7
+#define SCCL_RES_ADD 8
 
 // TODO: compress this by a lot!
 struct scclTransfer {
@@ -255,6 +256,7 @@ struct ncclWorkElem {
   uint8_t active;
   uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int scclAlgoIndex; // taken from info->scclAlgoIndex
+  scclComputeOp_t scclComputeOp; // taken from info->scclComputeOp
 
   const void * sendbuff;
   void * recvbuff;
@@ -275,7 +277,7 @@ struct ncclWorkElem {
       int32_t delta;
       uint16_t nThreads;
     } p2p;
-    int8_t align[80];
+    int8_t align[64];
   };
 };
 struct ncclWork {
