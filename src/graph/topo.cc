@@ -928,6 +928,10 @@ ncclResult_t scclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str
                   transferType = SCCL_REDUCE;
                   checkSrc = 1;
                   checkDst = 1;
+                } else if (strcmp(type, "ra") == 0) {
+                  transferType = SCCL_RES_ADD;
+                  checkSrc = 1;
+                  checkDst = 1;
                 } else if (strcmp(type, "nop") == 0) {
                   transferType = -1;
                 } else {

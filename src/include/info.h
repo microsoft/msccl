@@ -43,6 +43,7 @@ struct ncclInfo {
   // Computed later
   int algorithm;
   int scclAlgoIndex; // Used to indentify SCCL algorithm
+  scclComputeOp_t scclComputeOp; // sccl operation for custom compute
   int protocol;
   ncclPattern_t pattern;
   int nChannels;

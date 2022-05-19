@@ -364,7 +364,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   // SCCL needs exactly scclAlgo.nChannels.
   if (info->algorithm == NCCL_ALGO_SCCL){
     if (comm->scclAlgos[info->scclAlgoIndex].nChannels > comm->nChannels){
-      WARN("Comm must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
+      WARN("SCCL: Comm must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
       return ncclInternalError;
     }
     info->nChannels = comm->scclAlgos[info->scclAlgoIndex].nChannels;
@@ -461,6 +461,7 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->coll.nChannels = info->nChannels;
   work->nThreads = info->nThreads;
   work->scclAlgoIndex = info->scclAlgoIndex;
+  work->scclComputeOp = info->scclComputeOp;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
