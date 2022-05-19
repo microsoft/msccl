@@ -270,9 +270,9 @@ ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
     ncclComm_t comm, cudaStream_t stream);
 
 /*
- * SCCL Collective
+ * MSCCL Collective
  *
- * Run a SCCL Collective. 
+ * Run a MSCCL Collective. 
  * Value of count is the maximum of elements send per rank and elements receive per rank.
  */
 
@@ -283,10 +283,10 @@ typedef struct {
 
 typedef union {
     residualAddOp_t residualAddOp;
-} scclComputeOp_t;
+} mscclComputeOp_t;
 
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int scclAlgorithmIndex, scclComputeOp_t scclComputeOp, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, int mscclAlgorithmIndex, mscclComputeOp_t mscclComputeOp, ncclComm_t comm, cudaStream_t stream);
 
 /*
  * Group semantics

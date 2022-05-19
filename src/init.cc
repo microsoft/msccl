@@ -39,7 +39,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #endif
 
 const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll", "CustomCollective"};
-const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "SCCL", "CollNet" };
+const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "MSCCL", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
 NCCL_PARAM(GroupCudaStream, "GROUP_CUDA_STREAM", NCCL_GROUP_CUDA_STREAM);
@@ -171,7 +171,7 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-  CUDACHECK(cudaFree(comm->scclAlgoShared.flags));
+  CUDACHECK(cudaFree(comm->mscclAlgoShared.flags));
   CUDACHECK(cudaFree(comm->hostDevComm.channels));
   CUDACHECK(cudaFree(comm->devComm));
 
@@ -197,11 +197,11 @@ static ncclResult_t commFree(ncclComm_t comm) {
   }
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
-  // free up SCCL allocated scratchPad
-  if (comm->scclAlgoShared.scratchBuffer != NULL && comm->scclAlgoShared.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->scclAlgoShared.scratchBuffer));
-    comm->scclAlgoShared.scratchBuffer = NULL;
-    comm->scclAlgoShared.scratchBufferSize = 0;
+  // free up MSCCL allocated scratchPad
+  if (comm->mscclAlgoShared.scratchBuffer != NULL && comm->mscclAlgoShared.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->mscclAlgoShared.scratchBuffer));
+    comm->mscclAlgoShared.scratchBuffer = NULL;
+    comm->mscclAlgoShared.scratchBufferSize = 0;
   }
 
   // Poison comm to try and catch a double free
@@ -282,12 +282,12 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
-  NCCLCHECK(ncclCudaCalloc(&comm->scclAlgoShared.flags, SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
-  // SCCL algo is copied to the device side
-  for (int i = 0; i < comm->numberOfSCCLAlgorithms; i++)
-    comm->hostDevComm.scclAlgos[i] = comm->scclAlgos[i];
-  comm->hostDevComm.scclAlgoShared = comm->scclAlgoShared;
-  comm->hostDevComm.numberOfSCCLAlgorithms = comm->numberOfSCCLAlgorithms;
+  NCCLCHECK(ncclCudaCalloc(&comm->mscclAlgoShared.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  // MSCCL algo is copied to the device side
+  for (int i = 0; i < comm->numberOfMSCCLAlgorithms; i++)
+    comm->hostDevComm.mscclAlgos[i] = comm->mscclAlgos[i];
+  comm->hostDevComm.mscclAlgoShared = comm->mscclAlgoShared;
+  comm->hostDevComm.numberOfMSCCLAlgorithms = comm->numberOfMSCCLAlgorithms;
   
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaCalloc(&comm->devComm, 1));
@@ -774,21 +774,21 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     collNetGraph.typeInter = std::min(allGather3Data[i].collNet.typeInter, collNetGraph.typeInter);
   }
 
-  // Read SCCL algorithms first, but do not connect them yet.
-  int scclMinRequireNChannels = 0;
-  int numValidSCCLAlgos; // We only use this at connect site
-  if (getenv("SCCL_XML_FILES") || getenv("SCCL_CONFIG")) {
-    if (getenv("SCCL_XML_FILES")){
-      NCCLCHECK(scclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("SCCL_XML_FILES")));
+  // Read MSCCL algorithms first, but do not connect them yet.
+  int mscclMinRequireNChannels = 0;
+  int numValidMSCCLAlgos; // We only use this at connect site
+  if (getenv("MSCCL_XML_FILES") || getenv("MSCCL_CONFIG")) {
+    if (getenv("MSCCL_XML_FILES")){
+      NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("MSCCL_XML_FILES")));
     }
-    if (getenv("SCCL_CONFIG")) {
-      NCCLCHECK(scclGetAllAlgoFromSCCLConfigAndSetComm(comm, getenv("SCCL_CONFIG")));
+    if (getenv("MSCCL_CONFIG")) {
+      NCCLCHECK(mscclGetAllAlgoFromMSCCLConfigAndSetComm(comm, getenv("MSCCL_CONFIG")));
     }
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
-      struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
-      if (scclAlgo->isValid){
-        // Make sure SCCL at least has scclAlgo->nChannels
-        scclMinRequireNChannels = std::max(scclMinRequireNChannels, scclAlgo->nChannels);
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        // Make sure MSCCL at least has mscclAlgo->nChannels
+        mscclMinRequireNChannels = std::max(mscclMinRequireNChannels, mscclAlgo->nChannels);
       }
     }
   }
@@ -802,7 +802,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
 
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, scclMinRequireNChannels));
+  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, mscclMinRequireNChannels));
   if (comm->nNodes > 1 &&
       ncclParamCollNetEnable() == 1 &&
       collNetSupport() && collNetGraph.nChannels) {
@@ -884,29 +884,29 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
   free(rings);
 
-  numValidSCCLAlgos = 0;
+  numValidMSCCLAlgos = 0;
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-  for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++){
-    struct scclAlgorithm* scclAlgo = &comm->scclAlgos[scclAlgoIndex];
-    if (scclAlgo->isValid){
-      if (scclAlgo->nChannels > comm->nChannels){
-        scclAlgo->isValid = false;
+  for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
+    if (mscclAlgo->isValid){
+      if (mscclAlgo->nChannels > comm->nChannels){
+        mscclAlgo->isValid = false;
         continue;
       }
-      // Connect SCCL graph only if it was a valid algorithm
-      for (int c=0; c<scclAlgo->nChannels; c++) {
+      // Connect MSCCL graph only if it was a valid algorithm
+      for (int c=0; c<mscclAlgo->nChannels; c++) {
         struct ncclChannel* channel = comm->channels+c;
         if (comm->nRanks == 1) continue;
-        struct scclChannelInfo* scclChannel = &scclAlgo->scclChannels[c];
-        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, scclChannel->nrecvPeers, scclChannel->recvPeers, scclChannel->nsendPeers, scclChannel->sendPeers), ret, affinity_restore);
+        struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nrecvPeers, mscclChannel->recvPeers, mscclChannel->nsendPeers, mscclChannel->sendPeers), ret, affinity_restore);
       }
-      numValidSCCLAlgos++;
+      numValidMSCCLAlgos++;
     }
   }
-  if (numValidSCCLAlgos > 0){
+  if (numValidMSCCLAlgos > 0){
     NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 1), ret, affinity_restore);
-    INFO(NCCL_INIT, "Connected %d SCCL algorithms", numValidSCCLAlgos);
+    INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
   }
 
   // Compute time models for algorithm and protocol combinations.

@@ -17,7 +17,7 @@
 #define NCCL_FUNC4(func, redop, type) \
   (void*)NCCL_FUNC5(func, TREE,    redop, type), \
   (void*)NCCL_FUNC5(func, RING,    redop, type), \
-  (void*)NCCL_FUNC5(func, SCCL,    redop, type), \
+  (void*)NCCL_FUNC5(func, MSCCL,    redop, type), \
   (void*)NCCL_FUNC5(func, COLLNET, redop, type)
 
 // Must be consistent with ncclDataType_t
@@ -103,7 +103,7 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
   if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
-  if (!base) e->scclAlgoIndex = -1;
+  if (!base) e->mscclAlgoIndex = -1;
   e->active = 1;
   e->index = (setOpIndex == -1) ? opIndex : setOpIndex;
   if (base) base->index = e->index;
@@ -120,7 +120,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
   }
 
   // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
-  // SCCL: Total number of threadblocks are calculated here.
+  // MSCCL: Total number of threadblocks are calculated here.
   int totalNBlocks = 0;
   for (int c=0; c<params->gridDim.x; c++) {
     struct ncclChannel* channel = comm->channels+c;
@@ -135,21 +135,21 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
     int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
     struct ncclWorkElem* lastElem = channel->workFifo[channelTailIndex].elems;
     channel->workFifo[channelTailIndex].elems[0].active = 2;
-    if (lastElem->scclAlgoIndex >= 0){
-      struct scclAlgorithm* scclAglo = &comm->scclAlgos[lastElem->scclAlgoIndex];
-      if (c >= scclAglo->nChannels){
-        WARN("SCCL algorithm's nchannels is less than the gridDim.x size!");
+    if (lastElem->mscclAlgoIndex >= 0){
+      struct mscclAlgorithm* mscclAglo = &comm->mscclAlgos[lastElem->mscclAlgoIndex];
+      if (c >= mscclAglo->nChannels){
+        WARN("MSCCL algorithm's nchannels is less than the gridDim.x size!");
         return ncclInternalError;
       }
-      totalNBlocks += scclAglo->scclChannels[c].nBlocksForChannel;
+      totalNBlocks += mscclAglo->mscclChannels[c].nBlocksForChannel;
     } else {
       totalNBlocks++;
     }
   }
 
-  // set the gridDim accordingly to the number of active elements. if the algorithm is non-SCCL, 
-  // it remains the same. otherwise, it is set to the total # threadblocks necessary for SCCL algorithm
-  // this is the first time SCCL disassociates thread block and channels
+  // set the gridDim accordingly to the number of active elements. if the algorithm is non-MSCCL, 
+  // it remains the same. otherwise, it is set to the total # threadblocks necessary for MSCCL algorithm
+  // this is the first time MSCCL disassociates thread block and channels
   params->gridDim.x = totalNBlocks;
 
   // Find the first operation, choose the kernel accordingly and pass it
@@ -163,8 +163,8 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
     elem->active = 0;
   }
 
-  if (elem->scclAlgoIndex >= 0) {
-    for (int c=0; c<comm->scclAlgos[elem->scclAlgoIndex].nChannels; c++) {
+  if (elem->mscclAlgoIndex >= 0) {
+    for (int c=0; c<comm->mscclAlgos[elem->mscclAlgoIndex].nChannels; c++) {
       struct ncclChannel* channel = comm->channels+c;
       struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
       struct ncclWorkElem* elem = work->elems;
@@ -172,7 +172,7 @@ static ncclResult_t setupLaunch(struct ncclComm* comm, struct cudaLaunchParams* 
     }
   }
   if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
-    comm->scclAlgoShared.flagsNeedReset = 1;
+    comm->mscclAlgoShared.flagsNeedReset = 1;
 
   params->func = ncclKerns[elem->funcIndex];
   return ncclSuccess;
@@ -323,19 +323,19 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   if (info->comm->collNetSupport)
     NCCLCHECK(collNetReduceSupport(info->datatype, info->op, &collNetTypeSupport));
   if (collNetTypeSupport != 1) nAlgos--;
-  if (info->scclAlgoIndex >= 0){
-    // SCCL algorithm is already selected.
-    info->algorithm = NCCL_ALGO_SCCL;
-    info->protocol = info->comm->scclAlgos[info->scclAlgoIndex].protocol;
+  if (info->mscclAlgoIndex >= 0){
+    // MSCCL algorithm is already selected.
+    info->algorithm = NCCL_ALGO_MSCCL;
+    info->protocol = info->comm->mscclAlgos[info->mscclAlgoIndex].protocol;
   } else {
     for (int a=0; a<nAlgos; a++) {
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
         float time;
-        int scclAlgoIndex = -1;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, &time, &scclAlgoIndex, info->comm));
+        int mscclAlgoIndex = -1;
+        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, &time, &mscclAlgoIndex, info->comm));
         if (time >= 0 && time < minTime) {
           info->algorithm = a;
-          info->scclAlgoIndex = scclAlgoIndex;
+          info->mscclAlgoIndex = mscclAlgoIndex;
           info->protocol = p;
           minTime = time;
         }
@@ -361,13 +361,13 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info) {
   if (info->protocol == NCCL_PROTO_SIMPLE) nt += WARP_SIZE; // Extra warp for sync
   if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_TREE) nt += WARP_SIZE;
   info->nChannels = nc;
-  // SCCL needs exactly scclAlgo.nChannels.
-  if (info->algorithm == NCCL_ALGO_SCCL){
-    if (comm->scclAlgos[info->scclAlgoIndex].nChannels > comm->nChannels){
-      WARN("SCCL: Comm must have at least %d channels at this point but ended up with %d channels.", comm->scclAlgos[info->scclAlgoIndex].nChannels, comm->nChannels);
+  // MSCCL needs exactly mscclAlgo.nChannels.
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    if (comm->mscclAlgos[info->mscclAlgoIndex].nChannels > comm->nChannels){
+      WARN("MSCCL: Comm must have at least %d channels at this point but ended up with %d channels.", comm->mscclAlgos[info->mscclAlgoIndex].nChannels, comm->nChannels);
       return ncclInternalError;
     }
-    info->nChannels = comm->scclAlgos[info->scclAlgoIndex].nChannels;
+    info->nChannels = comm->mscclAlgos[info->mscclAlgoIndex].nChannels;
   }
   info->nThreads = nt;
   return ncclSuccess;
@@ -382,13 +382,13 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUp : ncclPatternPipelineTo; break;
     case ncclFuncReduceScatter:
     case ncclFuncAllGather:
-      info->pattern = info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRing; break;
+      info->pattern = info->algorithm == NCCL_ALGO_MSCCL ? ncclPatternMsccl : ncclPatternRing; break;
     case ncclFuncAllReduce:
-      info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : info->algorithm == NCCL_ALGO_SCCL ? ncclPatternSccl : ncclPatternRingTwice; break;
+      info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : info->algorithm == NCCL_ALGO_MSCCL ? ncclPatternMsccl : ncclPatternRingTwice; break;
     case ncclFuncAllToAll:
-      info->pattern = ncclPatternSccl; break;
+      info->pattern = ncclPatternMsccl; break;
     case ncclFuncCustomCollective:
-      info->pattern = ncclPatternSccl; break;
+      info->pattern = ncclPatternMsccl; break;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -410,10 +410,10 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
-    case ncclPatternSccl:
-      // SCCL needs a specific number of steps per loop for each channel/connection. it is set properly in ncclProxySaveColl
+    case ncclPatternMsccl:
+      // MSCCL needs a specific number of steps per loop for each channel/connection. it is set properly in ncclProxySaveColl
       // n chunks per loop identifies how many chunks from the input buffer is processed in each iteration.
-      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->scclAlgos[info->scclAlgoIndex].nchunksPerLoop; break;
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->mscclAlgos[info->mscclAlgoIndex].nchunksPerLoop; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -421,18 +421,18 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-static ncclResult_t adjustSCCLScratchPad(struct ncclInfo* info) {
-  struct scclAlgorithm* scclAlgo = &info->comm->scclAlgos[info->scclAlgoIndex];
-  struct scclAlgorithmShared* scclAlgoShared = &info->comm->scclAlgoShared;
-  size_t sizeNeeded = info->nBytes * (size_t)DIVUP(scclAlgo->nScratchChunks, scclAlgo->nchunksPerLoop);
-  if (sizeNeeded > scclAlgoShared->scratchBufferSize){
-    if (scclAlgoShared->scratchBufferSize > 0 && scclAlgoShared->scratchBuffer != NULL){
-      CUDACHECK(cudaFree(scclAlgoShared->scratchBuffer));
+static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
+  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclAlgos[info->mscclAlgoIndex];
+  struct mscclAlgorithmShared* mscclAlgoShared = &info->comm->mscclAlgoShared;
+  size_t sizeNeeded = info->nBytes * (size_t)DIVUP(mscclAlgo->nScratchChunks, mscclAlgo->nchunksPerLoop);
+  if (sizeNeeded > mscclAlgoShared->scratchBufferSize){
+    if (mscclAlgoShared->scratchBufferSize > 0 && mscclAlgoShared->scratchBuffer != NULL){
+      CUDACHECK(cudaFree(mscclAlgoShared->scratchBuffer));
     }
-    NCCLCHECK(ncclCudaCalloc((char**)&scclAlgoShared->scratchBuffer, sizeNeeded));
-    scclAlgoShared->scratchBufferSize = sizeNeeded;
+    NCCLCHECK(ncclCudaCalloc((char**)&mscclAlgoShared->scratchBuffer, sizeNeeded));
+    mscclAlgoShared->scratchBufferSize = sizeNeeded;
   }
-  info->scratchbuff = scclAlgoShared->scratchBuffer;
+  info->scratchbuff = mscclAlgoShared->scratchBuffer;
   return ncclSuccess;
 }
 
@@ -444,13 +444,13 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
-  if (info->algorithm == NCCL_ALGO_SCCL){
-    if (info->comm->scclAlgos[info->scclAlgoIndex].nChannels == 0){
-      WARN("SCCL algorithm's nchannels shouldn't be 0!");
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    if (info->comm->mscclAlgos[info->mscclAlgoIndex].nChannels == 0){
+      WARN("MSCCL algorithm's nchannels shouldn't be 0!");
       return ncclInternalError;
     }
-    // adjust SCCL scratch 
-    NCCLCHECK(adjustSCCLScratchPad(info));
+    // adjust MSCCL scratch 
+    NCCLCHECK(adjustMSCCLScratchPad(info));
   }
 
   work->sendbuff = info->sendbuff;
@@ -460,14 +460,14 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   work->coll.count = info->count;
   work->coll.nChannels = info->nChannels;
   work->nThreads = info->nThreads;
-  work->scclAlgoIndex = info->scclAlgoIndex;
-  work->scclComputeOp = info->scclComputeOp;
+  work->mscclAlgoIndex = info->mscclAlgoIndex;
+  work->mscclComputeOp = info->mscclComputeOp;
 
   work->funcIndex = FUNC_INDEX(info->coll, info->op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_SCCL))) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_MSCCL))) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_MSCCL))) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize
@@ -508,28 +508,28 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-  // sccl might use multiple channels per loop. therefore, the division by info->comm->scclAlgo.nChannels is necessary if the algo is SCCL.
-  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_SCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
-  // nstepsPerloop for sccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
+  // msccl might use multiple channels per loop. therefore, the division by info->comm->mscclAlgo.nChannels is necessary if the algo is MSCCL.
+  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_MSCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  // nstepsPerloop for msccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
   proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
   proxyArgs->sliceSteps = sliceSteps;
   proxyArgs->chunkSteps = chunkSteps;
   proxyArgs->protocol = info->protocol;
   proxyArgs->dtype = info->datatype;
   proxyArgs->redOp = info->op;
-  // SCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
-  if (info->algorithm == NCCL_ALGO_SCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
-    WARN("SCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
+  // MSCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
+  if (info->algorithm == NCCL_ALGO_MSCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
+    WARN("MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
     return ncclInvalidUsage;
   }
 
-  if (info->algorithm == NCCL_ALGO_SCCL) {
+  if (info->algorithm == NCCL_ALGO_MSCCL) {
     if (info->nBytes > 0){
-      proxyArgs->scclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
-      work->scclMaxAllowedCount = proxyArgs->scclMaxAllowedCount;
+      proxyArgs->mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+      work->mscclMaxAllowedCount = proxyArgs->mscclMaxAllowedCount;
     } else {
-      proxyArgs->scclMaxAllowedCount = 0;
-      work->scclMaxAllowedCount = 0;
+      proxyArgs->mscclMaxAllowedCount = 0;
+      work->mscclMaxAllowedCount = 0;
     }
   }
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
@@ -571,9 +571,9 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
     CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
   }*/
 
-  if (info->comm->scclAlgoShared.flagsNeedReset == 1){
-    CUDACHECK(cudaMemsetAsync(info->comm->scclAlgoShared.flags, 0, sizeof(scclFlag) * SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
-    info->comm->scclAlgoShared.flagsNeedReset = 0;
+  if (info->comm->mscclAlgoShared.flagsNeedReset == 1){
+    CUDACHECK(cudaMemsetAsync(info->comm->mscclAlgoShared.flags, 0, sizeof(mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+    info->comm->mscclAlgoShared.flagsNeedReset = 0;
   }
 
   struct ncclWorkElem work;
@@ -585,21 +585,21 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
 
   int nChannels = work.coll.nChannels;
   int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
-  struct scclAlgorithm* scclAlgo = NULL;
-  if (info->algorithm == NCCL_ALGO_SCCL)
-    scclAlgo = &info->comm->scclAlgos[info->scclAlgoIndex];
-  if (info->algorithm == NCCL_ALGO_SCCL && scclAlgo->nChannels == 0) {
-    WARN("scclAlgo.nChannels must be positive!\n");
+  struct mscclAlgorithm* mscclAlgo = NULL;
+  if (info->algorithm == NCCL_ALGO_MSCCL)
+    mscclAlgo = &info->comm->mscclAlgos[info->mscclAlgoIndex];
+  if (info->algorithm == NCCL_ALGO_MSCCL && mscclAlgo->nChannels == 0) {
+    WARN("mscclAlgo.nChannels must be positive!\n");
     return ncclInternalError;
   }
 
-  // SCCL needs work->index to be set the same for all channels for info
+  // MSCCL needs work->index to be set the same for all channels for info
   int setOpIndex = -1;
   for (int bid=0; bid<nChannels*nSubChannels; bid++) {
     int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
     struct ncclChannel* channel = info->comm->channels+channelId;
-    if (info->algorithm == NCCL_ALGO_SCCL && channelId >= scclAlgo->nChannels) {
-      WARN("channelId must be always within the range of scclAlgo nchannels!\n");
+    if (info->algorithm == NCCL_ALGO_MSCCL && channelId >= mscclAlgo->nChannels) {
+      WARN("channelId must be always within the range of mscclAlgo nchannels!\n");
       return ncclInternalError;
     }
     // Proxy
@@ -609,12 +609,12 @@ ncclResult_t ncclSaveKernel(struct ncclInfo* info) {
       info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
     }
 
-    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->scclAlgos[info->scclAlgoIndex]));
+    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->mscclAlgos[info->mscclAlgoIndex]));
 
     info->comm->myParams->gridDim.x++;
     work.coll.bid = bid % nChannels;
     NCCLCHECK(getNextOp(channel, NULL, &work, setOpIndex));
-    if (bid == 0 && info->algorithm == NCCL_ALGO_SCCL) setOpIndex = work.index;
+    if (bid == 0 && info->algorithm == NCCL_ALGO_MSCCL) setOpIndex = work.index;
   }
   return ncclSuccess;
 }
@@ -639,8 +639,8 @@ ncclResult_t ncclSaveCommKernels(ncclComm_t comm) {
       struct ncclInfo* info = comm->asyncOps+c;
       info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
       NCCLCHECK(ncclSaveKernel(info));
-      if (info->algorithm == NCCL_ALGO_SCCL){
-        WARN("SCCL algorithms can only be used asynchronously with one operation");
+      if (info->algorithm == NCCL_ALGO_MSCCL){
+        WARN("MSCCL algorithms can only be used asynchronously with one operation");
         return ncclInternalError;
       }
     }

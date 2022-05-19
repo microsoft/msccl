@@ -6,7 +6,7 @@ Microsoft Collective Communication Library (MSCCL) is a platform to execute cust
 
 MSCCL is an inter-accelerator communication framework that is built on top of [NCCL](https://github.com/nvidia/nccl) and uses its building blocks to execute custom-written collective communication algorithms. MSCCL vision is to provide a unified, efficient, and scalable framework for executing collective communication algorithms across multiple accelerators. To achieve this, MSCCL has multiple capabilities:
 
-- Programmibility: Inter-connection among accelerators have different latencies and bandwidths. Therefore, a generic collective communication algorithm does not necessarily well for all topologies and buffer sizes. MSCCL vision is to provide a unique collective communication algorithm for each topology and buffer size. In case no algorithm is available, MSCCL will automatically fall back to a NCCL's generic algorithm. For information regarding how to select a specific algorithm, please refer to [SCCL](https://github.com/microsoft/sccl).
+- Programmibility: Inter-connection among accelerators have different latencies and bandwidths. Therefore, a generic collective communication algorithm does not necessarily well for all topologies and buffer sizes. MSCCL vision is to provide a unique collective communication algorithm for each topology and buffer size. In case no algorithm is available, MSCCL will automatically fall back to a NCCL's generic algorithm. For information regarding how to select a specific algorithm, please refer to [MSCCL](https://github.com/microsoft/sccl).
 - Topology-Aware Drivers: each accelerator and type of inter-connect requires a driver to complete a primtive send and receive operation. MSCCL provides a link-specific driver for each Azure hardware to maximize the output of the connection.
 - Profiling: MSCCL has a profiling tool [NPKit](https://github.com/microsoft/npkit) which provides detailed timeline for each primitive send and receive operation to understand the bottlenecks in a given collective communication algorithms.
 
@@ -43,16 +43,16 @@ $ cd ../
 To evaluate the performance, execute the following command line on an Azure NDv4 node:
 
 ```shell
-$ mpirun -np 8 -mca pml ob1 --mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 -mca  coll_hcoll_enable 0  -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x NCCL_NET_SHARED_BUFFERS=0 -x SCCL_XML_FILES=msccl/src/xml_generator/ar_ll.xml:msccl/src/xml_generator/ar_ll128.xml -x NCCL_ALGO=SCCL,RING,TREE -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  nccl-tests/build/all_reduce_perf -b 128 -e 64MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
+$ mpirun -np 8 -mca pml ob1 --mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 -mca  coll_hcoll_enable 0  -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x NCCL_NET_SHARED_BUFFERS=0 -x SCCL_XML_FILES=msccl/src/xml_generator/ar_ll.xml:msccl/src/xml_generator/ar_ll128.xml -x NCCL_ALGO=MSCCL,RING,TREE -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  nccl-tests/build/all_reduce_perf -b 128 -e 64MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
 ```
 
 If everything is installed correctly, you should see the following output in log:
 
 ```shell
-[0] NCCL INFO Connected 2 SCCL algorithms
+[0] NCCL INFO Connected 2 MSCCL algorithms
 ```
 
-The two algorithms are the two XML files specified by `SCCL_XML_FILES` in the command line. You may remove `SCCL` among `NCCL_ALGO` algorithms to disable the custom algorithms
+The two algorithms are the two XML files specified by `SCCL_XML_FILES` in the command line. You may remove `MSCCL` among `NCCL_ALGO` algorithms to disable the custom algorithms
 
 ## Build
 

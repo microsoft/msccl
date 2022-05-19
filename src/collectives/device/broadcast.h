@@ -162,7 +162,7 @@ class ncclFunction<ncclFuncBroadcast, NCCL_ALGO_COLLNET, PROTO, REDOP, T, UNROLL
 };
 
 template<int PROTO, class REDOP, typename T, int UNROLL>
-class ncclFunction<ncclFuncBroadcast, NCCL_ALGO_SCCL, PROTO, REDOP, T, UNROLL> {
+class ncclFunction<ncclFuncBroadcast, NCCL_ALGO_MSCCL, PROTO, REDOP, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {}
 };

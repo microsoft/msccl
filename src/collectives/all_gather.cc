@@ -15,6 +15,6 @@ ncclResult_t ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcoun
   struct ncclInfo info = { ncclFuncAllGather, "AllGather",
     sendbuff, recvbuff, ((char*)sendbuff == (char*)recvbuff + (ssize_t)(comm->rank * sendcount * ncclTypeSize(datatype))), sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
     ALLGATHER_CHUNKSTEPS, ALLGATHER_SLICESTEPS };
-  info.scclAlgoIndex = -1;
+  info.mscclAlgoIndex = -1;
   return ncclEnqueueCheck(&info);
 }

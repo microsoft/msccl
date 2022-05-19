@@ -50,29 +50,29 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
   size_t allcount = sendcount * comm->nRanks;
   size_t nbytes = allcount * ncclTypeSize(datatype);
 
-  if (comm->nScclRegistrations > 0)
+  if (comm->nMscclRegistrations > 0)
   {
-    for (int i = 0; i < comm->nScclRegistrations; ++i)
+    for (int i = 0; i < comm->nMscclRegistrations; ++i)
     {
-      struct scclRegistration *reg = &comm->scclRegistrations[i];
+      struct mscclRegistration *reg = &comm->mscclRegistrations[i];
       if (reg->minBytes <= nbytes && (nbytes < reg->maxBytes || reg->maxBytes == -1))
       {
-        struct scclAlgorithm *scclAlgo = &comm->scclAlgos[reg->algoIndex];
-        if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % scclAlgo->nchunksPerLoop) == 0))
+        struct mscclAlgorithm *mscclAlgo = &comm->mscclAlgos[reg->algoIndex];
+        if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) && ((allcount % mscclAlgo->nchunksPerLoop) == 0))
         {
           // if it was the 2D algorithm, select it first.
-          if (!strcmp(scclAlgo->name, "2D")) {
+          if (!strcmp(mscclAlgo->name, "2D")) {
             return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
           } else {
             NVTX3_FUNC_RANGE_IN(nccl_domain);
             struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
                                     sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-                                    SCCL_CHUNKSTEPS, SCCL_SLICESTEPS};
-            info.scclAlgoIndex = reg->algoIndex;
-            auto curProto = scclAlgo->protocol;
-            scclAlgo->protocol = reg->protocol;
+                                    MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
+            info.mscclAlgoIndex = reg->algoIndex;
+            auto curProto = mscclAlgo->protocol;
+            mscclAlgo->protocol = reg->protocol;
             auto ret = ncclEnqueueCheck(&info);
-            scclAlgo->protocol = curProto;
+            mscclAlgo->protocol = curProto;
             return ret;
           }
         }
@@ -81,20 +81,20 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
   }
   else
   {
-    for (int scclAlgoIndex = 0; scclAlgoIndex < comm->numberOfSCCLAlgorithms; scclAlgoIndex++)
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++)
     {
-      struct scclAlgorithm *scclAlgo = &comm->scclAlgos[scclAlgoIndex];
-      if ((scclAlgo->isValid) && (scclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == scclAlgo->ngpus) && ((allcount % comm->scclAlgos[scclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= scclAlgo->minBytes) && (nbytes < scclAlgo->maxBytes))
+      struct mscclAlgorithm *mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
+      if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) && ((allcount % comm->mscclAlgos[mscclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= mscclAlgo->minBytes) && (nbytes < mscclAlgo->maxBytes))
       {
         // if it was the 2D algorithm, select it first.
-        if (!strcmp(scclAlgo->name, "2D")) {
+        if (!strcmp(mscclAlgo->name, "2D")) {
           return msccl2DAllToAll(sendbuff, recvbuff, sendcount, datatype, comm, stream);
         } else {
           NVTX3_FUNC_RANGE_IN(nccl_domain);
           struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
                                   sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
-                                  SCCL_CHUNKSTEPS, SCCL_SLICESTEPS};
-          info.scclAlgoIndex = scclAlgoIndex;
+                                  MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
+          info.mscclAlgoIndex = mscclAlgoIndex;
           return ncclEnqueueCheck(&info);
         }
       }
