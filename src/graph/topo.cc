@@ -1102,7 +1102,7 @@ ncclResult_t scclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const c
     } else {
       WARN("SCCL: algorithm %s failed to initialize. Will be ignored.", token);
     }
-    token = strtok_r(NULL, ",", &tmpStr);
+    token = strtok_r(NULL, ":", &tmpStr);
   }
   free(tokStr);
   return ncclSuccess;
