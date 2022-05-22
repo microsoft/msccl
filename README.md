@@ -24,7 +24,7 @@ In order to use MSCCL customized algorithms, you may follow these steps to use t
 
 Steps to install MSCCL:
 
-```shell
+```sh
 $ git clone https://github.com/microsoft/msccl.git
 $ cd msccl/
 $ make -j src.build
@@ -33,46 +33,57 @@ $ cd ../
 
 Then, follow these steps to install [nccl-tests](https://github.com/nvidia/nccl-tests) for performance evaluation:
 
-```shell
+```sh
 $ git clone https://github.com/nvidia/nccl-tests.git
 $ cd nccl-tests/
 $ make MPI=1 NCCL_HOME=../msccl/build/ -j 
 $ cd ../
 ```
 
-To evaluate the performance, execute the following command line on an Azure NDv4 node:
+Next install [MSCCL toolkit](https://github.com/microsoft/msccl-tools) to compile a few custom algorithms:
 
-```shell
-$ mpirun -np 8 -mca pml ob1 --mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 -mca  coll_hcoll_enable 0  -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x NCCL_NET_SHARED_BUFFERS=0 -x MSCCL_XML_FILES=allpairs.xml -x NCCL_ALGO=MSCCL,RING,TREE -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7  nccl-tests/build/all_reduce_perf -b 128 -e 64MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
+```console
+$ git clone https://github.com/microsoft/msccl-tools.git
+$ cd msccl-tools/
+$ pip install .
+$ cd ../
+$ python sccl/examples/scclang/allreduce_a100_allpairs.py --protocol=LL 4 > test.xml
+$ cd ../
+```
+
+The compiler's generated code is an XML file (`test.xml`) that is fed to MSCCL runtime. To evaluate its performance, execute the following command line on an Azure NDv4 node or any 8xA100 system:
+
+```sh
+$ mpirun -np 8 -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x MSCCL_XML_FILES=test.xml -x NCCL_ALGO=MSCCL,RING,TREE  nccl-tests/build/all_reduce_perf -b 128 -e 32MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
 ```
 
 If everything is installed correctly, you should see the following output in log:
 
-```shell
-[0] NCCL INFO Connected 2 MSCCL algorithms
+```sh
+[0] NCCL INFO Connected 1 MSCCL algorithms
 ```
 
-The two algorithms are the two XML files specified by `MSCCL_XML_FILES` in the command line. You may remove `MSCCL` among `NCCL_ALGO` algorithms to disable the custom algorithms
+`test.xml` is passed in to the runtime by `MSCCL_XML_FILES` in the command line. You may evaluate the performance of `test.xml` by comparing in-place (the new algorithm) vs out-of-place (default ring algorithm) and it should up-to 2x faster on 8xA100 NVLink-interconnected GPUs. [MSCCL toolkit](https://github.com/microsoft/msccl-tools) has a rich set of algorithms for different Azure SKUs and collective operations with significant speedups over vanilla NCCL.
 
 ## Build
 
 To build the library:
 
-```shell
+```sh
 $ cd msccl
 $ make -j src.build
 ```
 
 If CUDA is not installed in the default /usr/local/cuda path, you can define the CUDA path with :
 
-```shell
+```sh
 $ make src.build CUDA_HOME=<path to cuda install>
 ```
 
 MSCCL will be compiled and installed in `build/` unless `BUILDDIR` is set.
 
 By default, MSCCL is compiled for all supported architectures. To accelerate the compilation and reduce the binary size, consider redefining `NVCC_GENCODE` (defined in `makefiles/common.mk`) to only include the architecture of the target platform :
-```shell
+```sh
 $ make -j src.build NVCC_GENCODE="-gencode=arch=compute_80,code=sm_80"
 ```
 
@@ -81,7 +92,7 @@ $ make -j src.build NVCC_GENCODE="-gencode=arch=compute_80,code=sm_80"
 To install MSCCL on the system, create a package then install it as root.
 
 Debian/Ubuntu :
-```shell
+```sh
 $ # Install tools to create debian packages
 $ sudo apt install build-essential devscripts debhelper fakeroot
 $ # Build NCCL deb package
@@ -90,7 +101,7 @@ $ ls build/pkg/deb/
 ```
 
 RedHat/CentOS :
-```shell
+```sh
 $ # Install tools to create rpm packages
 $ sudo yum install rpm-build rpmdevtools
 $ # Build NCCL rpm package
@@ -99,21 +110,14 @@ $ ls build/pkg/rpm/
 ```
 
 OS-agnostic tarball :
-```shell
+```sh
 $ make pkg.txz.build
 $ ls build/pkg/txz/
 ```
 
-## Tests
+## PyTorch Integration
 
-Tests for MSCCL are maintained separately at https://github.com/nvidia/nccl-tests.
-
-```shell
-$ git clone https://github.com/nvidia/nccl-tests.git
-$ cd nccl-tests
-$ make
-$ ./build/all_reduce_perf -b 8 -e 256M -f 2 -g <ngpus>
-```
+For integration with PyTorch, follow the dockerfile in this repo. It has an example for how to replace default NCCL with MSCCL.
 
 ## Copyright
 
