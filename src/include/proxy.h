@@ -23,14 +23,14 @@ struct ncclProxyArgs {
   int sliceSteps;
   int chunkSteps;
   int nsteps;
-  int nLoops; // SCCL uses this to calculate number of proxies
+  int nLoops; // MSCCL uses this to calculate number of proxies
   uint64_t opCount;
   int protocol;
   int segment; // Only for profiling
   ncclDataType_t dtype;
   ncclRedOp_t redOp;
   int state;   // add component before this line -- it is left out during initialization
-  uint32_t scclMaxAllowedCount; // SCCL uses this to adjust nsteps for proxy
+  uint32_t mscclMaxAllowedCount; // MSCCL uses this to adjust nsteps for proxy
 
   // Internal state
   uint64_t posted;
@@ -81,7 +81,7 @@ enum proxyMode {
   proxyTo = 2
 };
 
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct scclAlgorithm* scclAlgo);
+ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct mscclAlgorithm* mscclAlgo);
 ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel, int segment);
 ncclResult_t ncclProxyStart(struct ncclComm* comm);
 ncclResult_t ncclProxyCreate(struct ncclComm* comm);

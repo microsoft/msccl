@@ -231,7 +231,7 @@ int ncclMaxNchannels() {
   return maxNchannels;
 }
 
-ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns, struct ncclTopoRanks** allTopoRanks, int* rings, int scclMinRequireNChannels) {
+ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns, struct ncclTopoRanks** allTopoRanks, int* rings, int mscclMinRequireNChannels) {
   // Gather data from all ranks
   int *ringRecv, *ringSend, *ringPrev, *ringNext, *treeToParent, *treeToChild0, *treeToChild1;
   int nranks = comm->nRanks;
@@ -270,7 +270,7 @@ ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePa
   // We permit combining max, then min, to only use the first channels, then duplicate them.
   nChannels = comm->nChannels = std::min((int)ncclMaxNchannels(), nChannels);
   int c;
-  for (c=nChannels; c<std::max(ncclMinNchannels(),scclMinRequireNChannels); c++) {
+  for (c=nChannels; c<std::max(ncclMinNchannels(),mscclMinRequireNChannels); c++) {
     memcpy(ringPrev+c*nranks, ringPrev+(c-nChannels)*nranks, nranks*sizeof(int));
     memcpy(ringNext+c*nranks, ringNext+(c-nChannels)*nranks, nranks*sizeof(int));
     memcpy(comm->channels+c, comm->channels+c-nChannels, sizeof(struct ncclChannel));

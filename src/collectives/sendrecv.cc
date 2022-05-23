@@ -16,7 +16,7 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
   struct ncclInfo info = { ncclFuncSendRecv, "Send",
     sendbuff, NULL, 0 /* send/recv are out of place */, count, datatype, ncclSum, peer, comm, stream, /* Args */
     1, 1 };
-  info.scclAlgoIndex = -1;
+  info.mscclAlgoIndex = -1;
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
   ret = ncclEnqueueCheck(&info);

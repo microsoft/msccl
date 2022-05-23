@@ -81,15 +81,15 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
 
   struct ncclDevComm* comm = first.comm;
   int channelId = bid;
-  if (ALGO == NCCL_ALGO_SCCL){
-    channelId = comm->scclAlgos[first.scclAlgoIndex].scclTB[bid].channelId;
+  if (ALGO == NCCL_ALGO_MSCCL){
+    channelId = comm->mscclAlgos[first.mscclAlgoIndex].mscclTB[bid].channelId;
   }
   struct ncclChannel* channel = comm->channels+channelId;
   struct ncclWorkElem* w = NULL;
   uint16_t index = first.index;
 
   /* To optimize for latency, (only) the first operation is passed as argument.*/
-  if ((channelId == 0 || ALGO == NCCL_ALGO_SCCL) && first.funcIndex != FUNC_INDEX_P2P) w = &first;
+  if ((channelId == 0 || ALGO == NCCL_ALGO_MSCCL) && first.funcIndex != FUNC_INDEX_P2P) w = &first;
   int wrappedAround = 0;
   while (1) {
     if (w == NULL) {
@@ -97,7 +97,7 @@ __device__ void ncclKernel(struct ncclWorkElem first)  {
       load_coll(&shmem.localWork, channel->workFifo+index, tid, comm);
     }
     if (tid < w->nThreads) {
-      // SCCL uses w->index as an indicator for the progress this threadblock has made. in case index wraps around due to overflow, w->index is increament so that the progress invariant is still true
+      // MSCCL uses w->index as an indicator for the progress this threadblock has made. in case index wraps around due to overflow, w->index is increament so that the progress invariant is still true
       if (wrappedAround){
         if (tid == 0) {
           w->index += NCCL_MAX_OPS;
@@ -147,7 +147,7 @@ __device__ void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkEl
 #define IMPL_COLL3(func, redop, type, ncclType) \
   IMPL_COLL4(func, TREE,    redop, type, ncclType) \
   IMPL_COLL4(func, RING,    redop, type, ncclType) \
-  IMPL_COLL4(func, SCCL,    redop, type, ncclType) \
+  IMPL_COLL4(func, MSCCL,    redop, type, ncclType) \
   IMPL_COLL4(func, COLLNET, redop, type, ncclType)
 
 #if NCCL_TYPE == 0

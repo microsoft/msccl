@@ -20,7 +20,7 @@ typedef enum {
   ncclPatternTreeUpDown,
   ncclPatternCollTreeUp,
   ncclPatternCollTreeDown,
-  ncclPatternSccl
+  ncclPatternMsccl
 } ncclPattern_t;
 
 // Used to pass NCCL call information between functions
@@ -30,7 +30,7 @@ struct ncclInfo {
   // NCCL Coll Args
   const void* sendbuff;
   void* recvbuff;
-  int inplace; // needed for sccl
+  int inplace; // needed for msccl
   size_t count;
   ncclDataType_t datatype;
   ncclRedOp_t op;
@@ -42,8 +42,8 @@ struct ncclInfo {
   int sliceSteps;
   // Computed later
   int algorithm;
-  int scclAlgoIndex; // Used to indentify SCCL algorithm
-  scclComputeOp_t scclComputeOp; // sccl operation for custom compute
+  int mscclAlgoIndex; // Used to indentify MSCCL algorithm
+  mscclComputeOp_t mscclComputeOp; // msccl operation for custom compute
   int protocol;
   ncclPattern_t pattern;
   int nChannels;
@@ -56,8 +56,8 @@ struct ncclInfo {
   uint32_t delta;
   int channelId;
   
-  // SCCL scratch buffer is passed as an arg
-  // this scratchBuffer can be accessed on the device. The management of this memory is on scclAlgorithm
+  // MSCCL scratch buffer is passed as an arg
+  // this scratchBuffer can be accessed on the device. The management of this memory is on mscclAlgorithm
   void* scratchbuff;
 };
 

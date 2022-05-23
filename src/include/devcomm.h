@@ -15,10 +15,10 @@
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv} ncclFunc_t;
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
-#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/SCCL/CollNet
+#define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/MSCCL/CollNet
 #define NCCL_ALGO_TREE 0
 #define NCCL_ALGO_RING 1
-#define NCCL_ALGO_SCCL 2
+#define NCCL_ALGO_MSCCL 2
 #define NCCL_ALGO_COLLNET 3
 extern const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS];
 
@@ -117,33 +117,33 @@ struct ncclRing {
   int* devUserRanks;
 };
 
-#define SCCL_MAX_NUM_STEPS 256
-#define SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
-#define SCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
+#define MSCCL_MAX_NUM_STEPS 256
+#define MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL 32
+#define MSCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
 
-static_assert(MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= SCCL_MAX_NUM_THREAD_BLOCKS);
-static_assert(SCCL_MAX_NUM_STEPS <= 256, "SCCL interpreter doesn't allow for more than nthreads dependences");
+static_assert(MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL >= MSCCL_MAX_NUM_THREAD_BLOCKS);
+static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for more than nthreads dependences");
 
-#define SCCL_INPUT_BUFFER 0
-#define SCCL_OUTPUT_BUFFER 1
-#define SCCL_SCRATCH_BUFFER 2
+#define MSCCL_INPUT_BUFFER 0
+#define MSCCL_OUTPUT_BUFFER 1
+#define MSCCL_SCRATCH_BUFFER 2
 
-#define SCCL_SEND 0
-#define SCCL_RECV 1
-#define SCCL_RECV_COPY_SEND 2
-#define SCCL_RECV_REDUCE_SEND 3
-#define SCCL_RECV_REDUCE_COPY 4
-#define SCCL_RECV_REDUCE_COPY_SEND 5
-#define SCCL_LOCAL_COPY 6
-#define SCCL_REDUCE 7
-#define SCCL_RES_ADD 8
+#define MSCCL_SEND 0
+#define MSCCL_RECV 1
+#define MSCCL_RECV_COPY_SEND 2
+#define MSCCL_RECV_REDUCE_SEND 3
+#define MSCCL_RECV_REDUCE_COPY 4
+#define MSCCL_RECV_REDUCE_COPY_SEND 5
+#define MSCCL_LOCAL_COPY 6
+#define MSCCL_REDUCE 7
+#define MSCCL_RES_ADD 8
 
 // TODO: compress this by a lot!
-struct scclTransfer {
+struct mscclTransfer {
   int16_t srcoffset;
   int16_t dstoffset;
-  uint8_t srcbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
-  uint8_t dstbuffer; // follow SCCL_THIS_INPUT/SCCL_THIS_OUTPUT macros
+  uint8_t srcbuffer; // follow MSCCL_THIS_INPUT/MSCCL_THIS_OUTPUT macros
+  uint8_t dstbuffer; // follow MSCCL_THIS_INPUT/MSCCL_THIS_OUTPUT macros
   int16_t depencePointer; // index to the first dependence
   int16_t numDependences; // depencePointer+numDependences indicate the last dependence
   int8_t has_dependence;
@@ -153,42 +153,42 @@ struct scclTransfer {
   uint8_t count;
 };
 
-struct scclThreadBlock {
+struct mscclThreadBlock {
   int16_t sendpeer;
   int16_t recvpeer;
   uint16_t nsteps;
   int8_t channelId; // associated channel. -1 indicates a threadblock with only local copies
   // step is used to index into this array. transfers[step] is the addr to transfer.
-  int8_t dependentBid[SCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
-  int16_t dependentStep[SCCL_MAX_NUM_STEPS];
-  int16_t reductionSrcOffsets[SCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
-  struct scclTransfer transfers[SCCL_MAX_NUM_STEPS];
+  int8_t dependentBid[MSCCL_MAX_NUM_STEPS]; // -1 if not dependent on any threadblock
+  int16_t dependentStep[MSCCL_MAX_NUM_STEPS];
+  int16_t reductionSrcOffsets[MSCCL_MAX_NUM_STEPS]; // in case there are multiple reductions with the same dstwewqwqew
+  struct mscclTransfer transfers[MSCCL_MAX_NUM_STEPS];
 };
 
-#define SCCL_MAX_COUNT 72
+#define MSCCL_MAX_COUNT 72
 
-struct scclChannelInfo {
-  int sendPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+struct mscclChannelInfo {
+  int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
   // nchunksForSendPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
-  int nchunksForSendPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
+  int nchunksForSendPeer[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][MSCCL_MAX_COUNT];
   int nsendPeers;
-  int recvPeers[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  int nchunksForRecvPeer[SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][SCCL_MAX_COUNT];
+  int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  int nchunksForRecvPeer[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL][MSCCL_MAX_COUNT];
   int nrecvPeers;
   int nBlocksForChannel;
 };
 
-struct scclFlag {
+struct mscclFlag {
   uint64_t flag;
   uint64_t align[3]; // To avoid false sharing
 };
 
 // gpuId is the one that is in comm->rank
-struct scclAlgorithm {
-#define SCCL_MAX_ALGO_NAME 63
+struct mscclAlgorithm {
+#define MSCCL_MAX_ALGO_NAME 63
   // name of the algorithm in the XML
-  char name[SCCL_MAX_ALGO_NAME+1];
-  // a flag to specify if the SCCL algorithm is a valid one
+  char name[MSCCL_MAX_ALGO_NAME+1];
+  // a flag to specify if the MSCCL algorithm is a valid one
   bool isValid;
   // the type of collective this algorithm is
   ncclFunc_t collectiveType;
@@ -203,21 +203,21 @@ struct scclAlgorithm {
   // the range of size in which this algorithm is performant
   int64_t minBytes; int64_t maxBytes;
   // bid is used as an index into this array
-  struct scclThreadBlock scclTB[MAXCHANNELS*SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-  // number of channels needed by SCCL algorithm
+  struct mscclThreadBlock mscclTB[MAXCHANNELS*MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+  // number of channels needed by MSCCL algorithm
   int nChannels;
-  // the arrays in this struct can be inferred from scclTB. they are created to use NCCL API easily
-  struct scclChannelInfo scclChannels[MAXCHANNELS];
-  // number of scratch chunks that SCCL will use
+  // the arrays in this struct can be inferred from mscclTB. they are created to use NCCL API easily
+  struct mscclChannelInfo mscclChannels[MAXCHANNELS];
+  // number of scratch chunks that MSCCL will use
   int nScratchChunks;
   //Reduction Operator. If the algorithm performs reduction it will specify the reduction operator.
   //If the algorithm do not perform reduction, its reduction operator is considered as ncclSum.
   ncclRedOp_t redOp;
 };
 
-struct scclAlgorithmShared {
-  // allocate enough SCCL flags (SCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
-  struct scclFlag* flags;
+struct mscclAlgorithmShared {
+  // allocate enough MSCCL flags (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
+  struct mscclFlag* flags;
   // this flag is used to indicate we have we have looped around the channels work queue. Once that happens, the flags need to be reset.
   int flagsNeedReset;
   // declaration for scratchBuffer. This is only to be accessed by the host
@@ -252,11 +252,11 @@ struct ncclWorkElem {
   uint16_t funcIndex;
   uint16_t index;
 
-  // in SCCL algorithms, only one workelem at a time is allowed.
+  // in MSCCL algorithms, only one workelem at a time is allowed.
   uint8_t active;
-  uint32_t scclMaxAllowedCount; // this is used in scclAlgorithm to find the maximum number of counts that can be sent at the same time.
-  int scclAlgoIndex; // taken from info->scclAlgoIndex
-  scclComputeOp_t scclComputeOp; // taken from info->scclComputeOp
+  uint32_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
+  int mscclAlgoIndex; // taken from info->mscclAlgoIndex
+  mscclComputeOp_t mscclComputeOp; // taken from info->mscclComputeOp
 
   const void * sendbuff;
   void * recvbuff;
@@ -308,16 +308,16 @@ struct ncclChannel {
 };
 static_assert(sizeof(struct ncclChannel) == 0x80*sizeof(int), "ncclChannel must have a pow2 size");
 
-#define SCCL_MAX_NUM_ALGOS 4
+#define MSCCL_MAX_NUM_ALGOS 4
 struct ncclDevComm {
   int rank;
   int nRanks;
   int buffSizes[NCCL_NUM_PROTOCOLS];
 
-  // SCCL related elements
-  int numberOfSCCLAlgorithms;
-  struct scclAlgorithm scclAlgos[SCCL_MAX_NUM_ALGOS];
-  struct scclAlgorithmShared scclAlgoShared;
+  // MSCCL related elements
+  int numberOfMSCCLAlgorithms;
+  struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
+  struct mscclAlgorithmShared mscclAlgoShared;
 
   // Flag to ask NCCL kernels to abort
   volatile uint32_t *abortFlag;

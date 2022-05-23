@@ -32,7 +32,7 @@
 #define DECL3(func, redop, type) \
   DECL4(func, RING,    redop, type) \
   DECL4(func, TREE,    redop, type) \
-  DECL4(func, SCCL,    redop, type) \
+  DECL4(func, MSCCL,    redop, type) \
   DECL4(func, COLLNET, redop, type)
 
 #define DECL2(func, redop) \
@@ -75,8 +75,8 @@ DECL_ALL
 #define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
-#define SCCL_SLICESTEPS (NCCL_STEPS/4)
-#define SCCL_CHUNKSTEPS (NCCL_STEPS/2)
+#define MSCCL_SLICESTEPS (NCCL_STEPS/4)
+#define MSCCL_CHUNKSTEPS (NCCL_STEPS/2)
 #define SENDRECV_SLICEFACTOR 4
 
 #endif

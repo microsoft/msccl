@@ -4,32 +4,32 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
- #include "sccl_interpreter.h"
+ #include "msccl_interpreter.h"
  
 template<class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
+class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionSimple<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, 1);
+      mscclFunctionSimple<FUNC, T, UNROLL> mscclfunc;
+      mscclfunc.run(args, 1);
     }
 };
 
 template<class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
+class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL128<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, 1);
+      mscclFunctionLL128<FUNC, T, UNROLL> mscclfunc;
+      mscclfunc.run(args, 1);
     }
 };
 
 template<class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_SCCL, NCCL_PROTO_LL, FUNC, T, UNROLL> {
+class ncclFunction<ncclFuncCustomCollective, NCCL_ALGO_MSCCL, NCCL_PROTO_LL, FUNC, T, UNROLL> {
     public:
     __device__ void run(struct ncclWorkElem* args) {
-      scclFunctionLL<FUNC, T, UNROLL> scclfunc;
-      scclfunc.run(args, 1);
+      mscclFunctionLL<FUNC, T, UNROLL> mscclfunc;
+      mscclfunc.run(args, 1);
     }
 };
 

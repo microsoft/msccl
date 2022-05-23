@@ -189,7 +189,7 @@ static ncclResult_t SaveProxy(int type, int peer, struct ncclProxyArgs* args) {
   return ncclSuccess;
 }
 
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct scclAlgorithm* scclAlgo) {
+ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct mscclAlgorithm* mscclAlgo) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
     struct ncclRing* ring = &args->channel->ring;
     if (NeedProxy(proxyRecv, pattern, root, ring, nranks)) NCCLCHECK(SaveProxy(proxyRecv, ring->prev, args));
@@ -219,32 +219,32 @@ ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root
     NCCLCHECK(SaveProxy(proxySend, tree->down[0], args));
     NCCLCHECK(SaveProxy(proxyRecv, tree->up, args));
   }
-  if (pattern == ncclPatternSccl){
-    int relativeChannelId = args->channel->id % scclAlgo->nChannels;
-    scclChannelInfo* scclChannel = &scclAlgo->scclChannels[relativeChannelId];
-    // nsteps is adjusted here for SCCL algo
-    for (int i=0; i<scclChannel->nrecvPeers; i++){
+  if (pattern == ncclPatternMsccl){
+    int relativeChannelId = args->channel->id % mscclAlgo->nChannels;
+    mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[relativeChannelId];
+    // nsteps is adjusted here for MSCCL algo
+    for (int i=0; i<mscclChannel->nrecvPeers; i++){
       int nrecvs = 0;
-      for (int j = 0; j < SCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,args->scclMaxAllowedCount);
-        nrecvs += scclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
+      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j+1,args->mscclMaxAllowedCount);
+        nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
       }
       args->nsteps = nrecvs * args->nLoops * args->chunkSteps;
-      NCCLCHECK(SaveProxy(proxyRecv, scclChannel->recvPeers[i], args));
+      NCCLCHECK(SaveProxy(proxyRecv, mscclChannel->recvPeers[i], args));
     }
-    for (int i=0; i<scclChannel->nsendPeers; i++){
+    for (int i=0; i<mscclChannel->nsendPeers; i++){
       int nsends = 0;
-      for (int j = 0; j < SCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,args->scclMaxAllowedCount);
-        nsends += scclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
+      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
+        int ntransfersPerOp = DIVUP(j+1,args->mscclMaxAllowedCount);
+        nsends += mscclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
       }
 
       args->nsteps = nsends * args->nLoops * args->chunkSteps;
-      NCCLCHECK(SaveProxy(proxySend, scclChannel->sendPeers[i], args));
+      NCCLCHECK(SaveProxy(proxySend, mscclChannel->sendPeers[i], args));
     }
 
     if (args->connector && args->connector->conn.shared != 0){
-      WARN("SCCL needs NET_SHARED_BUFFERS set to 0");
+      WARN("MSCCL needs NET_SHARED_BUFFERS set to 0");
       return ncclInvalidArgument;
     }
   }
