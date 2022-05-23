@@ -42,12 +42,12 @@ $ cd ../
 
 Next install [MSCCL toolkit](https://github.com/microsoft/msccl-tools) to compile a few custom algorithms:
 
-```console
+```sh
 $ git clone https://github.com/microsoft/msccl-tools.git
 $ cd msccl-tools/
 $ pip install .
 $ cd ../
-$ python sccl/examples/scclang/allreduce_a100_allpairs.py --protocol=LL 4 > test.xml
+$ python msccl-tools/examples/mscclang/allreduce_a100_allpairs.py --protocol=LL 8 2 > test.xml
 $ cd ../
 ```
 
