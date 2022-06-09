@@ -12,7 +12,7 @@ OBJDIR := $(BUILDDIR)/obj/collectives/device
 
 LIBSRCFILES := all_reduce.cu broadcast.cu reduce.cu all_gather.cu reduce_scatter.cu all_to_all.cu sendrecv.cu custom_collective.cu
 
-LIBSRCFILES += functions.cu stride_copy.cu
+LIBSRCFILES += functions.cu
 
 DEPFILES   := $(patsubst %.cu, $(OBJDIR)/%.d, $(LIBSRCFILES))
 DEPENDFILES:= $(DEPFILES:%.d=%.dep)
@@ -36,11 +36,14 @@ $(RULESFILE) :
 
 -include $(RULESFILE)
 
-LIBOBJ     := $(GENOBJS) $(OBJDIR)/functions.o $(OBJDIR)/stride_copy.o
+LIBOBJ     := $(GENOBJS) $(OBJDIR)/functions.o
+
+CUSTOMLIBOBJ := $(OBJDIR)/stride_copy_lib.o
+CUSTOMDEVOBJ := $(OBJDIR)/stride_copy_dev.o
 
 -include $(DEPFILES)
 
-$(STATICLIB): $(LIBOBJ) $(DEVOBJ)
+$(STATICLIB): $(LIBOBJ) $(DEVOBJ) $(CUSTOMLIBOBJ) $(CUSTOMDEVOBJ)
 	@printf "Archiving  %-35s > %s\n" objects $@
 	ar cr $@ $^
 
@@ -63,10 +66,15 @@ $(OBJDIR)/functions.o : functions.cu $(OBJDIR)/functions.dep
 	mkdir -p `dirname $@`
 	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
 
-$(OBJDIR)/stride_copy.o : stride_copy.cu $(OBJDIR)/stride_copy.dep
+$(OBJDIR)/%_lib.o : %.cu
 	@printf "Compiling  %-35s > %s\n" $< $@
 	mkdir -p `dirname $@`
 	$(NVCC) $(NVCUFLAGS) -dc $< -o $@
+
+$(OBJDIR)/%_dev.o : $(OBJDIR)/%_lib.o
+	@printf "Compiling  %-35s > %s\n" $< $@
+	mkdir -p `dirname $@`
+	$(NVCC) $(NVCUFLAGS) -dlink $< -o $@
 
 # ... and create the device-side linked object with all those.
 $(DEVOBJ) : $(LIBOBJ)
