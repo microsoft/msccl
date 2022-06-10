@@ -533,6 +533,11 @@ class Primitives<
       userBuff += delta;
   }
 
+  __device__ __forceinline__ void setInputOuput(T* inputBuf, T* outputBuf) {
+    if (flags & RoleInput) userBuff = (T*)inputBuf;
+    if (flags & RoleOutput) userBuff = (T*)outputBuf;
+  }
+
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
   }

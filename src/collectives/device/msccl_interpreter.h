@@ -14,123 +14,139 @@
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * MSCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
-template<class FUNC, typename T, typename PRIMS_WRAPPER>
-class mscclFunction {
-  public:
-    __device__ void run(struct ncclWorkElem* args, int sizeMultiplier) {
-      struct ncclDevComm* comm = args->comm;
-      struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclAlgoIndex];
-      const int tid = threadIdx.x;
-      const int nThreads = args->nThreads; // last thread is most likely not doing anthing and used for MSCCL cross thread synchronization
-      const int bid = blockIdx.x;
-      struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTB[bid];
-      const int channelId = mscclTB->channelId;
-      struct ncclChannel* channel = comm->channels+channelId;
+namespace {
+  template<typename T, typename RedOp, typename Proto>
+  __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
+    struct ncclDevComm* comm = args->comm;
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[args->mscclAlgoIndex];
+    const int tid = threadIdx.x;
+    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int bid = blockIdx.x;
+    struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTB[bid];
+    const int channelId = mscclTB->channelId;
+    struct ncclChannel* channel = comm->channels+channelId;
 
-      // Compute pointers
-      T * thisInput = (T*)args->sendbuff;
-      T * thisOutput = (T*)args->recvbuff;
-      T * thisScratch = (T*)args->scratchbuff;
-      int recvPeer = mscclTB->recvpeer;
-      int sendPeer = mscclTB->sendpeer;
+    // User pointers for primitives
+    T* thisInput = (T*)args->sendbuff;
+    T* thisOutput = (T*)args->recvbuff;
+    T* thisScratch = (T*)args->scratchbuff;
+    int recvPeer = mscclTB->recvpeer;
+    int sendPeer = mscclTB->sendpeer;
 
-      PRIMS_WRAPPER prims{args, tid, &recvPeer, &sendPeer, thisOutput, channel};
+    const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? MSCCL_CHUNKSTEPS : 1));
+    int minChunkSize;
+    if (Proto::Id == NCCL_PROTO_LL)
+      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T));
+    if (Proto::Id == NCCL_PROTO_LL128) {
+      // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
+      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
+    }
 
-      const ssize_t loopSize = (ssize_t)prims.chunkSize;
-      const ssize_t size = args->coll.count;
-      const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/mscclAlgo->nchunksPerLoop;
-      uint32_t mscclMaxAllowedCount = args->mscclMaxAllowedCount;
+    Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
+      (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
 
-      // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
-      // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
-      const int workIndex = args->index+1;
-      volatile struct mscclFlag* mscclFlags = comm->mscclAlgoShared.flags;
-      mscclComputeOp_t* mscclComputeOp = &args->mscclComputeOp;
+    const ssize_t loopSize = chunkSize;
+    const ssize_t size = args->coll.count;
+    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/mscclAlgo->nchunksPerLoop;
+    uint32_t mscclMaxAllowedCount = args->mscclMaxAllowedCount;
 
-      for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += loopSize, iter++) {
-        size_t chunkOffset = prims.initIter(sizePerMscclChunk, gridOffset);
-        ssize_t srcoffset, dstoffset;
-        T* srcPointer, * dstPointer;
-        int step = 0;
-        for (int i = 0; i < mscclTB->nsteps; i++){
-          struct mscclTransfer* msccltran = &mscclTB->transfers[i];
-          // first wait if there is a dependence
-          int16_t dependentPointer = msccltran->depencePointer;
-          int16_t numDependences = msccltran->numDependences;
-          if (msccltran->numDependences > 0){
-            int index = tid;
-	          if (index < numDependences){
-              int8_t dependentBid = mscclTB->dependentBid[dependentPointer+index];
-              int16_t dependentStep = mscclTB->dependentStep[dependentPointer+index];
-              uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-              while ((mscclFlags + dependentBid)->flag < goalFlag){};
-            }
-            step += msccltran->numDependences-1;
-            __syncthreads();
+    // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
+    // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
+    const int workIndex = args->index+1;
+    volatile struct mscclFlag* mscclFlags = comm->mscclAlgoShared.flags;
+    mscclComputeOp_t* mscclComputeOp = &args->mscclComputeOp;
+
+    for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += loopSize, iter++) {
+      ssize_t realChunkSize;
+      if (Proto::Id == NCCL_PROTO_SIMPLE) {
+        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks));
+        realChunkSize = roundUp(realChunkSize, (nthreads-WARP_SIZE)*sizeof(uint64_t)/sizeof(T));
+      }
+      else
+        realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks*minChunkSize)*minChunkSize);
+      realChunkSize = int(realChunkSize);
+      ssize_t srcoffset, dstoffset;
+      T* srcPointer, * dstPointer;
+      int step = 0;
+      for (int i = 0; i < mscclTB->nsteps; i++){
+        struct mscclTransfer* msccltran = &mscclTB->transfers[i];
+        // first wait if there is a dependence
+        int16_t dependentPointer = msccltran->depencePointer;
+        int16_t numDependences = msccltran->numDependences;
+        if (msccltran->numDependences > 0){
+          int index = tid;
+          if (index < numDependences){
+            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+index];
+            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+index];
+            uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
+            while ((mscclFlags + dependentBid)->flag < goalFlag){};
           }
-
-          srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-          int count = msccltran->count;
-          for (int c = 0; c < count; c += mscclMaxAllowedCount) {
-            srcoffset = chunkOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
-            dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-            int thisCount = min(mscclMaxAllowedCount, count-c);
-            if (msccltran->type == MSCCL_SEND)
-              prims.send(srcPointer + srcoffset, dstoffset, thisCount);
-            else if (msccltran->type == MSCCL_RECV)
-              prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (msccltran->type == MSCCL_REDUCE) {
-              int numReductions = msccltran->numReductions;
-              int thisChunkSize = prims.nelem * thisCount;
-              dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
-              for (int index = tid; index < thisChunkSize; index += nThreads){
-                T o = dstPointer[dstoffset + index];
-                for (int r = 0; r < numReductions; r++){
-                  srcoffset = chunkOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
-                  T t = srcPointer[srcoffset + index];
-                  o = FUNC()(o, t);
-                }
-                dstPointer[dstoffset + index] = o;
-              }
-              step += numReductions-1;
-            } else if (msccltran->type == MSCCL_RES_ADD) {
-              int thisChunkSize = prims.nelem * thisCount;
-              T* resPtr1 = (T*)mscclComputeOp->residualAddOp.residual1;
-              T* resPtr2 = (T*)mscclComputeOp->residualAddOp.residual2;
-              for (int index = tid; index < thisChunkSize; index += nThreads){
-                T r1 = resPtr1[srcoffset+index];
-                T r2 = resPtr2[srcoffset+index];
-                T o  = dstPointer[dstoffset+index];
-                o = FUNC()(o,FUNC()(r1,r2));
-                dstPointer[dstoffset+index] = o;
-              }
-            } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
-              prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
-            else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
-              prims.recvReduceSend(srcPointer + srcoffset, thisCount);
-            else if (msccltran->type == MSCCL_RECV_REDUCE_COPY_SEND)
-              prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
-              prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else if (msccltran->type == MSCCL_LOCAL_COPY)
-              prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
-            else
-              return;
-          }
-          if (msccltran->has_dependence){
-            __syncthreads();
-            if (tid == nThreads-1){
-              __threadfence();
-              uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
-              mscclFlags[bid].flag = curFlag;
-            }
-          }
-          step++;
+          step += msccltran->numDependences-1;
+          __syncthreads();
         }
+
+        srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+        dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+        int count = msccltran->count;
+        for (int c = 0; c < count; c += mscclMaxAllowedCount) {
+          srcoffset = chunkOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
+          dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+          int thisCount = min(mscclMaxAllowedCount, count-c);
+          if (msccltran->type == MSCCL_SEND)
+            prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+          else if (msccltran->type == MSCCL_RECV)
+            prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
+          else if (msccltran->type == MSCCL_REDUCE) {
+            int numReductions = msccltran->numReductions;
+            int thisChunkSize = prims.nelem * thisCount;
+            dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
+            for (int index = tid; index < thisChunkSize; index += nThreads){
+              T o = dstPointer[dstoffset + index];
+              for (int r = 0; r < numReductions; r++){
+                srcoffset = chunkOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
+                T t = srcPointer[srcoffset + index];
+                o = FUNC()(o, t);
+              }
+              dstPointer[dstoffset + index] = o;
+            }
+            step += numReductions-1;
+          } else if (msccltran->type == MSCCL_RES_ADD) {
+            int thisChunkSize = prims.nelem * thisCount;
+            T* resPtr1 = (T*)mscclComputeOp->residualAddOp.residual1;
+            T* resPtr2 = (T*)mscclComputeOp->residualAddOp.residual2;
+            for (int index = tid; index < thisChunkSize; index += nThreads){
+              T r1 = resPtr1[srcoffset+index];
+              T r2 = resPtr2[srcoffset+index];
+              T o  = dstPointer[dstoffset+index];
+              o = FUNC()(o,FUNC()(r1,r2));
+              dstPointer[dstoffset+index] = o;
+            }
+          } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
+            prims.recvCopySend(dstPointer + dstoffset, dstoffset, thisCount);
+          else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
+            prims.recvReduceSend(srcPointer + srcoffset, thisCount);
+          else if (msccltran->type == MSCCL_RECV_REDUCE_COPY_SEND)
+            prims.recvReduceCopySend(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+          else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
+            prims.recvReduceCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+          else if (msccltran->type == MSCCL_LOCAL_COPY)
+            prims.localCopy(srcPointer + srcoffset, dstPointer + dstoffset, thisCount);
+          else
+            return;
+        }
+        if (msccltran->has_dependence){
+          __syncthreads();
+          if (tid == nThreads-1){
+            __threadfence();
+            uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
+            mscclFlags[bid].flag = curFlag;
+          }
+        }
+        step++;
       }
     }
-};
+  }
+}
 
 template<class FUNC, typename T, int UNROLL>
 struct SimpleWrapper {

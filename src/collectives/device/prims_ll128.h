@@ -397,6 +397,12 @@ public:
     userBufs[Output] += delta;
   }
 
+  __device__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
+    userBufs[Input] = (T*)inputBuf;
+    userBufs[Output] = (T*)outputBuf;
+  }
+
+
   __device__ void send(intptr_t inpIx, int eltN) {
     return GenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
