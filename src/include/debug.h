@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -7,17 +7,17 @@
 #ifndef NCCL_DEBUG_H_
 #define NCCL_DEBUG_H_
 
-#include "core.h"
-
+#include "nccl_net.h"
 #include <stdio.h>
 #include <chrono>
 
 #include <sys/syscall.h>
 #include <limits.h>
 #include <string.h>
-#include "nccl_net.h"
+#include <pthread.h>
 
-#define gettid() (pid_t) syscall(SYS_gettid)
+// Conform to pthread and NVTX standard
+#define NCCL_THREAD_NAMELEN 16
 
 extern int ncclDebugLevel;
 extern uint64_t ncclDebugMask;
@@ -39,5 +39,7 @@ extern std::chrono::high_resolution_clock::time_point ncclEpoch;
 #else
 #define TRACE(...)
 #endif
+
+void ncclSetThreadName(pthread_t thread, const char *fmt, ...);
 
 #endif

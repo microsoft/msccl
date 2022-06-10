@@ -9,8 +9,8 @@
 #include "collectives.h"
 #include "msccl_interpreter.h"
 
-template<int ALGO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
+template<int ALGO, typename T, typename RedOp>
+struct RunWorkElement<ncclFuncAllToAll, T, RedOp, ALGO, NCCL_PROTO_SIMPLE> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       mscclFunctionSimple<FUNC, T, UNROLL> mscclfunc;
@@ -18,8 +18,8 @@ class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_SIMPLE, FUNC, T, UNROLL> {
     }
 };
 
-template<int ALGO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
+template<int ALGO, typename T, typename RedOp>
+struct RunWorkElement<ncclFuncAllToAll, T, RedOp, ALGO, NCCL_PROTO_LL128> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       mscclFunctionLL128<FUNC, T, UNROLL> mscclfunc;
@@ -27,8 +27,8 @@ class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL128, FUNC, T, UNROLL> {
     }
 };
 
-template<int ALGO, class FUNC, typename T, int UNROLL>
-class ncclFunction<ncclFuncAllToAll, ALGO, NCCL_PROTO_LL, FUNC, T, UNROLL> {
+template<int ALGO, typename T, typename RedOp>
+struct RunWorkElement<ncclFuncAllToAll, T, RedOp, ALGO, NCCL_PROTO_LL> {
   public:
     __device__ void run(struct ncclWorkElem* args) {
       mscclFunctionLL<FUNC, T, UNROLL> mscclfunc;

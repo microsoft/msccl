@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -8,6 +8,7 @@
 #define NCCL_UTILS_H_
 
 #include "nccl.h"
+#include "checks.h"
 #include <stdint.h>
 
 int ncclCudaCompCap();
@@ -36,5 +37,82 @@ static long log2i(long n) {
  while (n>>=1) l++;
  return l;
 }
+
+// Recyclable list that avoids frequent malloc/free
+template<typename T>
+struct ncclListElem {
+  T data;
+  struct ncclListElem* next;
+};
+
+template<typename T>
+class ncclRecyclableList {
+ private:
+  struct ncclListElem<T>* head;
+  struct ncclListElem<T>* tail;
+  struct ncclListElem<T>* cursor;
+  int n;
+
+ public:
+  ncclRecyclableList() {
+    tail = cursor = head = NULL;
+    n = 0;
+  }
+
+  int count() const { return n; }
+
+  // Get a new element from the list and return pointer
+  ncclResult_t getNewElem(T** dataOut) {
+    if (tail != NULL) {
+      *dataOut = &tail->data;
+      memset(*dataOut, 0, sizeof(T));
+    } else {
+      NCCLCHECK(ncclCalloc(&tail, 1));
+      *dataOut = &tail->data;
+      cursor = head = tail;
+    }
+    if (tail->next == NULL) {
+      NCCLCHECK(ncclCalloc(&tail->next, 1));
+    }
+    tail = tail->next;
+    n += 1;
+    return ncclSuccess;
+  }
+
+  T* begin() {
+    if (head == NULL || head == tail) return NULL;
+    cursor = head->next;
+    return &head->data;
+  }
+
+  // Get next element from the list during an iteration
+  T* getNext() {
+    // tail always points to the next element to be enqueued
+    // hence does not contain valid data
+    if (cursor == NULL || cursor == tail) return NULL;
+    T* rv = &cursor->data;
+    cursor = cursor->next;
+    return rv;
+  }
+
+  T* peakNext() {
+    if (cursor == NULL || cursor == tail) return NULL;
+    return &cursor->data;
+  }
+
+  // Recycle the list without freeing the space
+  void recycle() {
+    tail = cursor = head;
+    n = 0;
+  }
+
+  ~ncclRecyclableList() {
+    while (head != NULL) {
+      struct ncclListElem<T>* temp = head;
+      head = head->next;
+      free(temp);
+    }
+  }
+};
 
 #endif

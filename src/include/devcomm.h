@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -11,8 +11,13 @@
 #include "align.h"
 #include <stdint.h>
 
+<<<<<<< HEAD
 #define NCCL_NUM_FUNCTIONS 7 // SendRecv not included for now
 typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncAllToAll, ncclFuncCustomCollective, ncclFuncSendRecv} ncclFunc_t;
+=======
+#define NCCL_NUM_FUNCTIONS 5 // Send/Recv not included for now
+typedef enum { ncclFuncBroadcast, ncclFuncReduce, ncclFuncAllGather, ncclFuncReduceScatter, ncclFuncAllReduce, ncclFuncSendRecv, ncclFuncSend, ncclFuncRecv, ncclNumFuncs} ncclFunc_t;
+>>>>>>> upstream/master
 extern const char* ncclFuncStr[NCCL_NUM_FUNCTIONS];
 
 #define NCCL_NUM_ALGORITHMS 4 // Tree/Ring/MSCCL/CollNet
@@ -69,15 +74,14 @@ static_assert(NCCL_LL_CLEAN_MASK % NCCL_STEPS == 0, "Invalid NCCL_LL_CLEAN_MASK 
 #define NCCL_LL128_MAX_NTHREADS 640
 #define NCCL_LL128_ELEMS_PER_THREAD 120
 
-// Receiving from up to 3 sources is more compute intensive than sending
-// to 3 dests. Use 70% for reduce and 30% for bcast.
-#define NCCL_LL128_SPLIT(nt) ((nt*7/(10*32))*32)
-
 #define NCCL_LL128_SHMEM_ELEMS_PER_THREAD 8
 #define NCCL_LL128_SHMEM_SIZE (NCCL_LL128_SHMEM_ELEMS_PER_THREAD*NCCL_LL128_MAX_NTHREADS)
 
-#define NCCL_DIRECT_GPU 0x01
-#define NCCL_DIRECT_NIC 0x10
+#define NCCL_DIRECT_WRITE 0x01
+#define NCCL_DIRECT_READ  0x02
+#define NCCL_DIRECT_NIC   0x04
+#define NCCL_IPC_WRITE    0x08
+#define NCCL_IPC_READ     0x10
 
 struct ncclConnInfo {
   // Regular comm mechanism
@@ -88,19 +92,27 @@ struct ncclConnInfo {
   int direct;         // Direct communication
   int shared;         // Buffers are shared
   void **ptrExchange; // Pointer exchange for direct communication
+  uint64_t* redOpArgExchange; // PreOp scaler exchange for direct pull case
 
   int *sizesFifo;     // Sizes fifo from GPU to proxy
-  void* *ptrsFifo;      // Buffer fifo from proxy to GPU
+  int *offsFifo;      // Buffer fifo from proxy to GPU
 
   uint64_t step;      // Keep where we are
   uint64_t llLastCleaning;
 };
 
+struct ncclProxyConnector {
+  int rank;
+  int localRank;
+  struct ncclProxyConnection* connection;
+  struct ncclComm* comm;
+};
+
 struct ncclConnector {
   int connected;
-  struct ncclProxyArgs *proxyAppend;
+  struct ncclProxyConnector proxyConn;
   struct ncclTransportComm* transportComm;
-  void* transportResources; // Host-side resources
+  void* transportResources;
   struct ncclConnInfo conn;
   struct ncclComm *comm;
 };
@@ -115,6 +127,8 @@ struct ncclRing {
   // devices. Ordered from current device.
   int* userRanks;
   int* devUserRanks;
+
+  int index; // This rank's index in the ring
 };
 
 #define MSCCL_MAX_NUM_STEPS 256
@@ -232,24 +246,45 @@ struct ncclTree {
   int down[NCCL_MAX_TREE_ARITY];
 };
 
+#define NCCL_MAX_DIRECT_ARITY 7
+struct ncclDirect {
+  int depth;
+  int out;
+  int nHeads;
+  int headRank;
+  int shift;
+  int up[NCCL_MAX_DIRECT_ARITY];
+  int down[NCCL_MAX_DIRECT_ARITY];
+};
+
+#define NCCL_MAX_CONNS 2
 struct ncclPeer {
-  struct ncclConnector send;
-  struct ncclConnector recv;
+  struct ncclConnector send[NCCL_MAX_CONNS];
+  struct ncclConnector recv[NCCL_MAX_CONNS];
 };
 
 struct ncclDevComm;
 
-#define NCCL_MAX_WORK_ELEMENTS 8
-#define NCCL_MAX_GROUPS (NCCL_MAX_WORK_ELEMENTS*2)
-
 /* ncclWork is to be a power of two, currently 8x64 bytes, */
 /* to make sure reads to host from the CUDA kernel are aligned. */
 /* Make sure to adjust padding at the end of ncclWorkElem. */
-struct ncclWorkElem {
-  // Header
-  struct ncclDevComm* comm;
-  uint16_t nThreads;
+#define NCCL_WORK_SIZE 512
+
+enum ncclWorkElemType : uint8_t {
+   ncclWorkTypeUnused=0,
+   ncclWorkTypeColl=1,
+   ncclWorkTypeP2p=2,
+   ncclWorkTypeRegColl=3
+};
+enum ncclWorkElemSubType : uint8_t {
+  ncclWorkSubTypeUnused =0,
+  ncclWorkSubTypeSend,
+  ncclWorkSubTypeRecv
+};
+
+struct ncclWorkElemHeader {
   uint16_t funcIndex;
+<<<<<<< HEAD
   uint16_t index;
 
   // in MSCCL algorithms, only one workelem at a time is allowed.
@@ -257,11 +292,24 @@ struct ncclWorkElem {
   uint32_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int mscclAlgoIndex; // taken from info->mscclAlgoIndex
   mscclComputeOp_t mscclComputeOp; // taken from info->mscclComputeOp
+=======
+  enum ncclWorkElemType type;
+  unsigned nWarps:5;
+  unsigned isLast:1;
+};
+
+struct ncclWorkElem {
+  struct ncclWorkElemHeader header;
+  uint8_t regUsed;
+  uint8_t direct;
+  uint8_t redOpArgIsPtr;
+>>>>>>> upstream/master
 
   const void * sendbuff;
   void * recvbuff;
   void * scratchbuff;
 
+<<<<<<< HEAD
   // Op-specific fields.
   union {
     struct {
@@ -279,18 +327,68 @@ struct ncclWorkElem {
     } p2p;
     int8_t align[64];
   };
+=======
+  size_t count;
+  size_t lastChunkSize;
+  uint32_t root;
+  uint8_t bid;
+  uint8_t nChannels;
+  uint64_t redOpArg;
+  uint64_t pad;
 };
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
+
+struct ncclWorkElemP2p {
+  struct ncclWorkElemHeader header;
+  int32_t peer;
+  void* buff;
+  size_t count;
+  int chunkSize;
+  uint8_t ngroups;
+  uint8_t warpStart;
+  uint8_t nWarps;
+  enum ncclWorkElemSubType subType;
+};
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemP2p) == 0, "ncclWorkElemP2p size must be a multiple of ncclWork size");
+
+struct ncclWorkElemReg {
+  struct ncclWorkElem elem;
+  void* dnInputs[NCCL_MAX_DIRECT_ARITY+1];
+  void* dnOutputs[NCCL_MAX_DIRECT_ARITY+1];
+  void* upOutputs[NCCL_MAX_DIRECT_ARITY+1];
+>>>>>>> upstream/master
+};
+static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemReg) == 0, "ncclWork size must be a multiple of ncclWorkElemReg size");
+static_assert(sizeof(struct ncclWorkElemReg) % sizeof(struct ncclWorkElem) == 0, "ncclWorkElemReg size must be a multiple of ncclWorkElem size");
+
+#define NCCL_MAX_WORK_ELEMENTS (NCCL_WORK_SIZE/sizeof(struct ncclWorkElem))
+#define NCCL_MAX_WORK_ELEMENTS_P2P (NCCL_WORK_SIZE/sizeof(struct ncclWorkElemP2p))
+#define NCCL_MAX_WORK_ELEMENTS_REG (NCCL_WORK_SIZE/sizeof(struct ncclWorkElemReg))
+// Number of named barriers supported by CUDA
+#define NCCL_MAX_GROUPS 16
+
 struct ncclWork {
-  struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
+  union {
+    char pad[NCCL_WORK_SIZE];
+    struct ncclWorkElemHeader header;
+    struct ncclWorkElem elems[NCCL_MAX_WORK_ELEMENTS];
+    struct ncclWorkElemP2p p2pElems[NCCL_MAX_WORK_ELEMENTS_P2P];
+    struct ncclWorkElemReg regElems[NCCL_MAX_WORK_ELEMENTS_REG];
+  };
 };
+<<<<<<< HEAD
 static_assert(sizeof(struct ncclWorkElem) == (128), "ncclWorkElem must have a pow2 size");
+=======
+
+static_assert(sizeof(struct ncclWork) == NCCL_WORK_SIZE, "ncclWork size needs to be well aligned");
+>>>>>>> upstream/master
 
 struct ncclChannel {
   union {
     struct {
       struct ncclRing ring;
       struct ncclTree tree;
-      struct ncclTree collTree;
+      struct ncclDirect collTree;
 
       int id;
 
@@ -301,7 +399,14 @@ struct ncclChannel {
       // Operation list for aggregation
       struct ncclWork* workFifo;
       int workCount;
+      size_t totalSize;
       uint64_t workFifoTail; // Only used by CPU
+      uint16_t index;        // Only used by GPU
+
+      // GDRCOPY support
+      struct ncclWork* workFifoGdr;
+      struct ncclWork* workFifoDev;
+      void* gdrMemDesc;
     };
     int data[0x80];
   };
@@ -326,6 +431,13 @@ struct ncclDevComm {
   struct ncclChannel* channels;
 };
 
+<<<<<<< HEAD
 cudaError_t strideMemcpyAsync(void* dst, const void* src, const size_t size, const int height, const int width, cudaStream_t stream);
+=======
+struct ncclDevCommAndChannels {
+  ncclDevComm comm;
+  ncclChannel channels[MAXCHANNELS];
+};
+>>>>>>> upstream/master
 
 #endif

@@ -1,12 +1,17 @@
 
 /*************************************************************************
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
 
 #ifndef XML_H_
 #define XML_H_
+
+#include "nccl.h"
+#include "debug.h"
+#include "checks.h"
+#include <stdlib.h>
 
 // A few constraints to make the implementation easy
 #define MAX_STR_LEN 255
@@ -39,7 +44,7 @@ struct ncclXml {
 
 /* File functions */
 #define NCCL_TOPO_XML_VERSION 1
-ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml);
+ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml, int warn);
 ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml);
 #define NCCL_GRAPH_XML_VERSION 1
 ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
@@ -105,6 +110,14 @@ static ncclResult_t xmlGetAttrInt64_t(struct ncclXmlNode* node, const char* attr
   return ncclSuccess;
 }
 
+static ncclResult_t xmlGetAttrIntDefault(struct ncclXmlNode* node, const char* attrName, int* value, int defaultValue) {
+  const char* str;
+  NCCLCHECK(xmlGetAttr(node, attrName, &str));
+  *value = str ? strtol(str, NULL, 0) : defaultValue;
+  return ncclSuccess;
+}
+
+
 static ncclResult_t xmlGetAttrFloat(struct ncclXmlNode* node, const char* attrName, float* value) {
   const char* str;
   NCCLCHECK(xmlGetAttrStr(node, attrName, &str));
@@ -148,6 +161,18 @@ static ncclResult_t xmlSetAttr(struct ncclXmlNode* node, const char* attrName, c
     strncpy(node->attrs[index].key, attrName, MAX_STR_LEN);
     node->attrs[index].key[MAX_STR_LEN] = '\0';
   }
+  strncpy(node->attrs[index].value, value, MAX_STR_LEN);
+  node->attrs[index].value[MAX_STR_LEN] = '\0';
+  return ncclSuccess;
+}
+
+static ncclResult_t xmlSetAttrIfUnset(struct ncclXmlNode* node, const char* attrName, const char* value) {
+  int index;
+  NCCLCHECK(xmlGetAttrIndex(node, attrName, &index));
+  if (index != -1) return ncclSuccess;
+  index = node->nAttrs++;
+  strncpy(node->attrs[index].key, attrName, MAX_STR_LEN);
+  node->attrs[index].key[MAX_STR_LEN] = '\0';
   strncpy(node->attrs[index].value, value, MAX_STR_LEN);
   node->attrs[index].value[MAX_STR_LEN] = '\0';
   return ncclSuccess;
