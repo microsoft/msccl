@@ -65,6 +65,8 @@ namespace {
       else
         realChunkSize = min(chunkSize, divUp(size-gridOffset, nChannels*nranks*minChunkSize)*minChunkSize);
       realChunkSize = int(realChunkSize);
+      nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
+
       ssize_t srcoffset, dstoffset;
       T* srcPointer, * dstPointer;
       int step = 0;
@@ -89,21 +91,21 @@ namespace {
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         int count = msccltran->count;
         for (int c = 0; c < count; c += mscclMaxAllowedCount) {
-          srcoffset = chunkOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
-          dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+          srcoffset = gridOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
+          dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
           int thisCount = min(mscclMaxAllowedCount, count-c);
           if (msccltran->type == MSCCL_SEND)
-            prims.send(srcPointer + srcoffset, dstoffset, thisCount);
+            prims.send(srcoffset, dstoffset, thisCount);
           else if (msccltran->type == MSCCL_RECV)
             prims.recv(dstPointer + dstoffset, dstoffset, thisCount);
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             int thisChunkSize = prims.nelem * thisCount;
-            dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
+            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
             for (int index = tid; index < thisChunkSize; index += nThreads){
               T o = dstPointer[dstoffset + index];
               for (int r = 0; r < numReductions; r++){
-                srcoffset = chunkOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
+                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
                 T t = srcPointer[srcoffset + index];
                 o = FUNC()(o, t);
               }
