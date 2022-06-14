@@ -158,50 +158,15 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int bid = blockIdx.x;
 
   int turn = copyToShmem(&ncclShmem.comm, comm);
+  int channelId = bid;
+  if (ALGO == NCCL_ALGO_MSCCL)
+    channelId = comm->mscclAlgos[first.mscclAlgoIndex].mscclTB[bid].channelId;  
   // get address of channel without incurring indirect load from ncclDevCom::channels
-  ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
+  ncclChannel *channel = &((ncclDevCommAndChannels*)comm)->channels[channelId];
   turn = copyToShmem(&ncclShmem.channel, channel, turn);
 
-<<<<<<< HEAD
-  struct ncclDevComm* comm = first.comm;
-  int channelId = bid;
-  if (ALGO == NCCL_ALGO_MSCCL){
-    channelId = comm->mscclAlgos[first.mscclAlgoIndex].mscclTB[bid].channelId;
-  }
-  struct ncclChannel* channel = comm->channels+channelId;
-  struct ncclWorkElem* w = NULL;
-  uint16_t index = first.index;
-
-  /* To optimize for latency, (only) the first operation is passed as argument.*/
-  if ((channelId == 0 || ALGO == NCCL_ALGO_MSCCL) && first.funcIndex != FUNC_INDEX_P2P) w = &first;
-  int wrappedAround = 0;
-  while (1) {
-    if (w == NULL) {
-      w = shmem.localWork.elems;
-      load_coll(&shmem.localWork, channel->workFifo+index, tid, comm);
-    }
-    if (tid < w->nThreads) {
-      // MSCCL uses w->index as an indicator for the progress this threadblock has made. in case index wraps around due to overflow, w->index is increament so that the progress invariant is still true
-      if (wrappedAround){
-        if (tid == 0) {
-          w->index += NCCL_MAX_OPS;
-        }
-        __syncthreads();
-      }
-      
-      if (w->funcIndex == FINDEX) {
-        f.run(w);
-      } else {
-        ncclFuncs[w->funcIndex](w);
-      }
-    }
-    if (index == NCCL_MAX_OPS-1) wrappedAround = 1;
-    index = (index+1) % NCCL_MAX_OPS;
-    if (w->active == 2) {
-      return;
-=======
   // To optimize for latency, (only) the first operation is passed as argument.
-  if (bid == 0 && first.header.type != ncclWorkTypeUnused) {
+  if ((Algo == NCCL_ALGO_MSCCL || bid == 0) && first.header.type != ncclWorkTypeUnused) {
     // Copy first elem to work and zero out the rest
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
   }
@@ -234,7 +199,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       if (tid < NCCL_MAX_WORK_ELEMENTS) ncclRedopPtrDeref(&ncclShmem.work.elems[tid]);
     } else if (ncclShmem.work.header.type == ncclWorkTypeRegColl) {
       if (tid < NCCL_MAX_WORK_ELEMENTS_REG) ncclRedopPtrDeref(&ncclShmem.work.regElems[tid].elem);
->>>>>>> upstream/master
     }
     __syncthreads();
 
@@ -271,18 +235,11 @@ __device__ void NCCL_FUNC_NAME(func, algo, proto, devredop, type)() { \
   IMPL_COLL_FUNC(func, algo, SIMPLE, devredop, type) \
   IMPL_COLL_KERN(func, algo, LL,     devredop, type, FUNC_INDEX(ncclFunc##func, ncclDev##devredop, ncclType, NCCL_ALGO_##algo, NCCL_PROTO_LL)) \
 
-<<<<<<< HEAD
-#define IMPL_COLL3(func, redop, type, ncclType) \
-  IMPL_COLL4(func, TREE,    redop, type, ncclType) \
-  IMPL_COLL4(func, RING,    redop, type, ncclType) \
-  IMPL_COLL4(func, MSCCL,    redop, type, ncclType) \
-  IMPL_COLL4(func, COLLNET, redop, type, ncclType)
-=======
 #define IMPL_COLL3(func, devredop, type, ncclType) \
   IMPL_COLL4(func, TREE,    devredop, type, ncclType) \
   IMPL_COLL4(func, RING,    devredop, type, ncclType) \
+  IMPL_COLL4(func, MSCCL,   devredop, type, ncclType) \
   IMPL_COLL4(func, COLLNET, devredop, type, ncclType)
->>>>>>> upstream/master
 
 #if NCCL_TYPE == 0
 #define IMPL_COLL2(func, devredop) IMPL_COLL3(func, devredop, int8_t,   ncclInt8)

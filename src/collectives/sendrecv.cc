@@ -13,13 +13,8 @@ NCCL_API(ncclResult_t, ncclSend, const void* sendbuff, size_t count, ncclDataTyp
 ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
-<<<<<<< HEAD
-  struct ncclInfo info = { ncclFuncSendRecv, "Send",
-    sendbuff, NULL, 0 /* send/recv are out of place */, count, datatype, ncclSum, peer, comm, stream, /* Args */
-=======
   struct ncclInfo info = { ncclFuncSend, "Send",
-    NULL, (void*)sendbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
->>>>>>> upstream/master
+    NULL, (void*)sendbuff, 0, count, datatype, ncclSum, peer, comm, stream, /* Args */
     1, 1 };
   info.mscclAlgoIndex = -1;
   ncclResult_t ret;
@@ -34,13 +29,8 @@ NCCL_API(ncclResult_t, ncclRecv, void* recvbuff, size_t count, ncclDataType_t da
 ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
-<<<<<<< HEAD
-  struct ncclInfo info = { ncclFuncSendRecv, "Recv",
-    NULL, recvbuff, 0 /* send/recv are out of place */, count, datatype, ncclSum, peer, comm, stream, /* Args */
-=======
   struct ncclInfo info = { ncclFuncRecv, "Recv",
-    NULL, recvbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
->>>>>>> upstream/master
+    NULL, recvbuff, 0, count, datatype, ncclSum, peer, comm, stream, /* Args */
     1, 1 };
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
