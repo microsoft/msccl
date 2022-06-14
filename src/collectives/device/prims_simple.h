@@ -593,6 +593,9 @@ class Primitives<
     // Direct is only for the send part
     genericOp<0, 1, 1, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
   }
+  __device__ __forceinline__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
+    genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, postOp);
+  }
 
   __device__ __forceinline__ void
   scatter(intptr_t inpIx, int totalElem, int peerElem, int skip, int shift) {

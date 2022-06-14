@@ -91,27 +91,22 @@ struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROT
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE> {
-  public:
-    __device__ void run(struct ncclWorkElem* args) {
-      mscclFunctionSimple<FUNC, T, UNROLL> mscclfunc;
-      mscclfunc.run(args, args->comm->nRanks);
-    }
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
+    using Proto = ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>;
+    runInterpreter<T, RedOp, Proto>(args, args->comm->nRanks);
+  }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128> {
-  public:
-    __device__ void run(struct ncclWorkElem* args) {
-      mscclFunctionLL128<FUNC, T, UNROLL> mscclfunc;
-      mscclfunc.run(args, args->comm->nRanks);
-    }
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
+    runInterpreter<T, RedOp, ProtoLL128>(args, args->comm->nRanks);
+  }
 };
 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL> {
-  public:
-    __device__ void run(struct ncclWorkElem* args) {
-      mscclFunctionLL<FUNC, T, UNROLL> mscclfunc;
-      mscclfunc.run(args, args->comm->nRanks);
-    }
+  __device__ __forceinline__ void run(ncclWorkElem *args) {
+    runInterpreter<T, RedOp, ProtoLL>(args, args->comm->nRanks);
+  }
 };
