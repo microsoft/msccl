@@ -692,10 +692,6 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int* i
     }
     if (path->width == maxWidth && path->type == minType) nets[count++] = system->nodes[NET].nodes[n].id;
   }
-<<<<<<< HEAD
-  *id = nets[rr % count];
-
-=======
   if (count == 0) {
     *id = -1;
     free(nets);
@@ -704,7 +700,6 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int* i
 
   int rr = system->nodes[GPU].nodes[g].gpu.dev;
   *id = nets[rr%count];
->>>>>>> upstream/master
   free(nets);
   return ncclSuccess;
 }
