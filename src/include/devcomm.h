@@ -431,13 +431,10 @@ struct ncclDevComm {
   struct ncclChannel* channels;
 };
 
-<<<<<<< HEAD
 cudaError_t strideMemcpyAsync(void* dst, const void* src, const size_t size, const int height, const int width, cudaStream_t stream);
-=======
 struct ncclDevCommAndChannels {
   ncclDevComm comm;
   ncclChannel channels[MAXCHANNELS];
 };
->>>>>>> upstream/master
 
 #endif
