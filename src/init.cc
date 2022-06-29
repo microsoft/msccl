@@ -308,7 +308,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
 }
 
 // Pre-process the string so that running "strings" on the lib can quickly reveal the version.
-#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
+#define VERSION_STRING "NCCL version " STR(NCCL_MAJOR) "." STR(NCCL_MINOR) "." STR(NCCL_PATCH) NCCL_SUFFIX ".MSCCL." STR(MSCCL_VERSION) "+cuda" STR(CUDA_MAJOR) "." STR(CUDA_MINOR)
 static void showVersion() {
   static int shown = 0;
   if (shown == 0 && ncclDebugLevel >= NCCL_LOG_VERSION) {
