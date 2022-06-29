@@ -843,6 +843,10 @@ ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXm
   return ncclSuccess;
 }
 
+/**************************/
+/* MSCCL XML File Parsers */
+/**************************/
+
 ncclResult_t mscclAlgoXmlStep(FILE* file, struct ncclXml* xml, struct ncclXmlNode* head) {
   NCCLCHECK(xmlLoadSub(file, xml, head, NULL, 1));
   return ncclSuccess;

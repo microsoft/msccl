@@ -34,33 +34,6 @@ struct ncclDevRedOpFull {
   nccl##func##algo##proto
 
 /* Declare all collective operations */
-<<<<<<< HEAD
-#define DECL5(func, algo, proto, redop, type) \
-  extern __device__ void NCCL_FUNC_NAME(func, algo, proto, redop, type)(struct ncclWorkElem* args); \
-  extern __global__ void NCCL_KERN_NAME(func, algo, proto, redop, type)(struct ncclWorkElem c); \
-
-#define DECL4(func, algo, redop, type) \
-  DECL5(func, algo, SIMPLE, redop, type) \
-  DECL5(func, algo, LL,     redop, type) \
-  DECL5(func, algo, LL128,  redop, type)
-
-#define DECL3(func, redop, type) \
-  DECL4(func, RING,    redop, type) \
-  DECL4(func, TREE,    redop, type) \
-  DECL4(func, MSCCL,    redop, type) \
-  DECL4(func, COLLNET, redop, type)
-
-#define DECL2(func, redop) \
-  DECL3(func, redop, int8_t) \
-  DECL3(func, redop, uint8_t) \
-  DECL3(func, redop, int32_t) \
-  DECL3(func, redop, uint32_t) \
-  DECL3(func, redop, int64_t) \
-  DECL3(func, redop, uint64_t) \
-  DECL3(func, redop, half) \
-  DECL3(func, redop, float) \
-  DECL3(func, redop, double)
-=======
 #define DECL5(func, algo, proto, devredop, type) \
   extern __device__ void NCCL_FUNC_NAME(func, algo, proto, devredop, type)(); \
   extern __global__ void NCCL_KERN_NAME(func, algo, proto, devredop, type)(struct ncclDevComm* comm, struct ncclWorkElem c); \
@@ -78,6 +51,7 @@ struct ncclDevRedOpFull {
 #define DECL3(func, devredop, type, undef) \
   DECL4(func, RING,    devredop, type, undef) \
   DECL4(func, TREE,    devredop, type, undef) \
+  DECL4(func, MSCCL,    devredop, type, undef) \
   DECL4(func, COLLNET, devredop, type, undef)
 
 #if defined(__CUDA_BF16_TYPES_EXIST__)
@@ -104,7 +78,6 @@ struct ncclDevRedOpFull {
   DECL3(func, devredop, float, /*undef=*/undefForFloat) \
   DECL3(func, devredop, double, /*undef=*/undefForFloat)
 #endif
->>>>>>> upstream/master
 
 #define DECL(func) \
   DECL2(func, Sum, /*undefForFloat=*/0) \
@@ -114,24 +87,14 @@ struct ncclDevRedOpFull {
   DECL2(func, PreMulSum, /*undefForFloat=*/0) \
   DECL2(func, SumPostDiv, /*undefForFloat=*/1)
 
-<<<<<<< HEAD
-#define DECL_ALL \
-  DECL2(Broadcast, Sum) \
-  DECL(Reduce) \
-  DECL2(AllGather, Sum) \
-  DECL(ReduceScatter) \
-  DECL(AllReduce) \
-  DECL2(AllToAll, Sum) \
-  DECL5(SendRecv, RING, SIMPLE, Sum, int8_t) \
-  DECL(CustomCollective) \
-=======
 DECL2(Broadcast, Sum, /*undefForFloat=*/0)
 DECL(Reduce)
 DECL2(AllGather, Sum, /*undefForFloat=*/0)
 DECL(ReduceScatter)
 DECL(AllReduce)
+DECL2(AllToAll, Sum, /*undefForFloat=*/0)
+DECL(CustomCollective)
 DECL5(SendRecv, RING, SIMPLE, Sum, int8_t)
->>>>>>> upstream/master
 
 extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, int8_t)();
 extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, uint8_t)();
@@ -157,8 +120,6 @@ extern __device__ void NCCL_ONERANK_REDUCE_NAME(PreMulSum, double)();
 #define BROADCAST_CHUNKSTEPS 1
 #define REDUCE_SLICESTEPS 1
 #define REDUCE_CHUNKSTEPS 1
-#define MSCCL_SLICESTEPS (NCCL_STEPS/4)
-#define MSCCL_CHUNKSTEPS (NCCL_STEPS/2)
 #define SENDRECV_SLICEFACTOR 4
 #define NCCL_MAX_SLICE_PER_CHUNK 2  // max value for CHUNKSTEPS/SLICESTEPS, must accord with above
 

@@ -15,18 +15,11 @@ __shared__ ncclShmemData ncclShmem;
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, LL128,  devredop, type)), \
   MACRO_IF(nullify, nullptr, NCCL_FUNC_NAME(func, algo, SIMPLE, devredop, type))
 
-<<<<<<< HEAD
-#define NCCL_FUNC4(func, redop, type) \
-  NCCL_FUNC5(func, TREE,    redop, type), \
-  NCCL_FUNC5(func, RING,    redop, type), \
-  NCCL_FUNC5(func, MSCCL,    redop, type), \
-  NCCL_FUNC5(func, COLLNET, redop, type)
-=======
 #define NCCL_FUNC4(func, devredop, type, nullify) \
   NCCL_FUNC5(func, TREE,    devredop, type, nullify), \
   NCCL_FUNC5(func, RING,    devredop, type, nullify), \
+  NCCL_FUNC5(func, MSCCL,   devredop, type, nullify), \
   NCCL_FUNC5(func, COLLNET, devredop, type, nullify)
->>>>>>> upstream/master
 
 #if defined(__CUDA_BF16_TYPES_EXIST__)
 // Must be consistent with ncclDataType_t
@@ -93,20 +86,6 @@ __shared__ ncclShmemData ncclShmem;
   NCCL_FUNCS3B(func, Sum), \
   NCCL_FUNCS3B(func, Sum)
 
-<<<<<<< HEAD
-// Must be consistent with ncclFunc_t
-#define NCCL_FUNCS() { \
-  NCCL_FUNC_NAME(SendRecv, RING, SIMPLE, Sum, int8_t),\
-  NCCL_FUNCS2B(Broadcast), \
-  NCCL_FUNCS2A(Reduce), \
-  NCCL_FUNCS2B(AllGather), \
-  NCCL_FUNCS2A(ReduceScatter), \
-  NCCL_FUNCS2A(AllReduce), \
-  NCCL_FUNCS2B(AllToAll), \
-  NCCL_FUNCS2A(CustomCollective) }
-
-=======
->>>>>>> upstream/master
 // Must be consistent with the ncclFuncSet enum
 __device__ ncclKern_t ncclFuncs[1+ncclNumTypes+NCCL_NUM_FUNCTIONS*ncclNumDevRedOps*ncclNumTypes*NCCL_NUM_ALGORITHMS*NCCL_NUM_PROTOCOLS] = {
 // Don't try to initialize the host shadow copy of this device-side global

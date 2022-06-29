@@ -102,11 +102,6 @@ ncclResult_t ncclGroupStart() {
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-static ncclResult_t scheduleSendRecv(struct ncclComm* comm, int delta, int channelId, ssize_t recvbytes, void* recvbuff, ssize_t sendbytes, const void* sendbuff) {
-  struct ncclInfo info = { ncclFuncSendRecv, "SendRecv",
-    sendbuff, recvbuff, 0 /* send/recv are out of place */, (size_t)std::max<ssize_t>(sendbytes,recvbytes), ncclInt8, ncclSum, -1, comm, comm->userStream, /* Args */
-=======
 static ncclResult_t scheduleSend(struct ncclComm* comm, int peer, int chunk, size_t count, void* buff) {
   struct ncclInfo info = { ncclFuncSend, "Send",
     NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
@@ -120,7 +115,6 @@ static ncclResult_t scheduleSend(struct ncclComm* comm, int peer, int chunk, siz
 static ncclResult_t scheduleRecv(struct ncclComm* comm, int peer, int chunk, size_t count, void* buff) {
   struct ncclInfo info = { ncclFuncRecv, "Recv",
     NULL, buff, count, ncclInt8, ncclSum, peer, comm, comm->userStream, /* Args */
->>>>>>> upstream/master
     1, 1 };
   int channelId;
   NCCLCHECK(ncclChannelCompute(comm, peer, chunk%comm->p2pnChannelsPerPeer, ncclFuncRecv, &channelId));

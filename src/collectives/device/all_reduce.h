@@ -6,8 +6,8 @@
 
 #include "devcomm.h"
 #include "collectives.h"
-#include "msccl_interpreter.h"
 #include "primitives.h"
+#include "msccl_interpreter.h"
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
@@ -30,7 +30,6 @@ namespace {
       // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
-
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg);
 

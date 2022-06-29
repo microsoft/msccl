@@ -5,17 +5,16 @@
  ************************************************************************/
 
 #include "enqueue.h"
+#include "collectives.h"
 
 NCCL_API(ncclResult_t, ncclCustomCollective, const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int mscclAlgorithmIndex, mscclComputeOp_t mscclComputeOp, ncclComm_t comm, cudaStream_t stream);
+    ncclDataType_t datatype, ncclRedOp_t op, int mscclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream);
 ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int mscclAlgorithmIndex, mscclComputeOp_t mscclComputeOp, ncclComm_t comm, cudaStream_t stream) {
+    ncclDataType_t datatype, ncclRedOp_t op, int mscclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
-  
   struct ncclInfo info = { ncclFuncCustomCollective, "CustomCollective",
-    sendbuff, recvbuff, (recvbuff == sendbuff), count, datatype, comm->mscclAlgos[mscclAlgorithmIndex].redOp, 0, comm, stream, /* Args */
+    sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
     MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS };
-  info.mscclAlgoIndex = mscclAlgorithmIndex;
-  info.mscclComputeOp = mscclComputeOp;
+  info.mscclInfo.mscclAlgoIndex = mscclAlgorithmIndex;
   return ncclEnqueueCheck(&info);
 }

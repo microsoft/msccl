@@ -85,20 +85,8 @@ struct ncclNodeRanks {
   int* localRankToRank;
 };
 
-struct mscclRegistration {
-  int algoIndex;
-  int64_t minBytes;
-  int64_t maxBytes;
-  int protocol;
-};
-
 struct ncclComm {
   struct ncclChannel channels[MAXCHANNELS];
-  int numberOfMSCCLAlgorithms;
-  struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
-  struct mscclAlgorithmShared mscclAlgoShared;
-  struct mscclRegistration *mscclRegistrations;
-  int nMscclRegistrations;
 
   struct ncclPeerInfo* peerInfo;
   struct ncclTopoSystem* topo;
@@ -139,8 +127,9 @@ struct ncclComm {
   uint64_t collOpCount;
 
   // Channels for collectives
-  int nChannels; // this is used for allocation of channels
-  int nChannelsTreeRing; // this is used for tree and ring algorithms
+  int nChannels;
+  // This is due to MSCCL because an MSCCL algorithm may use more channels than the comm
+  int nChannelsRingOrTree;
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;
@@ -223,6 +212,8 @@ struct ncclComm {
   // user-created reduction ops
   int userRedOpCapacity, userRedOpFreeHead;
   ncclUserRedOp *userRedOps;
+
+  struct mscclHostCommInfo mscclHostComm;
 };
 
 // Scrambles the bits of non-builtin values of ncclRedOp_t according to the

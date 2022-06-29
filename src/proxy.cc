@@ -13,8 +13,6 @@
 #define ENABLE_TIMER 0
 #include "timer.h"
 
-enum { proxyRecv=0, proxySend=1 };
-
 static bool NeedProxy(int type, int pattern, int root, struct ncclRing* ring, int nranks) {
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice) return true;
 
@@ -365,13 +363,25 @@ static ncclResult_t SaveProxy(struct ncclChannel* channel, int type, int peer, s
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct mscclAlgorithm* mscclAlgo) {
-=======
-ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks) {
+ncclResult_t ConnectionNeedsProxy(struct ncclChannel* channel, int type, int peer, int connIndex, int* needsProxy) {
+  *needsProxy = 0;
+  if (peer < 0) return ncclSuccess;
+
+  struct ncclPeer* peerComm = channel->peers+peer;
+  struct ncclConnector* connector = type == proxyRecv ? peerComm->recv+connIndex : peerComm->send+connIndex;
+  if (connector->transportComm == NULL) {
+    WARN("Rank %d has no transport for %s peer %d on channel %d/%d", connector->comm->rank,
+        type == proxyRecv ? "recv" : "send", peer, channel->id, connIndex);
+    return ncclInternalError;
+  }
+  if (connector->transportComm->proxyProgress == NULL) return ncclSuccess;
+  *needsProxy = 1;
+  return ncclSuccess;
+}
+
+ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElem* mscclInfo) {
   struct ncclChannel* channel = comm->channels+op->channelId;
   int pattern = op->pattern;
->>>>>>> upstream/master
   if (pattern == ncclPatternRing || pattern == ncclPatternRingTwice || pattern == ncclPatternPipelineFrom || pattern == ncclPatternPipelineTo) {
     struct ncclRing* ring = &channel->ring;
     if (NeedProxy(proxyRecv, pattern, op->root, ring, nranks)) NCCLCHECK(SaveProxy(channel, proxyRecv, ring->prev, op, 0));
@@ -389,40 +399,47 @@ ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, in
     for (int i=0; i< NCCL_MAX_TREE_ARITY; i++) NCCLCHECK(SaveProxy(channel, proxySend, tree->down[i], op, 0));
     NCCLCHECK(SaveProxy(channel, proxyRecv, tree->up, op, 0));
   }
+
+  if (pattern == ncclPatternMSCCL){
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclInfo->mscclAlgoIndex];
+    int mscclMaxAllowedCount = mscclInfo->mscclMaxAllowedCount;
+    mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[op->channelId];
+    int nloopsChunkSteps = op->nsteps;
+    // nsteps is adjusted here for MSCCL algo
+    for (int i=0; i<mscclChannel->nRecvPeers; i++){
+      struct mscclChannelPeerInfo* recvPeer = &mscclChannel->recvPeerInfo[i];
+      int nrecvs = 0;
+      for (int j = 0; j < recvPeer->nCountExists; j++){
+        int c = recvPeer->counts[j];
+        int ntransfersPerOp = DIVUP(c+1,mscclMaxAllowedCount);
+        nrecvs += recvPeer->nchunksForPeer[c] * ntransfersPerOp;
+      }
+
+      op->nsteps = nloopsChunkSteps*nrecvs;
+      // printf("recv channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->recvPeers[i]);
+      NCCLCHECK(SaveProxy(channel, proxyRecv, recvPeer->peer, op, 0));
+    }
+    for (int i=0; i<mscclChannel->nSendPeers; i++){
+      struct mscclChannelPeerInfo* sendPeer = &mscclChannel->sendPeerInfo[i];
+      int nsends = 0;
+      for (int j = 0; j < sendPeer->nCountExists; j++){
+        int c = sendPeer->counts[j];
+        int ntransfersPerOp = DIVUP(c+1,mscclMaxAllowedCount);
+        nsends += sendPeer->nchunksForPeer[c] * ntransfersPerOp;
+      }
+
+      op->nsteps = nloopsChunkSteps*nsends;
+      // printf("send channel %d nsteps %d peer %d\n", op->channelId, op->nsteps, mscclChannel->sendPeers[i]);
+      NCCLCHECK(SaveProxy(channel, proxySend, sendPeer->peer, op, 0));
+    }
+    op->nsteps = nloopsChunkSteps;
+  }
+
   if (pattern == ncclPatternCollTreeUpDown) {
     // CollTree up
     NCCLCHECK(SaveProxy(channel, proxySend, channel->collTree.out, op, 1));  // For CollTree up, we are using push
     // CollTree down
     NCCLCHECK(SaveProxy(channel, proxyRecv, channel->collTree.out, op, 0));
-  }
-  if (pattern == ncclPatternMsccl){
-    int relativeChannelId = args->channel->id % mscclAlgo->nChannels;
-    mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[relativeChannelId];
-    // nsteps is adjusted here for MSCCL algo
-    for (int i=0; i<mscclChannel->nrecvPeers; i++){
-      int nrecvs = 0;
-      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,args->mscclMaxAllowedCount);
-        nrecvs += mscclChannel->nchunksForRecvPeer[i][j] * ntransfersPerOp;
-      }
-      args->nsteps = nrecvs * args->nLoops * args->chunkSteps;
-      NCCLCHECK(SaveProxy(proxyRecv, mscclChannel->recvPeers[i], args));
-    }
-    for (int i=0; i<mscclChannel->nsendPeers; i++){
-      int nsends = 0;
-      for (int j = 0; j < MSCCL_MAX_COUNT; j++){
-        int ntransfersPerOp = DIVUP(j+1,args->mscclMaxAllowedCount);
-        nsends += mscclChannel->nchunksForSendPeer[i][j] * ntransfersPerOp;
-      }
-
-      args->nsteps = nsends * args->nLoops * args->chunkSteps;
-      NCCLCHECK(SaveProxy(proxySend, mscclChannel->sendPeers[i], args));
-    }
-
-    if (args->connector && args->connector->conn.shared != 0){
-      WARN("MSCCL needs NET_SHARED_BUFFERS set to 0");
-      return ncclInvalidArgument;
-    }
   }
   return ncclSuccess;
 }
@@ -780,17 +797,6 @@ static ncclResult_t ncclProxyFreeConnections(struct ncclProxyConnectionPool* poo
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-  char* buff;
-  int* used;
-  *size = 2*comm->p2pnChannels*state->slotSize*state->nslots;
-  if (cuda && state->cudaBuff[0] == NULL) {
-    NCCLCHECK(ncclCudaCalloc(&buff, *size));
-    NCCLCHECK(ncclCalloc(&used, 2*comm->p2pnChannels*state->nslots));
-    for (int i=0; i<2*comm->p2pnChannels; i++) {
-      state->cudaBuff[i] = buff + state->nslots*state->slotSize*i;
-      state->cudaUsed[i] = used + state->nslots*i;
-=======
 #include "transport.h"
 
 ncclResult_t ncclProxyConnect(struct ncclComm* comm, int transport, int send, int rank, struct ncclProxyConnector* proxyConn) {
@@ -804,7 +810,6 @@ ncclResult_t ncclProxyConnect(struct ncclComm* comm, int transport, int send, in
     for (int r=0; r<comm->localRanks; r++) {
       comm->proxyState.peerSocks[r].fd = -1;
       comm->proxyState.peerSocks[r].abortFlag = comm->abortFlag;
->>>>>>> upstream/master
     }
   }
   NCCLCHECK(ncclTopoGetLocalRank(comm->topo, rank, &proxyConn->localRank));

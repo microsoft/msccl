@@ -46,11 +46,7 @@ struct ncclConnect {
 };
 
 struct ncclTransportComm {
-<<<<<<< HEAD
-  ncclResult_t (*setup)(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo*, struct ncclPeerInfo*, struct ncclConnect*, struct ncclConnector*, int channelId, int isMsccl);
-=======
   ncclResult_t (*setup)(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo*, struct ncclPeerInfo*, struct ncclConnect*, struct ncclConnector*, int channelId, int connIndex);
->>>>>>> upstream/master
   ncclResult_t (*connect)(struct ncclComm* comm, struct ncclConnect*, int nranks, int rank, struct ncclConnector*);
   ncclResult_t (*free)(struct ncclConnector*);
   ncclResult_t (*proxySharedInit)(struct ncclProxyConnection* connection, struct ncclComm* comm, int nChannels);
@@ -67,13 +63,8 @@ struct ncclTransport {
   struct ncclTransportComm recv;
 };
 
-<<<<<<< HEAD
-ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int nsend, int* peerSend);
-ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int isMsccl = 0);
-=======
 ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int nsend, int* peerSend, int connIndex);
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType=NULL);
->>>>>>> upstream/master
 
 enum { collNetRecv=0, collNetSend=1 };
 int ncclTransportCollNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, struct ncclChannel* channel, int masterRank, int masterPeer, int collNetGraphChannelId, int type);

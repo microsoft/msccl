@@ -134,18 +134,10 @@ static ncclResult_t canConnect(int* ret, struct ncclTopoSystem* topo, struct ncc
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-/* Setup send connector, and return connect information for others in the coll communicator to connect to me */
-ncclResult_t collNetSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int isMsccl = 0) {
-  struct collNetSendResources* resources;
-  NCCLCHECK(ncclCalloc(&resources, 1));
-  send->transportResources = resources;
-=======
 struct setupReq {
   int netDev;
   int useGdr;
 };
->>>>>>> upstream/master
 
 
 /* Setup send connector, and return connect information for others in the coll
@@ -167,16 +159,8 @@ static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-/* Setup recv connector */
-ncclResult_t collNetRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int isMsccl = 0) {
-  struct collNetRecvResources* resources;
-  NCCLCHECK(ncclCalloc(&resources, 1));
-  recv->transportResources = resources;
-=======
 static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
   struct setupReq req;
->>>>>>> upstream/master
 
   int proxyRank;
   NCCLCHECK(ncclTopoGetNetDev(comm, myInfo->rank, graph, channelId, -1, &req.netDev, &proxyRank));

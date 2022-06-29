@@ -46,18 +46,23 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
                           ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream)
 {
   if (sendcount == 0) return ncclSuccess;
+  if (sendbuff == recvbuff){
+    WARN("In-place alltoall is not possible currently.");
+    return ncclInvalidUsage;
+  }
 
   size_t allcount = sendcount * comm->nRanks;
   size_t nbytes = allcount * ncclTypeSize(datatype);
 
-  if (comm->nMscclRegistrations > 0)
+  struct mscclHostCommInfo* mscclInfo = &comm->mscclHostComm;
+  if (mscclInfo->nMscclRegistrations > 0)
   {
-    for (int i = 0; i < comm->nMscclRegistrations; ++i)
+    for (int i = 0; i < mscclInfo->nMscclRegistrations; ++i)
     {
-      struct mscclRegistration *reg = &comm->mscclRegistrations[i];
+      struct mscclRegistration *reg = &mscclInfo->mscclRegistrations[i];
       if (reg->minBytes <= nbytes && (nbytes < reg->maxBytes || reg->maxBytes == -1))
       {
-        struct mscclAlgorithm *mscclAlgo = &comm->mscclAlgos[reg->algoIndex];
+        struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[reg->algoIndex];
         if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) && ((allcount % mscclAlgo->nchunksPerLoop) == 0))
         {
           // if it was the 2D algorithm, select it first.
@@ -66,14 +71,12 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
           } else {
             NVTX3_FUNC_RANGE_IN(nccl_domain);
             struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
-                                    sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+                                    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
                                     MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
-            info.mscclAlgoIndex = reg->algoIndex;
-            auto curProto = mscclAlgo->protocol;
-            mscclAlgo->protocol = reg->protocol;
-            auto ret = ncclEnqueueCheck(&info);
-            mscclAlgo->protocol = curProto;
-            return ret;
+            info.algorithm = NCCL_ALGO_MSCCL;
+            info.mscclInfo.mscclAlgoIndex = reg->algoIndex;
+            info.protocol = reg->protocol;
+            return ncclEnqueueCheck(&info);
           }
         }
       }
@@ -81,10 +84,11 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
   }
   else
   {
-    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++)
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++)
     {
-      struct mscclAlgorithm *mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
-      if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) && ((allcount % comm->mscclAlgos[mscclAlgoIndex].nchunksPerLoop) == 0) && (nbytes >= mscclAlgo->minBytes) && (nbytes < mscclAlgo->maxBytes))
+      struct mscclAlgorithm *mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == ncclFuncAllToAll) && (comm->nRanks == mscclAlgo->ngpus) 
+        && ((allcount % mscclAlgo->nchunksPerLoop) == 0) && (nbytes >= mscclAlgo->minBytes) && (nbytes < mscclAlgo->maxBytes))
       {
         // if it was the 2D algorithm, select it first.
         if (!strcmp(mscclAlgo->name, "2D")) {
@@ -92,9 +96,11 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
         } else {
           NVTX3_FUNC_RANGE_IN(nccl_domain);
           struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
-                                  sendbuff, recvbuff, 0 /* all-to-all can only be out of place */, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+                                  sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
                                   MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
-          info.mscclAlgoIndex = mscclAlgoIndex;
+          info.algorithm = NCCL_ALGO_MSCCL;
+          info.mscclInfo.mscclAlgoIndex = mscclAlgoIndex;
+          info.protocol = mscclAlgo->protocol;
           return ncclEnqueueCheck(&info);
         }
       }

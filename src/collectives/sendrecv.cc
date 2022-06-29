@@ -14,9 +14,9 @@ ncclResult_t ncclSend(const void* sendbuff, size_t count, ncclDataType_t datatyp
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   struct ncclInfo info = { ncclFuncSend, "Send",
-    NULL, (void*)sendbuff, 0, count, datatype, ncclSum, peer, comm, stream, /* Args */
+    NULL, (void*)sendbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
     1, 1 };
-  info.mscclAlgoIndex = -1;
+  info.algorithm = -1;    
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
   ret = ncclEnqueueCheck(&info);
@@ -30,8 +30,9 @@ ncclResult_t ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int
     ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   struct ncclInfo info = { ncclFuncRecv, "Recv",
-    NULL, recvbuff, 0, count, datatype, ncclSum, peer, comm, stream, /* Args */
+    NULL, recvbuff, count, datatype, ncclSum, peer, comm, stream, /* Args */
     1, 1 };
+  info.algorithm = -1;    
   ncclResult_t ret;
   NCCLCHECK(ncclGroupStart());
   ret = ncclEnqueueCheck(&info);

@@ -164,12 +164,7 @@ static ncclResult_t p2pMap(struct ncclPeerInfo* myInfo, struct ncclPeerInfo* pee
 
 /* Send: Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-<<<<<<< HEAD
-    struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int isMsccl = 0) {
-
-=======
     struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
->>>>>>> upstream/master
   struct p2pSendResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   send->transportResources = resources;
@@ -215,12 +210,7 @@ ncclResult_t p2pSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
 
 /* Create and return connect structures for this peer to connect to me */
 ncclResult_t p2pRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo,
-<<<<<<< HEAD
-    struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId, int isMsccl = 0) {
-
-=======
     struct ncclConnect* connectInfo, struct ncclConnector * recv, int channelId, int connIndex) {
->>>>>>> upstream/master
   struct p2pRecvResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   recv->transportResources = resources;

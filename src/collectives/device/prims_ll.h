@@ -275,7 +275,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
-
     if (RECV) {
       for (int i=0; i < MaxRecv; i++) incRecv(i);
       postRecv();
@@ -359,12 +358,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     userBufs[Output] += delta;
   }
 
-  __device__ __forceinline__ void setInputOuput(T* inputBuf, T* outputBuf) {
-    userBufs[Input] = inputBuf;
-    userBufs[Output] = outputBuf;
-  }
-
-
   __device__ void send(intptr_t inpIx, int eltN) {
     return LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
   }
@@ -390,6 +383,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     return LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
   }
   __device__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    return LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
+    return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
   }
 };

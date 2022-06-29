@@ -23,15 +23,11 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
 };
 
 template <int type>
-<<<<<<< HEAD
-static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connect, struct ncclConnector* connector, int channelId, int isMsccl) {
-=======
 static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType) {
   struct ncclPeerInfo* myInfo = comm->peerInfo+comm->rank;
   struct ncclPeerInfo* peerInfo = comm->peerInfo+peer;
   struct ncclConnector* connector = (type == 1) ? comm->channels[channelId].peers[peer].send + connIndex :
                                                   comm->channels[channelId].peers[peer].recv + connIndex;
->>>>>>> upstream/master
   for (int t=0; t<NTRANSPORTS; t++) {
     struct ncclTransport *transport = ncclTransports+t;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
@@ -39,12 +35,8 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     NCCLCHECK(transport->canConnect(&ret, comm->topo, graph, myInfo, peerInfo));
     if (ret) {
       connector->transportComm = transportComm;
-<<<<<<< HEAD
-      NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, isMsccl));
-=======
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
       if (transportType) *transportType = t;
->>>>>>> upstream/master
       return ncclSuccess;
     }
   }
@@ -77,16 +69,12 @@ void dumpData(struct ncclConnect* data, int ndata) {
   }
 }
 
-<<<<<<< HEAD
-ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int isMsccl) {
-=======
 ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, int connIndex, int* highestTransportType/*=NULL*/) {
   // Stream used during transport setup; need for P2P pre-connect + CUDA Graph
   cudaStream_t transportSetupStream;
   CUDACHECK(cudaStreamCreateWithFlags(&transportSetupStream, cudaStreamNonBlocking));
   int highestType = TRANSPORT_P2P;  // track highest transport type
 
->>>>>>> upstream/master
   struct ncclConnect data[2*MAXCHANNELS];
   for (int i=1; i<comm->nRanks; i++) {
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
@@ -94,19 +82,15 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     uint32_t recvMask = comm->connectRecv[recvPeer];
     uint32_t sendMask = comm->connectSend[sendPeer];
+
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
     int type;
     TIME_START(0);
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
-<<<<<<< HEAD
-        struct ncclConnector* conn = &comm->channels[c].peers[recvPeer].recv;
-        NCCLCHECK(selectTransport<0>(comm, graph, comm->peerInfo+comm->rank, comm->peerInfo+recvPeer, recvData+recvChannels++, conn, c, isMsccl));
-=======
         NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, &type));
         if (type > highestType) highestType = type;
->>>>>>> upstream/master
       }
     }
     TIME_STOP(0);
@@ -114,13 +98,8 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     struct ncclConnect* sendData = recvData+recvChannels;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (sendMask & (1<<c)) {
-<<<<<<< HEAD
-        struct ncclConnector* conn = &comm->channels[c].peers[sendPeer].send;
-        NCCLCHECK(selectTransport<1>(comm, graph, comm->peerInfo+comm->rank, comm->peerInfo+sendPeer, sendData+sendChannels++, conn, c, isMsccl));
-=======
         NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, &type));
         if (type > highestType) highestType = type;
->>>>>>> upstream/master
       }
     }
     TIME_STOP(1);

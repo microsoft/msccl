@@ -12,6 +12,8 @@
 #include "socket.h"
 #include <pthread.h>
 
+enum { proxyRecv=0, proxySend=1 };
+
 enum ncclProxyOpState { ncclProxyOpNone, ncclProxyOpReady, ncclProxyOpProgress };
 
 struct ncclProxyArgs;
@@ -24,30 +26,21 @@ struct ncclProxyOp {
   struct ncclProxyConnection* connection;
   int channelId;
   int nsteps;
-<<<<<<< HEAD
-  int nLoops; // MSCCL uses this to calculate number of proxies
-=======
   ssize_t nbytes;
   int root;
   int next;
 
->>>>>>> upstream/master
   uint64_t opCount;
   int sliceSteps;
   int chunkSteps;
   int chunkSize;
   ncclDataType_t dtype;
   ncclRedOp_t redOp;
-<<<<<<< HEAD
-  int state;   // add component before this line -- it is left out during initialization
-  uint32_t mscclMaxAllowedCount; // MSCCL uses this to adjust nsteps for proxy
-=======
   ncclPattern_t pattern; // uint8_t
   uint8_t protocol;
   uint16_t pad;
 };
 static_assert(sizeof(struct ncclProxyOp) == 64, "Keep ProxyOp aligned with cache lines for effective prefetch");
->>>>>>> upstream/master
 
 struct ncclProxySubArgs {
   struct ncclProxyConnection* connection;
@@ -196,14 +189,10 @@ enum proxyMode {
   proxyTo = 2
 };
 
-<<<<<<< HEAD
-ncclResult_t ncclProxySaveColl(struct ncclProxyArgs* args, int pattern, int root, int nranks, struct mscclAlgorithm* mscclAlgo);
-ncclResult_t ncclProxySaveP2p(struct ncclInfo* info, struct ncclChannel* channel, int segment);
-=======
-ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* proxyOp, int nranks);
+ncclResult_t ConnectionNeedsProxy(struct ncclChannel* channel, int type, int peer, int connIndex, int* needsProxy);
+ncclResult_t ncclProxySaveColl(struct ncclComm* comm, struct ncclProxyOp* op, int nranks, struct mscclWorkElem* mscclInfo);
 ncclResult_t ncclProxyComputeP2p(struct ncclInfo* info, struct ncclProxyOp* proxyOp);
 ncclResult_t ncclProxySaveP2p(struct ncclComm* comm, struct ncclProxyOp* proxyOp);
->>>>>>> upstream/master
 ncclResult_t ncclProxyStart(struct ncclComm* comm);
 ncclResult_t ncclProxyInit(struct ncclComm* comm, struct ncclSocket* sock, union ncclSocketAddress* peerAddresses);
 ncclResult_t ncclProxyCreate(struct ncclComm* comm);

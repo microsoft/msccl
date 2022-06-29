@@ -159,11 +159,11 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 
 ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* ccMax);
 
-// MSCCL get algorithms from XML file and set the communicator
-ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str);
+// Read algorithms from XML files and set the mscclInfo
+ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks);
+// Read MSCCL config, get algorithms and set the mscclInfo
+ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks);
 
-// Read MSCCL config, get algorithms and set the communicator
-ncclResult_t mscclGetAllAlgoFromMSCCLConfigAndSetComm(struct ncclComm* comm, const char* str);
 
 static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, int64_t id, int* index) {
   *index = -1;

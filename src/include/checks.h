@@ -6,8 +6,6 @@
 
 #ifndef NCCL_CHECKS_H_
 #define NCCL_CHECKS_H_
-#include <thread>
-#include <chrono>
 
 #include "debug.h"
 
@@ -62,11 +60,6 @@
   } \
 } while(true)
 
-<<<<<<< HEAD
-// #define DEBUG
-
-#ifdef DEBUG
-=======
 #define SYSCHECKGOTO(statement, res, label) do { \
   if ((statement) == -1) {    \
     /* Print the back trace*/ \
@@ -110,29 +103,15 @@
   } \
 } while (0);
 
->>>>>>> upstream/master
 // Propagate errors up
 #define NCCLCHECK(call) do { \
   ncclResult_t res = call; \
   if (res != ncclSuccess) { \
     /* Print the back trace*/ \
-    printf("FAILURE %s %d\n", __FILE__, __LINE__); \
-    std::this_thread::sleep_for(std::chrono::seconds{3600}); \
     if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
     return res; \
   } \
 } while (0);
-#else
-#define NCCLCHECK(call) do { \
-  ncclResult_t res = call; \
-  if (res != ncclSuccess) { \
-    /* Print the back trace*/ \
-    if (ncclDebugNoWarn == 0) INFO(NCCL_ALL,"%s:%d -> %d", __FILE__, __LINE__, res);    \
-    return res; \
-  } \
-} while (0);
-#endif 
-
 
 #define NCCLCHECKGOTO(call, res, label) do { \
   res = call; \

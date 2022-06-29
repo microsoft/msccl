@@ -1,4 +1,3 @@
-
 /*************************************************************************
  * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
  *
@@ -17,7 +16,7 @@
 #define MAX_STR_LEN 255
 #define MAX_ATTR_COUNT 16
 #define MAX_SUBS 1024
-#define MAX_NODES (1<<22) 
+#define MAX_NODES (1<<22)
 
 #define NODE_TYPE_NONE 0
 #define NODE_TYPE_OPEN 1
@@ -48,8 +47,6 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
 ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml);
 #define NCCL_GRAPH_XML_VERSION 1
 ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
-ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml);
-ncclResult_t mscclGetXmlConfigFromFile(const char* xmlGraphFile, struct ncclXml* xml);
 
 /* Auto-detect functions */
 ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode);
@@ -57,6 +54,10 @@ ncclResult_t ncclTopoFillNet(struct ncclXml* xml, const char* pciPath, const cha
 
 /* Remove unneeded parts */
 ncclResult_t ncclTopoTrimXml(struct ncclXml* xml);
+
+/* msccl file loaders */
+ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+ncclResult_t mscclGetXmlConfigFromFile(const char* xmlGraphFile, struct ncclXml* xml);
 
 /**************/
 /* XML Struct */
@@ -103,6 +104,7 @@ static ncclResult_t xmlGetAttrInt(struct ncclXmlNode* node, const char* attrName
   *value = strtol(str, NULL, 0);
   return ncclSuccess;
 }
+
 static ncclResult_t xmlGetAttrInt64_t(struct ncclXmlNode* node, const char* attrName, int64_t* value) {
   const char* str;
   NCCLCHECK(xmlGetAttrStr(node, attrName, &str));

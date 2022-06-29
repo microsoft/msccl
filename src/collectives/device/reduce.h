@@ -7,6 +7,7 @@
 #include "devcomm.h"
 #include "collectives.h"
 #include "primitives.h"
+#include "msccl_interpreter.h"
 
 namespace {
   template<typename T, typename RedOp, typename Proto>

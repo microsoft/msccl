@@ -19,18 +19,11 @@
   (void*)NCCL_KERN_NAME(func, algo, LL, devredop, dtype), \
   (void*)NCCL_KERN_NAME(func, algo, LL, devredop, dtype)
 
-<<<<<<< HEAD
-#define NCCL_FUNC4(func, redop, type) \
-  (void*)NCCL_FUNC5(func, TREE,    redop, type), \
-  (void*)NCCL_FUNC5(func, RING,    redop, type), \
-  (void*)NCCL_FUNC5(func, MSCCL,    redop, type), \
-  (void*)NCCL_FUNC5(func, COLLNET, redop, type)
-=======
 #define NCCL_FUNC4(func, devredop, type) \
   (void*)NCCL_FUNC5(func, TREE,    devredop, type), \
   (void*)NCCL_FUNC5(func, RING,    devredop, type), \
+  (void*)NCCL_FUNC5(func, MSCCL,   devredop, type), \
   (void*)NCCL_FUNC5(func, COLLNET, devredop, type)
->>>>>>> upstream/master
 
 #if defined(__CUDA_BF16_TYPES_EXIST__)
 // Must be consistent with ncclDataType_t
@@ -173,7 +166,7 @@ ncclResult_t ncclLaunchCooperativeKernelMultiDevice(struct cudaLaunchParams *par
   return ncclSuccess;
 }
 
-static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** work, struct ncclWorkElem* base, int setOpIndex = -1) {
+static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** work, struct ncclWorkElem* base) {
   if (channel->workCount == NCCL_MAX_OPS) {
     WARN("Too many aggregated operations on channel %d (%d max)", channel->id, NCCL_MAX_OPS);
     return ncclInvalidUsage;
@@ -184,15 +177,8 @@ static ncclResult_t getNextOp(struct ncclChannel* channel, struct ncclWork** wor
   while (typePtr[0] != ncclWorkTypeUnused) sched_yield();
   memset(w, 0, sizeof(struct ncclWork));
   // Initialize with work elem if provided
-<<<<<<< HEAD
-  if (base) memcpy(e, base, sizeof(struct ncclWorkElem));
-  if (!base) e->mscclAlgoIndex = -1;
-  e->active = 1;
-  e->index = (setOpIndex == -1) ? opIndex : setOpIndex;
-  if (base) base->index = e->index;
-=======
   if (base) memcpy(w->elems, base, sizeof(struct ncclWorkElem));
->>>>>>> upstream/master
+  if (!base) w->elems->mscclWork.mscclAlgoIndex = -1; // make sure no msccl algo is used in case this is an empty work
   channel->workFifoTail++;
   channel->workCount++;
   if (work) *work = w;
@@ -207,27 +193,34 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
   // In graph mode, enqueue is async to capture, myParams can have been changed
   struct cudaLaunchParams* params = comm->myParams;
 
+  struct mscclAlgorithm* mscclAlgo = NULL;
+  if (eqInfo->elemList->count() == 1) {
+    auto w = &eqInfo->elemList->begin()->work;
+    int mscclAlgoIndex = w->elems->mscclWork.mscclAlgoIndex;  
+    if (w->header.type == ncclWorkTypeColl && mscclAlgoIndex >= 0)
+      mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+  }
+
   // Only launch blocks where we have work to do.
   // This is not supported when we are in cudaGraph mode.
   // Because in cudaGraph mode the launch param needs to be determined
   // at capture time instead of launch time.
   if (!usingCudaGraph) {
-    int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
-    for (int c=0; c<nChannels; c++) {
-      if (comm->channels[c].workCount) params->gridDim.x = c+1;
+    if (mscclAlgo){
+      // If we are using msccl, we need to set number of blocks and channels differently
+      params->gridDim.x = mscclAlgo->nBlocks;
+      eqInfo->maxChannels = 0;
+    } else {
+      int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
+      for (int c=0; c<nChannels; c++) {
+        if (comm->channels[c].workCount) params->gridDim.x = c+1;
+      }
+      eqInfo->maxChannels = params->gridDim.x;
     }
-    eqInfo->maxChannels = params->gridDim.x;
   }
 
-<<<<<<< HEAD
-  // Set active = 2 for the last operation and add a no-op on empty channels (p2p case).
-  // MSCCL: Total number of threadblocks are calculated here.
-  int totalNBlocks = 0;
-  for (int c=0; c<params->gridDim.x; c++) {
-=======
   // Set isLast = 1 for the last operation and add a no-op on empty channels (p2p case).
   for (int c=0; c<eqInfo->maxChannels; c++) {
->>>>>>> upstream/master
     struct ncclChannel* channel = comm->channels+c;
     if (channel->workCount == 0) {
       struct ncclWork* w;
@@ -236,49 +229,6 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       w->header.type = ncclWorkTypeP2p;
       w->header.nWarps = 0;
     }
-<<<<<<< HEAD
-    int channelTailIndex = ((channel->workFifoTail-1)%NCCL_MAX_OPS);
-    struct ncclWorkElem* lastElem = channel->workFifo[channelTailIndex].elems;
-    channel->workFifo[channelTailIndex].elems[0].active = 2;
-    if (lastElem->mscclAlgoIndex >= 0){
-      struct mscclAlgorithm* mscclAglo = &comm->mscclAlgos[lastElem->mscclAlgoIndex];
-      if (c >= mscclAglo->nChannels){
-        WARN("MSCCL algorithm's nchannels is less than the gridDim.x size!");
-        return ncclInternalError;
-      }
-      totalNBlocks += mscclAglo->mscclChannels[c].nBlocksForChannel;
-    } else {
-      totalNBlocks++;
-    }
-  }
-
-  // set the gridDim accordingly to the number of active elements. if the algorithm is non-MSCCL, 
-  // it remains the same. otherwise, it is set to the total # threadblocks necessary for MSCCL algorithm
-  // this is the first time MSCCL disassociates thread block and channels
-  params->gridDim.x = totalNBlocks;
-
-  // Find the first operation, choose the kernel accordingly and pass it
-  // as the first argument.
-  struct ncclChannel* c0 = comm->channels;
-  struct ncclWork* work = c0->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
-  struct ncclWorkElem* elem = work->elems;
-  memcpy(&comm->args, elem, sizeof(struct ncclWorkElem));
-  // As we inline the first coll directly, we can free it immediately.
-  if (elem->funcIndex != FUNC_INDEX_P2P){
-    elem->active = 0;
-  }
-
-  if (elem->mscclAlgoIndex >= 0) {
-    for (int c=0; c<comm->mscclAlgos[elem->mscclAlgoIndex].nChannels; c++) {
-      struct ncclChannel* channel = comm->channels+c;
-      struct ncclWork* work = channel->workFifo+((c0->workFifoTail-c0->workCount)%NCCL_MAX_OPS);
-      struct ncclWorkElem* elem = work->elems;
-      elem->active = 0;
-    }
-  }
-  if ((c0->workFifoTail % NCCL_MAX_OPS) < c0->workCount)
-    comm->mscclAlgoShared.flagsNeedReset = 1;
-=======
     channel->workFifo[(channel->workFifoTail-1)%NCCL_MAX_OPS].header.isLast = 1;
 
     if (c == 0) {
@@ -303,7 +253,6 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       }
     }
   }
->>>>>>> upstream/master
 
   return ncclSuccess;
 }
@@ -414,24 +363,13 @@ static ncclResult_t ncclLaunchProxy(struct ncclQueueInfo* eqInfo) {
   // launch and the ncclProxyStart call could cause a deadlock.
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
-<<<<<<< HEAD
-
-  uint64_t max = 0ULL;
-  for (int r=0; r<comm->p2pnChannels; r++) {
-    struct ncclChannel* channel = comm->channels+r;
-    if (channel->workCount) {
-      max = std::max(max, channel->workFifoTail);
-      channel->workCount = 0;
-    }
-=======
   ncclComm_t comm = eqInfo->comm;
-  if (eqInfo->maxChannels == 0) return ncclSuccess;
+  if (eqInfo->maxChannels == 0 && eqInfo->elemList->begin()->work.elems->mscclWork.mscclAlgoIndex == -1) return ncclSuccess;
 
   for (int r=0; r<eqInfo->maxChannels; r++) {
     struct ncclChannel* channel = comm->channels+r;
     channel->workCount = 0;
     channel->totalSize = 0;
->>>>>>> upstream/master
   }
   comm->lastChannel = 0;
   NCCLCHECK(ncclProxyStart(comm));
@@ -502,51 +440,38 @@ static inline ncclResult_t getCollNetSupport(struct ncclInfo* info, int* collNet
 // numPipeOps: number of pipelined ops. Can be greater than 1 in aggregation mode. Used to adjust latency.
 static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, int numPipeOps) {
   struct ncclComm* comm = info->comm;
-<<<<<<< HEAD
-  float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
-  // Find algorithm / protocol.
-  info->algorithm = -1;
-  info->protocol = -1;
-  int nAlgos = NCCL_NUM_ALGORITHMS;
-  // Check collNet support
-  int collNetTypeSupport = 0;
-  if (info->comm->collNetSupport)
-    NCCLCHECK(collNetReduceSupport(info->datatype, info->op, &collNetTypeSupport));
-  if (collNetTypeSupport != 1) nAlgos--;
-  if (info->mscclAlgoIndex >= 0){
-    // MSCCL algorithm is already selected.
-    info->algorithm = NCCL_ALGO_MSCCL;
-    info->protocol = info->comm->mscclAlgos[info->mscclAlgoIndex].protocol;
-  } else {
-    for (int a=0; a<nAlgos; a++) {
-      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        float time;
-        int mscclAlgoIndex = -1;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, &time, &mscclAlgoIndex, info->comm));
-        if (time >= 0 && time < minTime) {
-          info->algorithm = a;
-          info->mscclAlgoIndex = mscclAlgoIndex;
-=======
   if (comm->nRanks == 1) {
     info->algorithm = NCCL_ALGO_RING;
     info->protocol = NCCL_PROTO_SIMPLE;
   }
   else {
-    float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
-    // Find algorithm / protocol.
-    info->algorithm = -1;
-    info->protocol = -1;
-    int nAlgos = NCCL_NUM_ALGORITHMS;
-    for (int a=0; a<nAlgos; a++) {
-      if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
-      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
-        float time;
-        NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
-        if (time >= 0 && time < minTime) {
-          info->algorithm = a;
->>>>>>> upstream/master
-          info->protocol = p;
-          minTime = time;
+    if (comm->asyncOpCount > 1 && info->algorithm == NCCL_ALGO_MSCCL){
+      WARN("MSCCL algorithms is not supposed to be used in async mode!");
+      return ncclInvalidUsage;
+    }
+    // if it is already decided that this is a MSCCL algorithm, then skip this part
+    if (info->algorithm != NCCL_ALGO_MSCCL){
+      float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
+      // Find algorithm / protocol.
+      info->algorithm = -1;
+      info->protocol = -1;
+      // Do not run any MSCCL algo in async mode
+      if (comm->asyncOpCount <= 1)
+        NCCLCHECK(ncclTopoGetMSCCLAlgo(info));
+      if (info->algorithm != NCCL_ALGO_MSCCL){
+        int nAlgos = NCCL_NUM_ALGORITHMS;
+        for (int a=0; a<nAlgos; a++) {
+          if (a == NCCL_ALGO_MSCCL) continue;
+          if (a == NCCL_ALGO_COLLNET && collNetTypeSupport != 1) continue;
+          for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+            float time;
+            NCCLCHECK(ncclTopoGetAlgoTime(info, a, p, numPipeOps, &time));
+            if (time >= 0 && time < minTime) {
+              info->algorithm = a;
+              info->protocol = p;
+              minTime = time;
+            }
+          }
         }
       }
     }
@@ -558,31 +483,34 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
   }
 
-<<<<<<< HEAD
-  int nc = (info->nChannels > 0) ? info->nChannels :
-           (info->algorithm == NCCL_ALGO_COLLNET) ? comm->nChannelsTreeRing/2 : comm->nChannelsTreeRing; // CollNet uses one channel for up and one channel for down
-=======
-  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannels;
->>>>>>> upstream/master
+  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannelsRingOrTree; // Honor NCCL decision
   int nt = comm->maxThreads[info->algorithm][info->protocol];
-  int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
-  if (info->algorithm == NCCL_ALGO_COLLNET) {
-    // CollNet channel tuning
-    int ncSwitch = 16;
-    bool flag = true;
-    while (ncSwitch >= 1 && flag) {
-      while ((flag = info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold) && nc > ncSwitch) {
-        if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
-        nc--;
-      }
-      ncSwitch /= 2;
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    nc = 0; // set nchannels for MSCCL to 0 since we will use first inlined work for work
+    int mscclAlgoNthreads = comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nThreads;
+    if (mscclAlgoNthreads > 0){
+      nt = std::min(nt, mscclAlgoNthreads);
     }
   } else {
-    // Ring/Tree channel tuning
-    while (info->nBytes < nc*nt*threadThreshold) {
-      if (nc >= 2) nc--;
-      else if ((nt % 128) == 0) nt/=2;
-      else break;
+    int threadThreshold = comm->threadThresholds[info->algorithm][info->protocol];
+    if (info->algorithm == NCCL_ALGO_COLLNET) {
+      // CollNet channel tuning
+      int ncSwitch = 16;
+      bool flag = true;
+      while (ncSwitch >= 1 && flag) {
+        while ((flag = info->nBytes < nc*nt*info->comm->channels[0].collTree.nHeads*threadThreshold) && nc > ncSwitch) {
+          if (nc == ncSwitch+ncSwitch/2) threadThreshold /= 2;
+          nc--;
+        }
+        ncSwitch /= 2;
+      }
+    } else {
+      // Ring/Tree channel tuning
+      while (info->nBytes < nc*nt*threadThreshold) {
+        if (nc >= 2) nc--;
+        else if ((nt % 128) == 0) nt/=2;
+        else break;
+      }
     }
   }
   if (info->protocol == NCCL_PROTO_SIMPLE) {
@@ -592,20 +520,16 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     if (info->algorithm == NCCL_ALGO_COLLNET) nt += 3*WARP_SIZE;
   }
   info->nChannels = nc;
-  // MSCCL needs exactly mscclAlgo.nChannels.
-  if (info->algorithm == NCCL_ALGO_MSCCL){
-    if (comm->mscclAlgos[info->mscclAlgoIndex].nChannels > comm->nChannels){
-      WARN("MSCCL: Comm must have at least %d channels at this point but ended up with %d channels.", comm->mscclAlgos[info->mscclAlgoIndex].nChannels, comm->nChannels);
-      return ncclInternalError;
-    }
-    info->nChannels = comm->mscclAlgos[info->mscclAlgoIndex].nChannels;
-  }
   info->nThreads = nt;
   return ncclSuccess;
 }
 
 static ncclResult_t getPatternInfo(struct ncclInfo* info) {
-
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    // in case the algorithm is MSCCL, the proxy args are handled differently
+    info->pattern = ncclPatternMSCCL;
+    return ncclSuccess;
+  }
   switch (info->coll) {
     case ncclFuncBroadcast:
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeDown : ncclPatternPipelineFrom; break;
@@ -613,17 +537,13 @@ static ncclResult_t getPatternInfo(struct ncclInfo* info) {
       info->pattern = info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUp : ncclPatternPipelineTo; break;
     case ncclFuncReduceScatter:
     case ncclFuncAllGather:
-      info->pattern = info->algorithm == NCCL_ALGO_MSCCL ? ncclPatternMsccl : ncclPatternRing; break;
+      info->pattern = ncclPatternRing; break;
     case ncclFuncAllReduce:
-<<<<<<< HEAD
-      info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUp : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : info->algorithm == NCCL_ALGO_MSCCL ? ncclPatternMsccl : ncclPatternRingTwice; break;
-    case ncclFuncAllToAll:
-      info->pattern = ncclPatternMsccl; break;
-    case ncclFuncCustomCollective:
-      info->pattern = ncclPatternMsccl; break;
-=======
       info->pattern = info->algorithm == NCCL_ALGO_COLLNET ? ncclPatternCollTreeUpDown : info->algorithm == NCCL_ALGO_TREE ? ncclPatternTreeUpDown : ncclPatternRingTwice; break;
->>>>>>> upstream/master
+    case ncclFuncAllToAll:
+    case ncclFuncCustomCollective:
+      WARN("MSCCL: AllToAll/CustomCollective algorithm must have been set by now or defaulted to P2P instead");
+      return ncclInternalError;
     default:
       WARN("Unknown pattern for collective %d algorithm %d", info->coll, info->algorithm);
       return ncclInternalError;
@@ -645,10 +565,11 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
       info->nstepsPerLoop = info->comm->nRanks-1; info->nchunksPerLoop = info->comm->nRanks; break;
     case ncclPatternRingTwice:
       info->nstepsPerLoop = 2*(info->comm->nRanks-1); info->nchunksPerLoop = info->comm->nRanks; break;
-    case ncclPatternMsccl:
-      // MSCCL needs a specific number of steps per loop for each channel/connection. it is set properly in ncclProxySaveColl
+    case ncclPatternMSCCL:
+      // MSCCL needs a specific number of steps per loop for each channel/connection and therefore needs a variable number for each proxy. 
+      // So it is set properly in ncclProxySaveColl
       // n chunks per loop identifies how many chunks from the input buffer is processed in each iteration.
-      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->mscclAlgos[info->mscclAlgoIndex].nchunksPerLoop; break;
+      info->nstepsPerLoop = 1; info->nchunksPerLoop = info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].nchunksPerLoop; break;
     default:
       WARN("Unknown pattern %d", info->pattern);
       return ncclInternalError;
@@ -656,25 +577,25 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
 static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
-  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclAlgos[info->mscclAlgoIndex];
-  struct mscclAlgorithmShared* mscclAlgoShared = &info->comm->mscclAlgoShared;
-  size_t sizeNeeded = info->nBytes * (size_t)DIVUP(mscclAlgo->nScratchChunks, mscclAlgo->nchunksPerLoop);
-  if (sizeNeeded > mscclAlgoShared->scratchBufferSize){
-    if (mscclAlgoShared->scratchBufferSize > 0 && mscclAlgoShared->scratchBuffer != NULL){
-      CUDACHECK(cudaFree(mscclAlgoShared->scratchBuffer));
+  struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+  struct mscclHostCommInfo* mscclInfo = &info->comm->mscclHostComm;
+  size_t sizeNeeded = (info->nBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
+  if (sizeNeeded > mscclInfo->scratchBufferSize){
+    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevComm.scratchBuffer != NULL){
+      CUDACHECK(cudaFree(mscclInfo->mscclDevComm.scratchBuffer));
     }
-    NCCLCHECK(ncclCudaCalloc((char**)&mscclAlgoShared->scratchBuffer, sizeNeeded));
-    mscclAlgoShared->scratchBufferSize = sizeNeeded;
+    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeNeeded));
+    mscclInfo->scratchBufferSize = sizeNeeded;
+    // Not accessing any memory location on the device memory, but just getting their address
+    // Also make a dependence on the stream so that we wait for the previous call to be finished
+    // This hopefully happens very infrequently.
+    CUDACHECK(cudaMemcpyAsync((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), 
+      (char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
   }
-  info->scratchbuff = mscclAlgoShared->scratchBuffer;
   return ncclSuccess;
 }
 
-static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyArgs* proxyArgs /* output */) {
-  work->comm = info->comm->devComm;
-=======
 static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWorkElem* work, struct ncclProxyOp* proxyOp /* output */) {
   int collNetTypeSupport = 0;
   // Check whether algo and proto have been preset (as in aggregation case)
@@ -682,33 +603,15 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   if (info->nChannels > 0 && info->nThreads > 0) goto comp_next;
   NCCLCHECK(getCollNetSupport(info, &collNetTypeSupport));
   NCCLCHECK(getAlgoInfo(info, collNetTypeSupport, 1));
->>>>>>> upstream/master
 
 comp_next:
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
 
-<<<<<<< HEAD
-  if (info->algorithm == NCCL_ALGO_MSCCL){
-    if (info->comm->mscclAlgos[info->mscclAlgoIndex].nChannels == 0){
-      WARN("MSCCL algorithm's nchannels shouldn't be 0!");
-      return ncclInternalError;
-    }
-    // adjust MSCCL scratch 
+  if (info->algorithm == NCCL_ALGO_MSCCL)
     NCCLCHECK(adjustMSCCLScratchPad(info));
-  }
 
-  work->sendbuff = info->sendbuff;
-  work->recvbuff = info->recvbuff;
-  work->scratchbuff = info->scratchbuff;
-  work->coll.root = info->root;
-  work->coll.count = info->count;
-  work->coll.nChannels = info->nChannels;
-  work->nThreads = info->nThreads;
-  work->mscclAlgoIndex = info->mscclAlgoIndex;
-  work->mscclComputeOp = info->mscclComputeOp;
-=======
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
   work->recvbuff = info->recvbuff;
@@ -718,19 +621,19 @@ comp_next:
   work->header.nWarps = info->nThreads / WARP_SIZE;
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
+  work->mscclWork.mscclAlgoIndex = info->mscclInfo.mscclAlgoIndex;
 
   if (info->comm->nRanks == 1) {
     // one-rank reduce index
     work->header.funcIndex = 1 + int(info->datatype);
     return ncclSuccess;
   }
->>>>>>> upstream/master
 
   work->header.funcIndex = FUNC_INDEX(info->coll, info->opFull.op, info->datatype, info->algorithm, info->protocol);
 
   int stepSize   = info->comm->buffSizes[info->protocol]/NCCL_STEPS;
-  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_MSCCL))) ? info->chunkSteps : 1;
-  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && ((info->algorithm == NCCL_ALGO_RING) || (info->algorithm == NCCL_ALGO_MSCCL))) ? info->sliceSteps : 1;
+  int chunkSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING || info->algorithm == NCCL_ALGO_MSCCL)) ? info->chunkSteps : 1;
+  int sliceSteps = (info->protocol == NCCL_PROTO_SIMPLE && (info->algorithm == NCCL_ALGO_RING || info->algorithm == NCCL_ALGO_MSCCL)) ? info->sliceSteps : 1;
   int chunkSize  = stepSize*chunkSteps;
 
   // Compute lastChunkSize
@@ -752,7 +655,7 @@ comp_next:
     work->lastChunkSize = chunkSize / ncclTypeSize(info->datatype);
     // Set direct direction for broadcast-gather (read or write)
     work->direct = (info->nBytes / info->nChannels <= 1024*1024) ? NCCL_DIRECT_WRITE : NCCL_DIRECT_READ;
-  } else if (info->protocol == NCCL_PROTO_LL) {
+  } else if (info->algorithm != NCCL_ALGO_MSCCL &&info->protocol == NCCL_PROTO_LL) {
     const ssize_t sliceSize = stepSize*sizeof(uint64_t)/sizeof(union ncclLLFifoLine);
     const ssize_t loopSize = info->nChannels*info->nchunksPerLoop*(ssize_t)sliceSize;
     work->lastChunkSize = DIVUP((info->nBytes-(info->nBytes/loopSize)*loopSize), info->nChannels*info->nchunksPerLoop);
@@ -769,37 +672,13 @@ comp_next:
   }
 
   // Compute nSteps for proxies
-  size_t chunkEffectiveSize = chunkSize;
+  int chunkEffectiveSize = chunkSize;
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
   //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
-<<<<<<< HEAD
   // msccl might use multiple channels per loop. therefore, the division by info->comm->mscclAlgo.nChannels is necessary if the algo is MSCCL.
-  proxyArgs->nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_MSCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
-  // nstepsPerloop for msccl is incorrect at this pointand will be adjusted in ncclProxySaveColl
-  proxyArgs->nsteps = info->nstepsPerLoop * proxyArgs->nLoops * chunkSteps;
-  proxyArgs->sliceSteps = sliceSteps;
-  proxyArgs->chunkSteps = chunkSteps;
-  proxyArgs->protocol = info->protocol;
-  proxyArgs->dtype = info->datatype;
-  proxyArgs->redOp = info->op;
-  // MSCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
-  if (info->algorithm == NCCL_ALGO_MSCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
-    WARN("MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
-    return ncclInvalidUsage;
-  }
-
-  if (info->algorithm == NCCL_ALGO_MSCCL) {
-    if (info->nBytes > 0){
-      proxyArgs->mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
-      work->mscclMaxAllowedCount = proxyArgs->mscclMaxAllowedCount;
-    } else {
-      proxyArgs->mscclMaxAllowedCount = 0;
-      work->mscclMaxAllowedCount = 0;
-    }
-  }
-=======
-  int nLoops = (int)(DIVUP(info->nBytes, (((size_t)(info->nChannels))*info->nchunksPerLoop*chunkEffectiveSize)));
+  int nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_MSCCL) ? 1 : info->nChannels) * info->nchunksPerLoop*chunkEffectiveSize)));
+  // nsteps is completely incorrect for MSCCL algorithm. See getLoopInfo. It will be adjusted properly in ncclProxySaveColl.
   proxyOp->nsteps = info->nstepsPerLoop * nLoops * chunkSteps;
   proxyOp->sliceSteps = sliceSteps;
   proxyOp->chunkSteps = chunkSteps;
@@ -811,21 +690,52 @@ comp_next:
                      info->op;
   proxyOp->pattern = info->pattern;
   proxyOp->root = info->root;
->>>>>>> upstream/master
+
+  // MSCCL sets maxAllowed count based on how much buff we have available and what the size of input buffer is.
+  // TODO: this concept will be removed in later versions.
+  if (info->algorithm == NCCL_ALGO_MSCCL && info->nBytes % (size_t)(info->nchunksPerLoop) != 0){
+    WARN("MSCCL: something went wrong. MSCCL algorithm needs the input buffer to be divisible by %d\n", info->nchunksPerLoop);
+    return ncclInternalError;
+  }
+
+  if (info->protocol == NCCL_PROTO_SIMPLE && (chunkSize % ((info->nThreads-WARP_SIZE)*sizeof(uint64_t)/ncclTypeSize(info->datatype))) != 0){
+    WARN("chunkSize (%d) should be divisble by (nthreads-WARP_SIZE) (%d) for Simple protocol", chunkSize, info->nThreads-WARP_SIZE);
+    return ncclInternalError;
+  }
+
+  if (info->algorithm == NCCL_ALGO_MSCCL) {
+    int mscclMaxAllowedCount = 0;
+    if (info->nBytes > 0)
+      mscclMaxAllowedCount = std::max((uint32_t)1, (uint32_t)(chunkEffectiveSize / DIVUP(info->nBytes, (size_t)(info->nchunksPerLoop))));
+    if (mscclMaxAllowedCount == 0){
+      WARN("MSCCL: something went wrong. Max allowed count is 0\n");
+      return ncclInternalError;
+    }
+    if (mscclMaxAllowedCount >= MSCCL_MAX_COUNT)
+      mscclMaxAllowedCount = MSCCL_MAX_COUNT-1;
+
+    work->mscclWork.mscclMaxAllowedCount = mscclMaxAllowedCount;
+
+    // set workIndex in here which will be inlined later
+    work->mscclWork.workIndex = info->comm->mscclHostComm.workIndex++;
+    // make sure we reset the msccl flags when when we are almost overflowing the type of workIndex
+    if ((info->comm->mscclHostComm.flagsNeedReset) || (info->comm->mscclHostComm.workIndex > (((uint64_t)1 << (8*sizeof(info->comm->mscclHostComm.workIndex))) - 2*NCCL_MAX_OPS-1))) {
+      TRACE(NCCL_COLL,"MSCCL: resetting the semaphores");
+      CUDACHECK(cudaMemsetAsync(info->comm->mscclHostComm.mscclDevComm.flags, 0, sizeof(struct mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
+      info->comm->mscclHostComm.workIndex = 1; // setting the workIndex back to 1 for next iterations
+      info->comm->mscclHostComm.flagsNeedReset = 0;
+    }
+  }
+
+
   // This is used by P2P to reduce the receive buffer size. We don't use it in collectives
   // because some protocols need to transmit more than the total size, plus they sometimes
   // round up
   proxyOp->nbytes = stepSize*proxyOp->sliceSteps;
 
-<<<<<<< HEAD
-  TRACE(NCCL_NET,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d comm %p",
-      proxyArgs->opCount, proxyArgs->sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
-      proxyArgs->nLoops, proxyArgs->nsteps, info->comm);
-=======
   TRACE(NCCL_COLL,"opCount %lx slicesteps %d spl %d cpl %d nbytes %zi -> protocol %d nchannels %d nthreads %d, nloops %d nsteps %d chunksize %d comm %p",
       proxyOp->opCount, sliceSteps, info->nstepsPerLoop, info->nchunksPerLoop, info->nBytes, info->protocol, info->nChannels, info->nThreads,
       nLoops, proxyOp->nsteps, chunkSize, info->comm);
->>>>>>> upstream/master
   return ncclSuccess;
 }
 
@@ -911,21 +821,6 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
       CUDACHECK(cudaMemcpyAsync(info->recvbuff, info->sendbuff, info->nBytes, cudaMemcpyDeviceToDevice, info->stream));
     return ncclSuccess;
   }
-  // Alltoall needs a local copy and it has no allocated channel/threadblock. the corresponding chunk is transferred here
-/*  if (info->coll == ncclFuncAllToAll){
-    if (info->sendbuff == info->recvbuff){
-      WARN("Alltoall needs separate receive and send buffers.");
-      return ncclInvalidArgument;
-    }
-    size_t nBytesPerRank = info->nBytes / info->comm->nRanks;
-    size_t rankOffset = info->comm->rank * nBytesPerRank;
-    CUDACHECK(cudaMemcpyAsync((int8_t*)info->recvbuff + rankOffset, (int8_t*)info->sendbuff + rankOffset, nBytesPerRank, cudaMemcpyDeviceToDevice, info->stream));
-  }*/
-
-  if (info->comm->mscclAlgoShared.flagsNeedReset == 1){
-    CUDACHECK(cudaMemsetAsync(info->comm->mscclAlgoShared.flags, 0, sizeof(mscclFlag) * MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS, info->stream));
-    info->comm->mscclAlgoShared.flagsNeedReset = 0;
-  }
 
   // Compute cuda kernel arg and proxy arg templates
   struct ncclQueueElem* eqElem;
@@ -933,38 +828,19 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
   struct ncclWork* work = &eqElem->work;
   NCCLCHECK(computeColl(info, work->elems, &eqElem->proxyOp));
 
-<<<<<<< HEAD
-  int nChannels = work.coll.nChannels;
-  int nSubChannels = (info->pattern == ncclPatternCollTreeUp || info->pattern == ncclPatternCollTreeDown) ? 2 : 1;
-  struct mscclAlgorithm* mscclAlgo = NULL;
-  if (info->algorithm == NCCL_ALGO_MSCCL)
-    mscclAlgo = &info->comm->mscclAlgos[info->mscclAlgoIndex];
-  if (info->algorithm == NCCL_ALGO_MSCCL && mscclAlgo->nChannels == 0) {
-    WARN("mscclAlgo.nChannels must be positive!\n");
-    return ncclInternalError;
-  }
-
-  // MSCCL needs work->index to be set the same for all channels for info
-  int setOpIndex = -1;
-  for (int bid=0; bid<nChannels*nSubChannels; bid++) {
-    int channelId = info->comm->myParams->gridDim.x % info->comm->nChannels;
-    struct ncclChannel* channel = info->comm->channels+channelId;
-    if (info->algorithm == NCCL_ALGO_MSCCL && channelId >= mscclAlgo->nChannels) {
-      WARN("channelId must be always within the range of mscclAlgo nchannels!\n");
-      return ncclInternalError;
-    }
-    // Proxy
-    proxyArgs.channel = channel;
-    // Adjust pattern for CollNet based on channel index
-    if (nSubChannels == 2) {
-      info->pattern = (channelId < info->comm->nChannels/nSubChannels) ? ncclPatternCollTreeUp : ncclPatternCollTreeDown;
-=======
   // Determine grid size
   struct cudaLaunchParams* params = comm->myParams;
-  params->gridDim.x += info->nChannels;
-  params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+  // In case we have an MSCCL algorithm, there is only one in the queue.
   params->blockDim.x = std::max<unsigned>(params->blockDim.x, info->nThreads);
-  comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
+  if (info->algorithm == NCCL_ALGO_MSCCL){
+    struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
+    params->gridDim.x = mscclAlgo->nBlocks;
+    comm->enqueueInfo->maxChannels = 0; // nchannels with MSCCL is set to 0 since first is always inlined and MSCCL can be used only that way
+  } else {
+    params->gridDim.x += info->nChannels;
+    params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+    comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
+  }
 
   // Inline the first kernel
   if (params->func == NULL) {
@@ -975,18 +851,9 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
       memcpy(&comm->args, work->elems, sizeof(struct ncclWorkElem));
       comm->args.bid = 0;    // Only inline for channel 0
       comm->args.header.isLast = 1; // I am so far the last element
->>>>>>> upstream/master
     }
   }
 
-<<<<<<< HEAD
-    if (proxyArgs.nsteps) NCCLCHECK(ncclProxySaveColl(&proxyArgs, info->pattern, info->root, info->comm->nRanks, &info->comm->mscclAlgos[info->mscclAlgoIndex]));
-
-    info->comm->myParams->gridDim.x++;
-    work.coll.bid = bid % nChannels;
-    NCCLCHECK(getNextOp(channel, NULL, &work, setOpIndex));
-    if (bid == 0 && info->algorithm == NCCL_ALGO_MSCCL) setOpIndex = work.index;
-=======
   // Register and exchange input and output buffers
   if (comm->usingCudaGraph &&                   // only in CUDA graph mode
       comm->graphRegister == 1 &&               // when registration is enabled
@@ -999,7 +866,6 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
     // Disable inline argument because we need kernel to copy the entire ncclWork from workFifo
     // because the registered addresses are in ncclWorkElemReg
     comm->args.header.type = ncclWorkTypeUnused;
->>>>>>> upstream/master
   }
 
   return ncclSuccess;
@@ -1057,29 +923,20 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
       channelSize = NCCL_AGG_CHANNEL_SIZE * std::min(16, comm->nRanks);
     }
     // Reduce the per-channel size if we cannot fully utilize the channels
-    while (comm->asyncTotalSize < channelSize * comm->nChannels && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
+    while (comm->asyncTotalSize < channelSize * comm->nChannelsRingOrTree && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     // Check whether the ops have same reduce and data types (and hence can be packed in same ncclWork)
     int channelUsed = 0;
     int homogeneous = 1;
     int allCollNetSupport = comm->collNetSupport;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-<<<<<<< HEAD
-      info->nChannels = std::min((int)DIVUP(info->nBytes, channelSize), comm->nChannelsTreeRing); // assign number of channels
-      NCCLCHECK(ncclSaveKernel(info));
-      if (info->algorithm == NCCL_ALGO_MSCCL){
-        WARN("MSCCL algorithms can only be used asynchronously with one operation");
-        return ncclInternalError;
-      }
-=======
-      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannels); // assign number of channels
+      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannelsRingOrTree); // assign number of channels
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
       homogeneous &= info->coll == comm->asyncOps[0].coll &&
                      info->opFull.op == comm->asyncOps[0].opFull.op &&
                      info->datatype == comm->asyncOps[0].datatype;
       if (allCollNetSupport > 0) NCCLCHECK(getCollNetSupport(info, &allCollNetSupport));
->>>>>>> upstream/master
     }
     // Compute algo, proto, nthreads for the entire kernel
     // Prepare a synthetic op info to calculate the collective algo
@@ -1321,6 +1178,18 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   struct ncclWork* work = &eqElem->work;
   struct ncclWorkElem* elem = work->elems;
   struct ncclProxyOp* proxyOp = &eqElem->proxyOp;
+  int mscclAlgoIndex = elem->mscclWork.mscclAlgoIndex;
+  if (mscclAlgoIndex >= 0){
+    // short circuit and only save proxy
+    struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+    proxyOp->opCount = comm->collOpCount;
+    for (int ch = 0; ch < mscclAlgo->nChannels; ch++){
+      proxyOp->channelId = ch;
+      if (proxyOp->nsteps && mscclAlgo->needsProxy) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
+    }
+    comm->collOpCount++;
+    return ncclSuccess;
+  }
 
   int nChannels = elem->nChannels;
   size_t channelSize = elem->count*ncclTypeSize(proxyOp->dtype)/elem->nChannels;
@@ -1333,7 +1202,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     // Proxy
     proxyOp->channelId = channelId;
     proxyOp->opCount = comm->collOpCount;
-    if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks));
+    if (proxyOp->nsteps) NCCLCHECK(ncclProxySaveColl(comm, proxyOp, comm->nRanks, &elem->mscclWork));
 
     elem->bid = bid % nChannels;
     struct ncclWork* w = NULL;
@@ -1358,6 +1227,7 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
     NCCLCHECK(enqueueSegOp(workElemType, work, w, segment, &eqElem->buffRegInfo, channel, comm));
     channel->totalSize += channelSize;
   }
+
   comm->collOpCount++;
   return ncclSuccess;
 }
@@ -1459,6 +1329,8 @@ ncclResult_t ncclGetCudaGraph(ncclComm_t comm, cudaGraph_t* graph) {
       // the first setup node in the new graph will not have a dependency
       comm->lastCudaGraphId = cudaGraphId;
       comm->lastSetupNode = NULL;
+      // MSCCL needs a flag reset if it is a new graph and there is an MSCCL collective in the graph
+      comm->mscclHostComm.flagsNeedReset = 1;
     }
     if (comm->launchMode == ncclComm::GROUP) comm->launchMode = ncclComm::GROUP_GRAPH;
     comm->usingCudaGraph = 1;
@@ -1620,26 +1492,12 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
       NCCLCHECKGOTO(ncclSaveAsyncColl(info), ret, end);
     }
   } else {
-<<<<<<< HEAD
-    NCCLCHECK(PtrCheck(info->comm, info->opName, "comm"));
-    NCCLCHECK(ArgsCheck(info));
-    NCCLCHECK(checkSetStream(info));
-    NCCLCHECK(ncclSaveKernel(info));
-    NCCLCHECK(ncclBarrierEnqueue(info->comm));
-=======
     NCCLCHECKGOTO(checkSetStream(info), ret, end);
->>>>>>> upstream/master
 
-    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d algorithm %d numThreadBlocks %d threadBlocksSize %d protocol %d comm %p [nranks=%d] stream %p",
+    INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
         info->opName, info->comm->opCount, info->sendbuff, info->recvbuff, info->count,
-        info->datatype, info->op, info->root, info->algorithm, info->comm->myParams->gridDim.x, info->comm->myParams->blockDim.x, info->protocol, info->comm, info->comm->nRanks, info->stream);
+        info->datatype, info->op, info->root, info->comm, info->comm->nRanks, info->stream);
 
-<<<<<<< HEAD
-    NCCLCHECK(ncclBarrierEnqueueWait(info->comm));
-    NCCLCHECK(ncclEnqueueEvents(info->comm));
-
-    return ncclSuccess;
-=======
     // Check whether we are in cuda graph mode
     cudaGraph_t graph;
     ncclComm_t comm = info->comm;
@@ -1649,11 +1507,14 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     NCCLCHECKGOTO(ncclSetupCollKernel(info), ret, end);
 
     // Host setup
-    if (comm->usingCudaGraph) {
-      NCCLCHECKGOTO(ncclCudaGraphHostSetup(comm, graph), ret, end);
-    } else {
-      ncclEnqueueHostSetup<0>(comm->enqueueInfo);
-      NCCLCHECKGOTO(comm->enqueueInfo->ret, ret, end);
+    // If the algo is MSCCL and we didn't need any proxy thread, we can short circuit this
+    if (info->algorithm != NCCL_ALGO_MSCCL || comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex].needsProxy){
+      if (comm->usingCudaGraph) {
+        NCCLCHECKGOTO(ncclCudaGraphHostSetup(comm, graph), ret, end);
+      } else {
+        ncclEnqueueHostSetup<0>(comm->enqueueInfo);
+        NCCLCHECKGOTO(comm->enqueueInfo->ret, ret, end);
+      }
     }
 
     // Common part between graph mode and non-graph mode
@@ -1661,7 +1522,6 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
     NCCLCHECKGOTO(ncclLaunchKernel(comm), ret, end);
     NCCLCHECKGOTO(ncclRecordEvents(comm), ret, end);
     NCCLCHECKGOTO(ncclLaunchReset(comm), ret, end);
->>>>>>> upstream/master
   }
 end:
   if (isAsync && savedDev != -1) CUDACHECK(cudaSetDevice(savedDev));

@@ -55,12 +55,7 @@ ncclResult_t shmCanConnect(int* ret, struct ncclTopoSystem* topo, struct ncclTop
 #define MAX_SHM_NAME_LEN 1024
 
 /* Create and return connect structures for this peer to connect to me */
-<<<<<<< HEAD
-ncclResult_t shmSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int isMsccl = 0) {
-
-=======
 ncclResult_t shmSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
->>>>>>> upstream/master
   struct shmSendResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   send->transportResources = resources;
@@ -79,11 +74,7 @@ ncclResult_t shmSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, st
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-ncclResult_t shmRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int isMsccl = 0) {
-=======
 ncclResult_t shmRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
->>>>>>> upstream/master
   struct shmRecvResources* resources;
   NCCLCHECK(ncclCalloc(&resources, 1));
   recv->transportResources = resources;

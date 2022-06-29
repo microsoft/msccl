@@ -39,7 +39,7 @@ std::chrono::high_resolution_clock::time_point ncclEpoch;
 #define NCCL_GROUP_CUDA_STREAM 1 // CGMD: CUDA 9.0,9.1 Need to use an internal CUDA stream
 #endif
 
-const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll", "CustomCollective"};
+const char* ncclFuncStr[NCCL_NUM_FUNCTIONS] = { "Broadcast", "Reduce", "AllGather", "ReduceScatter", "AllReduce", "AllToAll", "CustomCollective" };
 const char* ncclAlgoStr[NCCL_NUM_ALGORITHMS] = { "Tree", "Ring", "MSCCL", "CollNet" };
 const char* ncclProtoStr[NCCL_NUM_PROTOCOLS] = { "LL", "LL128", "Simple" };
 
@@ -139,13 +139,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
   if (comm->bootstrap)
     NCCLCHECK(bootstrapClose(comm->bootstrap));
 
-<<<<<<< HEAD
-  CUDACHECK(cudaFree(comm->mscclAlgoShared.flags));
-  CUDACHECK(cudaFree(comm->hostDevComm.channels));
-  CUDACHECK(cudaFree(comm->devComm));
-=======
+  CUDACHECK(cudaFree(comm->mscclHostComm.mscclDevComm.flags));
   CUDACHECK(cudaFree((ncclDevCommAndChannels*)comm->devComm));
->>>>>>> upstream/master
 
   for (int channel=0; channel<MAXCHANNELS; channel++)
     NCCLCHECK(freeChannel(comm->channels+channel, comm->nRanks));
@@ -181,10 +176,10 @@ static ncclResult_t commFree(ncclComm_t comm) {
   NCCLCHECK(ncclCudaHostFree((void *)comm->abortFlag));
 
   // free up MSCCL allocated scratchPad
-  if (comm->mscclAlgoShared.scratchBuffer != NULL && comm->mscclAlgoShared.scratchBufferSize > 0){
-    CUDACHECK(cudaFree(comm->mscclAlgoShared.scratchBuffer));
-    comm->mscclAlgoShared.scratchBuffer = NULL;
-    comm->mscclAlgoShared.scratchBufferSize = 0;
+  if (comm->mscclHostComm.mscclDevComm.scratchBuffer != NULL && comm->mscclHostComm.scratchBufferSize > 0){
+    CUDACHECK(cudaFree(comm->mscclHostComm.mscclDevComm.scratchBuffer));
+    comm->mscclHostComm.mscclDevComm.scratchBuffer = NULL;
+    comm->mscclHostComm.scratchBufferSize = 0;
   }
 
   // Poison comm to try and catch a double free
@@ -290,6 +285,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   NCCLCHECK(ncclCudaCalloc(&devCommAndChans, 1));
   comm->devComm = &devCommAndChans->comm;
   comm->hostDevComm.channels = devCommAndChans->channels;
+  comm->hostDevComm.mscclInfo = devCommAndChans->mscclInfo;
 
   // Duplicate the channels on the device
   int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
@@ -300,13 +296,12 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
     NCCLCHECK(ncclCudaMemcpy(comm->channels[r].ring.devUserRanks, comm->channels[r].ring.userRanks, comm->nRanks));
   }
 
-  NCCLCHECK(ncclCudaCalloc(&comm->mscclAlgoShared.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
-  // MSCCL algo is copied to the device side
-  for (int i = 0; i < comm->numberOfMSCCLAlgorithms; i++)
-    comm->hostDevComm.mscclAlgos[i] = comm->mscclAlgos[i];
-  comm->hostDevComm.mscclAlgoShared = comm->mscclAlgoShared;
-  comm->hostDevComm.numberOfMSCCLAlgorithms = comm->numberOfMSCCLAlgorithms;
-  
+  // Allocating and copying MSCCL elements
+  NCCLCHECK(ncclCudaCalloc(&comm->mscclHostComm.mscclDevComm.flags, MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS));
+  comm->mscclHostComm.workIndex = 1; // start workIndex from 1 since flags are initialized to 0
+  comm->mscclHostComm.flagsNeedReset = 0; // since we just allocated them
+  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.mscclInfo, &comm->mscclHostComm.mscclDevComm, 1));
+
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
   return ncclSuccess;
@@ -347,6 +342,7 @@ static ncclResult_t fillInfo(struct ncclComm* comm, struct ncclPeerInfo* info, u
 }
 
 static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank, int nranks, int* ringRanks) {
+  TRACE(NCCL_INIT, "rank %d nranks %d", rank, nranks);
   NCCLCHECK(initChannel(comm, channelId));
 
   struct ncclRing* ring = &comm->channels[channelId].ring;
@@ -360,6 +356,13 @@ static ncclResult_t setupChannel(struct ncclComm* comm, int channelId, int rank,
   for (int i=0; i<nranks; i++) {
     ring->userRanks[i] = ringRanks[(i+ixRank)%nranks];
   }
+  return ncclSuccess;
+}
+
+static ncclResult_t setupMSCCLChannel(struct ncclComm* comm, int mscclMinRequireNChannels) {
+  TRACE(NCCL_INIT, "rank %d nranks %d", comm->rank, comm->nRanks);
+  for (int channelId = comm->nChannels; channelId < mscclMinRequireNChannels; channelId++)
+    NCCLCHECK(initChannel(comm, channelId));
   return ncclSuccess;
 }
 
@@ -464,132 +467,6 @@ static ncclResult_t computeBuffSizes(struct ncclComm* comm) {
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-extern struct ncclTransport collNetTransport;
-
-// All ranks must participate in collNetSetup call
-// type: 0 for send, 1 for recv
-// return: 0 - unsupported, 1 - supported
-// We do not NCCLCHECK this call because we would fall back to P2P network in case CollNet setup fails
-static int collNetSetup(struct ncclComm* comm, struct ncclTopoGraph* collNetGraph, struct ncclChannel* channel, int rank, int nranks,  int masterRank, int masterPeer, int nMasters, int type) {
-  int rankInCollNet = -1;
-  int supported = 0;
-  int isMaster = (rank == masterRank) ? 1 : 0;
-  struct {
-    int collNetRank;
-    ncclConnect connect;
-  } sendrecvExchange;
-
-  // check if we can connect to collnet, whose root is the nranks-th rank
-  struct ncclPeerInfo *myInfo = comm->peerInfo+rank, *peerInfo = comm->peerInfo+nranks;
-  peerInfo->rank = nranks;
-  int ret = 1;
-  if (isMaster) {
-    NCCLCHECK(collNetTransport.canConnect(&ret, comm->topo, collNetGraph, myInfo, peerInfo));
-  }
-
-  // send master receives connect info from peer recv master
-  if (isMaster && type == 0) {
-    NCCLCHECK(bootstrapRecv(comm->bootstrap, masterPeer, &sendrecvExchange, sizeof(sendrecvExchange)));
-    rankInCollNet = sendrecvExchange.collNetRank;
-    INFO(NCCL_INIT, "CollNet [send] : rank %d collNetRank %d collNetNranks %d received connect from rank %d", rank, rankInCollNet, nMasters, masterPeer);
-  }
-
-  // select
-  struct ncclPeer* root = channel->peers+nranks;
-  struct ncclConnector* conn = (type == 1) ? &root->recv : &root->send;
-  struct ncclTransportComm* transportComm = (type == 1) ? &(collNetTransport.recv) : &(collNetTransport.send);
-  conn->transportComm = transportComm;
-  // setup
-  struct ncclConnect myConnect;
-  if (isMaster && ret > 0) {
-    NCCLCHECK(transportComm->setup(comm, collNetGraph, myInfo, peerInfo, &myConnect, conn, channel->id, 0));
-  }
-  // prepare connect handles
-  ncclResult_t res;
-  struct {
-    int isMaster;
-    ncclConnect connect;
-  } *allConnects = NULL;
-  ncclConnect *masterConnects = NULL;
-  NCCLCHECK(ncclCalloc(&masterConnects, nMasters));
-  if (type == 1) {  // recv side: AllGather
-    // all ranks must participate
-    NCCLCHECK(ncclCalloc(&allConnects, nranks));
-    allConnects[rank].isMaster = isMaster;
-    memcpy(&(allConnects[rank].connect), &myConnect, sizeof(struct ncclConnect));
-    NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, allConnects, sizeof(*allConnects)), res, cleanup);
-    // consolidate
-    int c = 0;
-    for (int r = 0; r < nranks; r++) {
-      if (allConnects[r].isMaster) {
-        memcpy(masterConnects+c, &(allConnects[r].connect), sizeof(struct ncclConnect));
-        if (r == rank) rankInCollNet = c;
-        c++;
-      }
-    }
-  } else { // send side : copy in connect info received from peer recv master
-    if (isMaster) memcpy(masterConnects+rankInCollNet, &(sendrecvExchange.connect), sizeof(struct ncclConnect));
-  }
-  // connect
-  if (isMaster && ret > 0) {
-    NCCLCHECKGOTO(transportComm->connect(comm, masterConnects, nMasters, rankInCollNet, conn), res, cleanup);
-    struct ncclPeer* devRoot = channel->devPeers+nranks;
-    struct ncclConnector* devConn = (type == 1) ? &devRoot->recv : &devRoot->send;
-    CUDACHECKGOTO(cudaMemcpy(devConn, conn, sizeof(struct ncclConnector), cudaMemcpyHostToDevice), res, cleanup);
-  }
-  // recv side sends connect info to send side
-  if (isMaster && type == 1) {
-    sendrecvExchange.collNetRank = rankInCollNet;
-    memcpy(&sendrecvExchange.connect, masterConnects+rankInCollNet, sizeof(struct ncclConnect));
-    NCCLCHECKGOTO(bootstrapSend(comm->bootstrap, masterPeer, &sendrecvExchange, sizeof(sendrecvExchange)), res, cleanup);
-    INFO(NCCL_INIT, "CollNet [recv] : rank %d collNetRank %d collNetNranks %d sent connect to rank %d", rank, rankInCollNet, nMasters, masterPeer);
-  }
-  if (ret > 0) {
-    supported = 1;
-  }
-cleanup:
-  if (allConnects != NULL) free(allConnects);
-  if (masterConnects != NULL) free(masterConnects);
-  return supported;
-}
-
-static ncclResult_t checkCollNetSetup(struct ncclComm* comm, int rank, int collNetSetupFail) {
-  int nranks = comm->nRanks;
-  // AllGather collNet setup results
-  int* allGatherFailures;
-  NCCLCHECK(ncclCalloc(&allGatherFailures, nranks));
-  allGatherFailures[rank] = collNetSetupFail;
-  NCCLCHECK(bootstrapAllGather(comm->bootstrap, allGatherFailures, sizeof(int)));
-  for (int i=0; i<nranks; i++) {
-    if (allGatherFailures[i] != 0) {
-      collNetSetupFail = 1;
-      break;
-    }
-  }
-  free(allGatherFailures);
-  if (collNetSetupFail) {
-    if (rank == 0) WARN("Cannot initialize CollNet, using %s instead", ncclNetName());
-    // Free collNet resources
-    for (int r=0; r<comm->nChannels; r++) {
-      struct ncclChannel* channel = comm->channels+r;
-      struct ncclPeer* peer = channel->peers+nranks;
-      if (peer->send.transportResources && peer->send.transportComm) NCCLCHECK(peer->send.transportComm->free(peer->send.transportResources));
-      if (peer->recv.transportResources && peer->recv.transportComm) NCCLCHECK(peer->recv.transportComm->free(peer->recv.transportResources));
-      peer->send.transportResources = NULL; // avoid double free
-      peer->recv.transportResources = NULL; // avoid double free
-    }
-    // Set support to 0
-    comm->collNetSupport = 0;
-  } else {
-    comm->collNetSupport = 1;
-  }
-  return ncclSuccess;
-}
-
-NCCL_PARAM(CrossNic, "CROSS_NIC", 2);
-=======
->>>>>>> upstream/master
 NCCL_PARAM(GraphDumpFileRank, "GRAPH_DUMP_FILE_RANK", 0);
 NCCL_PARAM(CollNetNodeThreshold, "COLLNET_NODE_THRESHOLD", 2);
 NCCL_PARAM(NvbPreconnect, "NVB_PRECONNECT", 1);
@@ -598,6 +475,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // We use 2 AllGathers
   // 1. { peerInfo, comm, compCap}
   // 2. { nChannels, graphInfo, topoRanks }
+
+  // needs declaration early to avoid goto compilation bug
+  int mscclMinRequireNChannels = 0;
+  int numValidMSCCLAlgos = 0;
 
   int rank = comm->rank;
   int nranks = comm->nRanks;
@@ -817,29 +698,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     comm->collNetSupport = std::min(allGather3Data[i].collNetSupport, comm->collNetSupport);
   }
 
-<<<<<<< HEAD
-  // Read MSCCL algorithms first, but do not connect them yet.
-  int mscclMinRequireNChannels = 0;
-  int numValidMSCCLAlgos; // We only use this at connect site
-  if (getenv("MSCCL_XML_FILES") || getenv("MSCCL_CONFIG")) {
-    if (getenv("MSCCL_XML_FILES")){
-      NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetComm(comm, getenv("MSCCL_XML_FILES")));
-    }
-    if (getenv("MSCCL_CONFIG")) {
-      NCCLCHECK(mscclGetAllAlgoFromMSCCLConfigAndSetComm(comm, getenv("MSCCL_CONFIG")));
-    }
-    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-      struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
-      if (mscclAlgo->isValid){
-        // Make sure MSCCL at least has mscclAlgo->nChannels
-        mscclMinRequireNChannels = std::max(mscclMinRequireNChannels, mscclAlgo->nChannels);
-      }
-    }
-  }
-
-=======
   comm->nChannels = treeGraph.nChannels = ringGraph.nChannels = std::min(treeGraph.nChannels, ringGraph.nChannels);
->>>>>>> upstream/master
   if (comm->nChannels < nChannelsOrig) {
     // We started duplicating channels during Preset(), so we need to move the
     // duplicated channels since we have removed some.
@@ -864,17 +723,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
   int *rings;
   NCCLCHECK(ncclCalloc(&rings, nranks*MAXCHANNELS));
-<<<<<<< HEAD
-
-  NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, mscclMinRequireNChannels));
-  if (comm->nNodes > 1 &&
-      ncclParamCollNetEnable() == 1 &&
-      collNetSupport() && collNetGraph.nChannels) {
-    NCCLCHECK(ncclTopoConnectCollNet(comm, &collNetGraph, rank));
-  }
-=======
   NCCLCHECK(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, &collNetGraph));
->>>>>>> upstream/master
 
   free(allTopoRanks);
   free(nodesTreePatterns);
@@ -896,16 +745,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   line[1023] = '\0';
   INFO(NCCL_INIT, "Trees%s", line);
 
-<<<<<<< HEAD
-  // Set Affinity to a CPU local the our GPU, so that all memory we allocate
-  // on the host is local.
-  cpu_set_t affinitySave;
-  sched_getaffinity(0, sizeof(cpu_set_t), &affinitySave);
-  NCCLCHECK(ncclTopoSetAffinity(comm->topo, comm->rank));
-  ncclResult_t ret;
-  
-=======
->>>>>>> upstream/master
   NCCLCHECK(computeBuffSizes(comm));
 
   // Connect with prev/next for each ring
@@ -915,6 +754,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     if (comm->nRanks == 1) continue;
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->ring.prev, 1, &channel->ring.next, 0), ret, affinity_restore);
   }
+  // use nChannelsRingOrTree in getAlgoInfo so that we honor NCCL decisions
+  comm->nChannelsRingOrTree = comm->nChannels;
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, affinity_restore);
   free(rings);
   INFO(NCCL_INIT, "Connected all rings");
@@ -928,6 +769,92 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
   INFO(NCCL_INIT, "Connected all trees");
+
+  // Read MSCCL algorithms first, but do not connect them yet.
+
+  if (getenv("MSCCL_XML_FILES") || getenv("MSCCL_CONFIG")) {
+    struct mscclHostCommInfo* mscclInfo = &comm->mscclHostComm;
+    if (getenv("MSCCL_XML_FILES")){
+      NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetInfo(getenv("MSCCL_XML_FILES"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
+    }
+    if (getenv("MSCCL_CONFIG")) {
+      NCCLCHECK(mscclGetAllAlgoFromConfigAndSetInfo(getenv("MSCCL_CONFIG"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
+    }
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        numValidMSCCLAlgos++;
+        // Make sure MSCCL at least has mscclAlgo->nChannels
+        mscclMinRequireNChannels = std::max(mscclMinRequireNChannels, mscclAlgo->nChannels);
+      } else {
+        WARN("MSCCL should have ignored all invalid algorithms at this point!");
+        return ncclInternalError;
+      }
+    }
+  }
+
+  if (numValidMSCCLAlgos > 0 && comm->nRanks > 1) {
+    // first allocate the channels if they are not allocated
+    NCCLCHECKGOTO(setupMSCCLChannel(comm, mscclMinRequireNChannels), ret, affinity_restore);
+    comm->nChannels = std::max(comm->nChannels, mscclMinRequireNChannels); // extending the comm nChannels
+
+    // now go over each algorithm and queue all of the necessary connections
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+
+          int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nSendPeers; p++)
+            sendPeers[p] = mscclChannel->sendPeerInfo[p].peer;
+
+          int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++)
+            recvPeers[p] = mscclChannel->recvPeerInfo[p].peer;
+
+          NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nRecvPeers, recvPeers, mscclChannel->nSendPeers, sendPeers, 0), ret, affinity_restore);
+        }
+      }
+    }
+
+    // connect MSCCL connections
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for shared buffer for net.cc
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
+    INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+
+    // now figure out if proxies are needed
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        mscclAlgo->needsProxy = 0;
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+
+          for (int p = 0; p < mscclChannel->nSendPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxySend, mscclChannel->sendPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxyRecv, mscclChannel->recvPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
 
   // Check if we can setup CollNet
   if (comm->collNetSupport > 0) {
@@ -990,9 +917,6 @@ collnet_cleanup:
   }
   TRACE(NCCL_INIT, "rank %d nranks %d - CONNECTED %d RINGS AND TREES", rank, nranks, comm->nChannels);
 
-<<<<<<< HEAD
-  numValidMSCCLAlgos = 0;
-=======
   // Compute time models for algorithm and protocol combinations
   do {
     int myCompCap = comm->peerInfo[rank].cudaCompCap;
@@ -1004,34 +928,8 @@ collnet_cleanup:
     NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
   } while(0);
 
->>>>>>> upstream/master
   // Compute nChannels per peer for p2p
   NCCLCHECK(ncclTopoComputeP2pChannels(comm));
-  for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
-    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[mscclAlgoIndex];
-    if (mscclAlgo->isValid){
-      if (mscclAlgo->nChannels > comm->nChannels){
-        mscclAlgo->isValid = false;
-        continue;
-      }
-      // Connect MSCCL graph only if it was a valid algorithm
-      for (int c=0; c<mscclAlgo->nChannels; c++) {
-        struct ncclChannel* channel = comm->channels+c;
-        if (comm->nRanks == 1) continue;
-        struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
-        NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nrecvPeers, mscclChannel->recvPeers, mscclChannel->nsendPeers, mscclChannel->sendPeers), ret, affinity_restore);
-      }
-      numValidMSCCLAlgos++;
-    }
-  }
-  if (numValidMSCCLAlgos > 0){
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 1), ret, affinity_restore);
-    INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
-  }
-
-  // Compute time models for algorithm and protocol combinations.
-  NCCLCHECK(ncclTopoTuneModel(comm, minCompCap, maxCompCap, &treeGraph, &ringGraph, &collNetGraph));
-
 
   if (ncclParamNvbPreconnect()) {
     // Connect p2p when using NVB path

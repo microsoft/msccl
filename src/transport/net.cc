@@ -162,18 +162,11 @@ struct setupReq {
 
 /* Determine if we will use this transport for this peer and return connect
  * information for this peer */
-<<<<<<< HEAD
-ncclResult_t netSendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int isMsccl = 0) {
-  struct netSendResources* resources;
-  NCCLCHECK(ncclCalloc(&resources, 1));
-  send->transportResources = resources;
-  send->conn.shared = resources->shared = ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : (graph || isMsccl) ? 0 : 1;
-=======
 static ncclResult_t sendSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* send, int channelId, int connIndex) {
   struct setupReq req;
->>>>>>> upstream/master
 
-  send->conn.shared = req.shared = graph ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  // if it is in the setup phase for MSCCL, do not use a shared buffer.
+  send->conn.shared = req.shared = (graph || comm->mscclHostComm.inMSCCLConnectionSetupPhase) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
   req.channelId = channelId;
   req.connIndex = connIndex;
 
@@ -208,7 +201,7 @@ NCCL_PARAM(GdrCopyFlushEnable, "GDRCOPY_FLUSH_ENABLE", 0);
 static ncclResult_t recvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int connIndex) {
   struct setupReq req;
 
-  recv->conn.shared = req.shared = graph ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
+  recv->conn.shared = req.shared = (graph || comm->mscclHostComm.inMSCCLConnectionSetupPhase) ? 0 : ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : 1;
   req.channelId = channelId;
   req.connIndex = connIndex;
 
@@ -319,16 +312,6 @@ static ncclResult_t sendConnect(struct ncclComm* comm, struct ncclConnect* conne
   return ncclSuccess;
 }
 
-<<<<<<< HEAD
-ncclResult_t netRecvSetup(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclPeerInfo* myInfo, struct ncclPeerInfo* peerInfo, struct ncclConnect* connectInfo, struct ncclConnector* recv, int channelId, int isMsccl = 0) {
-  struct netRecvResources* resources;
-  NCCLCHECK(ncclCalloc(&resources, 1));
-  recv->transportResources = resources;
-  recv->conn.shared = resources->shared = ncclParamNetSharedBuffers() != -2 ? ncclParamNetSharedBuffers() : (graph || isMsccl) ? 0 : 1;
-
-  NCCLCHECK(ncclTopoGetNetDev(comm->topo, myInfo->rank, graph, channelId, &resources->netDev));
-  NCCLCHECK(ncclTopoCheckGdr(comm->topo, myInfo->busId, resources->netDev, 0, &resources->useGdr));
-=======
 /* Connect to this peer */
 static ncclResult_t recvConnect(struct ncclComm* comm, struct ncclConnect* connectInfo, int nranks, int rank, struct ncclConnector* recv) {
   struct connectMap* map;
@@ -336,7 +319,6 @@ static ncclResult_t recvConnect(struct ncclComm* comm, struct ncclConnect* conne
   recv->transportResources = map;
   NCCLCHECK(ncclProxyCall(&recv->proxyConn, ncclProxyMsgConnect, connectInfo, sizeof(int), map, sizeof(struct connectMap)));
   //NCCLCHECK(netDumpMap(map));
->>>>>>> upstream/master
 
   struct ncclSendMem *sendMem = (struct ncclSendMem*) NCCL_NET_MAP_GET_POINTER(map, gpu, sendMem);
   recv->conn.head = &sendMem->head;

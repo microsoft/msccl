@@ -533,11 +533,11 @@ class Primitives<
       userBuff += delta;
   }
 
-  __device__ __forceinline__ void setInputOuput(T* inputBuf, T* outputBuf) {
+  // For MSCCL purposes
+  __device__ __forceinline__ void setDataPtrs(void const *inputBuf, void *outputBuf) {
     if (flags & RoleInput) userBuff = (T*)inputBuf;
-    if (flags & RoleOutput) userBuff = (T*)outputBuf;
+    if (flags & RoleOutput) userBuff = (T*)outputBuf;    
   }
-
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
   }
@@ -593,10 +593,10 @@ class Primitives<
     // Direct is only for the send part
     genericOp<0, 1, 1, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
   }
-  __device__ __forceinline__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, postOp);
+  // MSCCL local copy
+  __device__ __forceinline__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN) {
+    genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, false);
   }
-
   __device__ __forceinline__ void
   scatter(intptr_t inpIx, int totalElem, int peerElem, int skip, int shift) {
     ScatterGatherOp<0, 0, 0, 1>(inpIx, -1, totalElem, peerElem, skip, shift, /*postOp=*/false);

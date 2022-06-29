@@ -704,6 +704,10 @@ ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int* i
   return ncclSuccess;
 }
 
+/*******************************/
+/* MSCCL XML parsing functions */
+/*******************************/
+
 ncclResult_t mscclGetBufferType(const char* str, uint8_t* output){
   if (strcmp(str, "i") == 0){
     *output = MSCCL_INPUT_BUFFER;
@@ -752,13 +756,12 @@ ncclResult_t mscclProtocolStrToId(const char *protocol, int *protocolId) {
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str, struct mscclAlgorithm* mscclAlgo) {
+ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorithm* mscclAlgo, int maxNChannels, int rank, int nRanks) {
   INFO(NCCL_INIT, "MSCCL: Parsing algorithm %s", str);
   struct ncclXml* xml;
 
   NCCLCHECK(ncclCalloc(&xml, 1));
   NCCLCHECK(mscclGetXmlAlgoFromFile(str, xml));
-  int rank = comm->rank;
 
   // zeroing out all entries.
   memset(mscclAlgo, 0, sizeof(struct mscclAlgorithm));
@@ -771,8 +774,8 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
 
   int ngpus;
   NCCLCHECK(xmlGetAttrInt(topNode, "ngpus", &ngpus));
-  if (comm->nRanks != ngpus){
-    WARN("MSCCL: ngpus set in the MSCCL algo (%d) doesn't match the communicator ngpus (%d)", ngpus, comm->nRanks);
+  if (nRanks != ngpus){
+    WARN("MSCCL: ngpus set in the MSCCL algo (%d) doesn't match the communicator ngpus (%d)", ngpus, nRanks);
     return ncclInvalidUsage;
   }
   mscclAlgo->ngpus = ngpus;
@@ -780,32 +783,6 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
   NCCLCHECK(xmlGetAttrInt(topNode, "nchunksperloop", &nchunksPerLoop));
   int globalNChannels;
   NCCLCHECK(xmlGetAttrInt(topNode, "nchannels", &globalNChannels));
-
-  int redopExists = 0;
-  NCCLCHECK(xmlAttrExists(topNode, "redop", &redopExists));
-  if (redopExists){
-    const char* redop;
-    // redop exists
-    NCCLCHECK(xmlGetAttrStr(topNode, "redop", &redop));
-    if (strcmp(redop, "sum") == 0){
-      mscclAlgo->redOp = ncclSum;
-    } else if (strcmp(redop, "prod") == 0){
-      mscclAlgo->redOp = ncclProd;
-    } else if (strcmp(redop, "max") == 0){
-      mscclAlgo->redOp = ncclMax;
-    } else if (strcmp(redop, "min") == 0){
-      mscclAlgo->redOp = ncclMin;
-    } else if (strcmp(redop, "nop") == 0){
-      //If algorithm has no reduction operator then use ncclSum.
-      mscclAlgo->redOp = ncclSum;
-    } else {
-      WARN("MSCCL: redop %s is not supported.", redop);
-      return ncclInvalidUsage;
-    }
-  } else {
-    // redop doesn't exist, default to nop/ncclSum
-    mscclAlgo->redOp = ncclSum;
-  }
 
   const char* protocol;
   NCCLCHECK(xmlGetAttrStr(topNode, "proto", &protocol));
@@ -871,7 +848,21 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
   } else {
     mscclAlgo->inPlace = 0;
   }
+  int nThreads, hasnthreads;
+  nThreads = 0; // default value
+  NCCLCHECK(xmlAttrExists(topNode, "nthreads", &hasnthreads));
+  if (hasnthreads){
+    NCCLCHECK(xmlGetAttrInt(topNode, "nthreads", &nThreads));
+    if ((nThreads % WARP_SIZE) != 0){
+      WARN("MSCCL nthreads must be a multiplication of %d", WARP_SIZE);
+      return ncclInvalidUsage;
+    }
+  }
+  mscclAlgo->nThreads = nThreads;
 
+  if (globalNChannels > maxNChannels){
+    WARN("MSCCL: number of desired channels (%d) is more than possible ones (%d)", globalNChannels, maxNChannels);
+  }
   mscclAlgo->nChannels = globalNChannels;
   mscclAlgo->nchunksPerLoop  = nchunksPerLoop;
   for (int s=0; s<topNode->nSubs; s++) {
@@ -916,7 +907,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
               WARN("MSCCL: peer (%d,%d) and gpu id (%d) must be different", recvpeer, sendpeer, id);
               return ncclInvalidUsage;
             }
-            struct mscclThreadBlock* sTB = &mscclAlgo->mscclTB[bid];
+            struct mscclThreadBlock* sTB = &mscclAlgo->mscclTBs[bid];
             sTB->nsteps = 0;
             if (recvpeer < -1 || sendpeer < -1){
               WARN("MSCCL: wrong recvpeer (%d) or sendpeer (%d) in threadblock %d on gpu %d", recvpeer, sendpeer, bid, id);
@@ -936,17 +927,13 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
             sTB->recvpeer = recvpeer;
             sTB->sendpeer = sendpeer;
             if (channelId < 0 || channelId > MAXCHANNELS){
-              if (channelId == -1 && recvpeer == -1 && sendpeer == -1){
-                WARN("MSCCL: threadblock %d on GPU %d has no send or recv", bid, id);
-              } else {
-                WARN("MSCCL for threadblocks with recv/send, chan needs to be between 0 and %d and it was %d", MAXCHANNELS, channelId);
-                return ncclInvalidUsage;
-              }
+              WARN("MSCCL: threadblock %d on GPU %d has an invalid channel %d", bid, id, channelId);
+              return ncclInvalidUsage;
             }
             sTB->channelId = channelId;
 
             // setting the summary of the msccl aglorithm in msccl channels
-            mscclChannelInfo* mscclChannel = (sTB->channelId == -1) ? NULL : &mscclAlgo->mscclChannels[sTB->channelId];
+            mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[sTB->channelId];
 
             int numDependences = 0;
             int oldDependencePointer = 0; // inidcator of where the dependences started for nop
@@ -1074,22 +1061,27 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
                       WARN("MSCCL: there is a send in threadblock %d on GPU %d without a sendpeer.", bid, id);
                       return ncclInvalidUsage;
                     }
-                    if (mscclChannel == NULL) {
-                      WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                      return ncclInternalError;
+                    if (mscclChannel->nSendPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                      WARN("MSCCL: too many sends per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                      return ncclInvalidUsage;
                     }
-                    mscclChannel->nchunksForSendPeer[mscclChannel->nsendPeers][count-1]++;
+
+                    struct mscclChannelPeerInfo* sendPeerInfo = &mscclChannel->sendPeerInfo[mscclChannel->nSendPeers];
+                    sendPeerInfo->nchunksForPeer[count-1]++;
+                    // mscclChannel->nchunksForSendPeer[mscclChannel->nsendPeers][count-1]++;
                   }
                   if (hasRecv){
                     if (recvpeer < 0){
                       WARN("MSCCL: there is a recv in threadblock %d on GPU %d without a recvpeer.", bid, id);
                       return ncclInvalidUsage;
                     }
-                    if (mscclChannel == NULL) {
-                      WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                      return ncclInternalError;
+                    if (mscclChannel->nRecvPeers >= MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
+                      WARN("MSCCL: too many recvs per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
+                      return ncclInvalidUsage;
                     }
-                    mscclChannel->nchunksForRecvPeer[mscclChannel->nrecvPeers][count-1]++;
+                    struct mscclChannelPeerInfo* recvPeerInfo = &mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers];
+                    recvPeerInfo->nchunksForPeer[count-1]++;
+                    // mscclChannel->nchunksForRecvPeer[mscclChannel->nrecvPeers][count-1]++;
                   }
 
                   if (checkSrc) NCCLCHECK(mscclCheckBufferBounds(msccltran->srcbuffer, msccltran->srcoffset, nInputChunks, nOutputChunks, nScratchChunks));
@@ -1140,28 +1132,29 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
                 }
               }
             }
-            if (sTB->sendpeer >= 0){
-              if (mscclChannel == NULL) {
-                WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                return ncclInternalError;
+
+            // finish up mscclChannel calculation
+
+            for (int c = 0; c < MSCCL_MAX_COUNT; c++){
+              struct mscclChannelPeerInfo* sendPeer = &mscclChannel->sendPeerInfo[mscclChannel->nSendPeers];
+              if (sendPeer->nchunksForPeer[c] > 0){
+                sendPeer->counts[sendPeer->nCountExists] = c;
+                sendPeer->nCountExists++;
               }
-              mscclChannel->sendPeers[mscclChannel->nsendPeers] = sTB->sendpeer;
-              mscclChannel->nsendPeers++;
+              struct mscclChannelPeerInfo* recvPeer = &mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers];
+              if (recvPeer->nchunksForPeer[c] > 0){
+                recvPeer->counts[recvPeer->nCountExists] = c;
+                recvPeer->nCountExists++;
+              }
+            }
+
+            if (sTB->sendpeer >= 0){
+              mscclChannel->sendPeerInfo[mscclChannel->nSendPeers].peer = sTB->sendpeer;
+              mscclChannel->nSendPeers++;
             }
             if (sTB->recvpeer >= 0){
-              if (mscclChannel == NULL) {
-                WARN("MSCCL: something went wrong! Channel should not have been NULL on threadblock %d GPU %d.", bid, id);
-                return ncclInternalError;
-              }
-              mscclChannel->recvPeers[mscclChannel->nrecvPeers] = sTB->recvpeer;
-              mscclChannel->nrecvPeers++;
-            }
-            if (mscclChannel) {
-              mscclChannel->nBlocksForChannel++;
-              if (mscclChannel->nBlocksForChannel > MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL){
-                WARN("MSCCL: too many sends/recv per channel. Max allowed %d", MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL);
-                return ncclInvalidUsage;
-              }
+              mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers].peer = sTB->recvpeer;
+              mscclChannel->nRecvPeers++;
             }
           }
         }
@@ -1170,6 +1163,9 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
           if (blockExists[i] == 1 && blockExists[i-1] == 0){
             WARN("MSCCL: threadblock %d is missing", i);
             return ncclInvalidUsage;
+          }
+          if (blockExists[i] == 1){
+            mscclAlgo->nBlocks = i+1;
           }
         }
       }
@@ -1180,20 +1176,20 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str){
+ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks){
   INFO(NCCL_ENV, "MSCCL_XML_FILES set by environment to %s", str);
   char* tokStr = strdup(str);
   char* tmpStr;
   char* token = strtok_r(tokStr, ":", &tmpStr);
-  comm->numberOfMSCCLAlgorithms = 0;
+  mscclInfo->numberOfMSCCLAlgorithms = 0;
   while (token) {
-    if (comm->numberOfMSCCLAlgorithms == MSCCL_MAX_NUM_ALGOS){
-      WARN("MSCCL: too many algorithms (%d) specified in environment variable MSCCL_XML_FILES. The rest will be ignored.", comm->numberOfMSCCLAlgorithms);
+    if (mscclInfo->numberOfMSCCLAlgorithms == MSCCL_MAX_NUM_ALGOS){
+      WARN("MSCCL: too many algorithms (%d) specified in environment variable MSCCL_XML_FILES. The rest will be ignored.", mscclInfo->numberOfMSCCLAlgorithms);
       break;
     }
-    struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[comm->numberOfMSCCLAlgorithms];
-    if (mscclGetAlgoFromXMLAndSetComm(comm, token, mscclAlgo) == ncclSuccess){
-      comm->numberOfMSCCLAlgorithms++;
+    struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclInfo->numberOfMSCCLAlgorithms];
+    if (mscclGetAlgoFromXMLAndSetAlgo(token, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
+      mscclInfo->numberOfMSCCLAlgorithms++;
       INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", token);
     } else {
       WARN("MSCCL: algorithm %s failed to initialize. Will be ignored.", token);
@@ -1204,12 +1200,12 @@ ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const 
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetAllAlgoFromMSCCLConfigAndSetComm(struct ncclComm* comm, const char* str){
+ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks){
   INFO(NCCL_INIT, "MSCCL: Parsing config %s", str);
   struct ncclXml* xml;
 
-  comm->mscclRegistrations = NULL;
-  comm->nMscclRegistrations = 0;
+  mscclInfo->mscclRegistrations = NULL;
+  mscclInfo->nMscclRegistrations = 0;
 
   NCCLCHECK(ncclCalloc(&xml, 1));
   NCCLCHECK(mscclGetXmlConfigFromFile(str, xml));
@@ -1220,8 +1216,8 @@ ncclResult_t mscclGetAllAlgoFromMSCCLConfigAndSetComm(struct ncclComm* comm, con
   for (int s=0; s < topNode->nSubs; s++) {
     struct ncclXmlNode* node = topNode->subs[s];
     if (strcmp(node->name, "load") == 0) {
-      if (comm->numberOfMSCCLAlgorithms == MSCCL_MAX_NUM_ALGOS){
-        WARN("MSCCL: too many algorithms (%d) specified in environment variable MSCCL_XML_FILES. The rest will be ignored.", comm->numberOfMSCCLAlgorithms);
+      if (mscclInfo->numberOfMSCCLAlgorithms == MSCCL_MAX_NUM_ALGOS){
+        WARN("MSCCL: too many algorithms (%d) specified in environment variable MSCCL_XML_FILES. The rest will be ignored.", mscclInfo->numberOfMSCCLAlgorithms);
         break;
       }
 
@@ -1249,15 +1245,15 @@ ncclResult_t mscclGetAllAlgoFromMSCCLConfigAndSetComm(struct ncclComm* comm, con
         NCCLCHECK(xmlGetAttrStr(node, "proto", &protocol));
       }
 
-      int algoIndex = comm->numberOfMSCCLAlgorithms;
-      struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[algoIndex];
-      if (mscclGetAlgoFromXMLAndSetComm(comm, path, mscclAlgo) == ncclSuccess){
-        comm->numberOfMSCCLAlgorithms++;
+      int algoIndex = mscclInfo->numberOfMSCCLAlgorithms;
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[algoIndex];
+      if (mscclGetAlgoFromXMLAndSetAlgo(path, mscclAlgo, maxNChannels, rank, nRanks) == ncclSuccess){
+        mscclInfo->numberOfMSCCLAlgorithms++;
         INFO(NCCL_INIT, "Parsed MSCCL Algorithm %s successfully.", path);
 
-        int regIndex = comm->nMscclRegistrations++;
-        NCCLCHECK(ncclRealloc(&comm->mscclRegistrations, comm->nMscclRegistrations));
-        struct mscclRegistration *mscclReg = &comm->mscclRegistrations[regIndex];
+        int regIndex = mscclInfo->nMscclRegistrations++;
+        NCCLCHECK(ncclRealloc(&mscclInfo->mscclRegistrations, mscclInfo->nMscclRegistrations-1, mscclInfo->nMscclRegistrations));
+        struct mscclRegistration *mscclReg = &mscclInfo->mscclRegistrations[regIndex];
         mscclReg->algoIndex = algoIndex;
         mscclReg->minBytes = minBytes;
         mscclReg->maxBytes = maxBytes;

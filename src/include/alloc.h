@@ -44,15 +44,6 @@ static ncclResult_t ncclCallocDebug(T** ptr, size_t nelem, const char *filefunc,
 #define ncclCalloc(...) ncclCallocDebug(__VA_ARGS__, __FILE__, __LINE__)
 
 template <typename T>
-<<<<<<< HEAD
-static ncclResult_t ncclRealloc(T** ptr, size_t nelem) {
-  void* p = realloc(*ptr, nelem*sizeof(T));
-  if (p == NULL) {
-    WARN("Failed to realloc %ld bytes", nelem*sizeof(T));
-    return ncclSystemError;
-  }
-  *ptr = (T*)p;
-=======
 static ncclResult_t ncclRealloc(T** ptr, size_t oldNelem, size_t nelem) {
   if (nelem < oldNelem) return ncclInternalError;
   if (nelem == oldNelem) return ncclSuccess;
@@ -68,19 +59,14 @@ static ncclResult_t ncclRealloc(T** ptr, size_t oldNelem, size_t nelem) {
   memset(p+oldNelem, 0, (nelem-oldNelem)*sizeof(T));
   *ptr = (T*)p;
   INFO(NCCL_ALLOC, "Mem Realloc old size %ld, new size %ld pointer %p", oldNelem*sizeof(T), nelem*sizeof(T), *ptr);
->>>>>>> upstream/master
   return ncclSuccess;
 }
 
 template <typename T>
-<<<<<<< HEAD
-static ncclResult_t ncclCudaCalloc(T** ptr, size_t nelem) {
-=======
 static ncclResult_t ncclCudaCallocDebug(T** ptr, size_t nelem, const char *filefunc, int line) {
   // Need async stream for P2P pre-connect + CUDA Graph
   cudaStream_t stream;
   CUDACHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
->>>>>>> upstream/master
   CUDACHECK(cudaMalloc(ptr, nelem*sizeof(T)));
   CUDACHECK(cudaMemsetAsync(*ptr, 0, nelem*sizeof(T), stream));
   CUDACHECK(cudaStreamSynchronize(stream));

@@ -275,6 +275,7 @@ ncclResult_t  ncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcou
 ncclResult_t pncclAllGather(const void* sendbuff, void* recvbuff, size_t sendcount,
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
+
 /*
  * All-To-All
  *
@@ -323,25 +324,6 @@ ncclResult_t pncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, in
     ncclComm_t comm, cudaStream_t stream);
 ncclResult_t  ncclRecv(void* recvbuff, size_t count, ncclDataType_t datatype, int peer,
     ncclComm_t comm, cudaStream_t stream);
-
-/*
- * MSCCL Collective
- *
- * Run a MSCCL Collective. 
- * Value of count is the maximum of elements send per rank and elements receive per rank.
- */
-
-typedef struct {
-    void* residual1;
-    void* residual2;
-} residualAddOp_t;
-
-typedef union {
-    residualAddOp_t residualAddOp;
-} mscclComputeOp_t;
-
-ncclResult_t ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
-    ncclDataType_t datatype, int mscclAlgorithmIndex, mscclComputeOp_t mscclComputeOp, ncclComm_t comm, cudaStream_t stream);
 
 /*
  * Group semantics
