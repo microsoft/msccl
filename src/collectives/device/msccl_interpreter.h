@@ -110,7 +110,7 @@ namespace {
             }
             step += numReductions-1;
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
-            prims.recvCopySend(dstoffset, dstoffset, thisNelem);
+            prims.recvCopySend(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
             prims.recvReduceSend(srcoffset, thisNelem);
           else if (msccltran->type == MSCCL_RECV_REDUCE_COPY_SEND)
