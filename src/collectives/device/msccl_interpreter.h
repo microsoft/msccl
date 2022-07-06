@@ -83,11 +83,11 @@ class mscclFunction {
             else if (msccltran->type == MSCCL_REDUCE) {
               int numReductions = msccltran->numReductions;
               int thisChunkSize = prims.nelem * thisCount;
-              dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
+              dstoffset = chunkOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
               for (int index = tid; index < thisChunkSize; index += nThreads){
                 T o = dstPointer[dstoffset + index];
                 for (int r = 0; r < numReductions; r++){
-                  srcoffset = chunkOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
+                  srcoffset = chunkOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
                   T t = srcPointer[srcoffset + index];
                   o = FUNC()(o, t);
                 }
