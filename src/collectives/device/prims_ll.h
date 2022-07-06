@@ -103,9 +103,10 @@ class ncclLLPrimitives {
   }
 
   // Using memcpy handles misaligned pointers.
-  __device__ uint64_t readAL(uint64_t* src) {
+  __device__ uint64_t readAL(volatile uint64_t* src) {
     uint64_t val;
-    memcpy((char*)&val, (char*)src, sizeof(uint64_t));
+    //memcpy((char*)&val, (char*)src, sizeof(uint64_t));
+    val = *src;
     return val;
   }
 
