@@ -118,6 +118,14 @@ ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCom
       nNodes;
 
     for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
+      for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
+        if (a == NCCL_ALGO_MSCCL) {
+          // MSCCL algorithms have a range for each algorithm and are decided by ncclTopoGetAlgoTime function.
+          comm->latencies[coll][a][p] = 0.;
+          comm->bandwidths[coll][a][p] = 1.;
+          continue;
+        }
+      }
       if (coll != ncclFuncAllReduce && a != NCCL_ALGO_RING) continue;
 
       for (int p=0; p<NCCL_NUM_PROTOCOLS; p++) {
@@ -301,29 +309,43 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
 }
 
 // checks whether the collective is inplace
-bool isInPlace(struct ncclInfo* info){
+ncclResult_t mscclInPlaceTotalCountHelper(struct ncclInfo* info, int* inPlace, int* totalCount){
   switch (info->coll) {
     case ncclFuncAllReduce:
     case ncclFuncCustomCollective:
     case ncclFuncBroadcast:
     case ncclFuncReduce:
+      *inPlace = (info->sendbuff == info->recvbuff);
+      *totalCount = info->count;
+      break;
     case ncclFuncAllToAll:
-      return (info->sendbuff == info->recvbuff);
+      *inPlace = (info->sendbuff == info->recvbuff);
+      *totalCount = info->count * info->comm->nRanks;
+      break;
     case ncclFuncAllGather:
-      return ((char*)info->sendbuff == (char*)info->recvbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+      *inPlace = ((char*)info->sendbuff == (char*)info->recvbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+      *totalCount = info->count * info->comm->nRanks;
+      break;
     case ncclFuncReduceScatter:
-      return ((char*)info->recvbuff == (char*)info->sendbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+      *inPlace = ((char*)info->recvbuff == (char*)info->sendbuff + (ssize_t)(info->comm->rank * info->count * ncclTypeSize(info->datatype)));
+      *totalCount = info->count * info->comm->nRanks;
+      break;
     case ncclFuncSend:    
     case ncclFuncRecv:    
     case ncclFuncSendRecv:
     default:
-      return false;    
+      *inPlace = 0;
+      *totalCount = info->count;
+      break;
   }
+  return ncclSuccess;
 }
 
 ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
   if (info->opFull.op == ncclDevSum || info->opFull.op == ncclDevProd || info->opFull.op == ncclDevMax || info->opFull.op == ncclDevMin){
-    bool inPlace = isInPlace(info);
+    int inPlace;
+    int totalCount;
+    NCCLCHECK(mscclInPlaceTotalCountHelper(info, &inPlace, &totalCount));
     struct mscclHostCommInfo* mscclHostComm = &info->comm->mscclHostComm;
     if (mscclHostComm->nMscclRegistrations > 0) {
       for (int i = 0; i < mscclHostComm->nMscclRegistrations; ++i) {
@@ -331,7 +353,7 @@ ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
         if (reg->minBytes <= info->nBytes && (info->nBytes < reg->maxBytes || reg->maxBytes == -1)) {
           struct mscclAlgorithm* mscclAlgo = &mscclHostComm->mscclDevComm.mscclAlgos[reg->algoIndex];
           if ((mscclAlgo->isValid) && (info->comm->bandwidths[info->coll][NCCL_ALGO_MSCCL][mscclAlgo->protocol] > 0) && (mscclAlgo->collectiveType == info->coll) 
-              && (inPlace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks) && ((info->count % mscclAlgo->nchunksPerLoop) == 0)) {
+              && (inPlace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks) && ((totalCount % mscclAlgo->nchunksPerLoop) == 0)) {
             info->algorithm = NCCL_ALGO_MSCCL;
             info->protocol = reg->protocol;
             info->mscclInfo.mscclAlgoIndex = reg->algoIndex;
@@ -344,7 +366,7 @@ ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
         struct mscclAlgorithm* mscclAlgo = &mscclHostComm->mscclDevComm.mscclAlgos[i];
         if ((mscclAlgo->isValid) && (info->comm->bandwidths[info->coll][NCCL_ALGO_MSCCL][mscclAlgo->protocol] > 0) 
             && (mscclAlgo->collectiveType == info->coll) && (inPlace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks)
-            && ((info->count % mscclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= mscclAlgo->minBytes) && (info->nBytes < mscclAlgo->maxBytes)) {
+            && ((totalCount % mscclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= mscclAlgo->minBytes) && (info->nBytes < mscclAlgo->maxBytes)) {
           info->algorithm = NCCL_ALGO_MSCCL;
           info->protocol = mscclAlgo->protocol;
           info->mscclInfo.mscclAlgoIndex = i;

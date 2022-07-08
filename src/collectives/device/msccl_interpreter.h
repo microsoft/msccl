@@ -86,7 +86,6 @@ namespace {
         dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
         prims.setDataPtrs(srcPointer, dstPointer);
         int count = msccltran->count;
-        // if (tid == 0) printf("1: bid %d step %d workIndex %d tile %d maxCount %d nthreads %d\n", bid, step, (int)workIndex, (int)iter, mscclMaxAllowedCount, nthreads);
         for (int c = 0; c < count; c += mscclMaxAllowedCount) {
           srcoffset = gridOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
           dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;

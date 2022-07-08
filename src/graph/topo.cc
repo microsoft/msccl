@@ -1035,9 +1035,14 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
 
                 int continuationOfReductions = 0;
                 // Analyze to see if this is in the same list of reductions for them to be chained
-                if (transferType == MSCCL_REDUCE && oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
-                  numTransfers--; // reuse the same transfer
-                  continuationOfReductions = 1;
+                if (transferType == MSCCL_REDUCE) {
+                  if (oldReductionDstBuffer == dstbufferInt && oldReductionDstOffset == dstoffset && oldReductionSrcBuffer == srcbufferInt && depend_bid == -1){
+                    numTransfers--; // reuse the same transfer
+                    continuationOfReductions = 1;
+                  } else {
+                    oldReductionDstBuffer = -1;
+                    oldReductionDstOffset = -1;
+                  }
                 }
 
 
