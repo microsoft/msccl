@@ -294,13 +294,14 @@ static float treeCorrectionFactor[NCCL_NUM_PROTOCOLS][23] = {
 
 ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int protocol, float* time, int* mscclAlgoIndex, struct ncclComm* comm) {
   if (algorithm == NCCL_ALGO_MSCCL){
+    size_t countMultiplied = info->nBytes/ncclTypeSize(info->datatype);
     if (comm->nMscclRegistrations > 0) {
       for (int i = 0; i < comm->nMscclRegistrations; ++i) {
         struct mscclRegistration *reg = &comm->mscclRegistrations[i];
         if (reg->minBytes <= info->nBytes && (info->nBytes < reg->maxBytes || reg->maxBytes == -1) && reg->protocol == protocol) {
           struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[reg->algoIndex];
           if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == info->coll) && (info->inplace == mscclAlgo->inPlace) && (mscclAlgo->ngpus == info->comm->nRanks)
-              && ((info->count % mscclAlgo->nchunksPerLoop) == 0)) {
+              && ((countMultiplied % mscclAlgo->nchunksPerLoop) == 0)) {
             *time = 0.f;
             *mscclAlgoIndex = reg->algoIndex;
             return ncclSuccess;
@@ -311,7 +312,7 @@ ncclResult_t ncclTopoGetAlgoTime(struct ncclInfo* info, int algorithm, int proto
       for (int i=0; i<comm->numberOfMSCCLAlgorithms; i++){
         struct mscclAlgorithm* mscclAlgo = &comm->mscclAlgos[i];
         if ((mscclAlgo->isValid) && (mscclAlgo->collectiveType == info->coll) && (info->inplace == mscclAlgo->inPlace) && (mscclAlgo->protocol == protocol) && (mscclAlgo->ngpus == info->comm->nRanks)
-            && ((info->count % mscclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= mscclAlgo->minBytes) && (info->nBytes < mscclAlgo->maxBytes)) {
+            && ((countMultiplied % mscclAlgo->nchunksPerLoop) == 0) && (info->nBytes >= mscclAlgo->minBytes) && (info->nBytes < mscclAlgo->maxBytes)) {
           *time = 0.f;
           *mscclAlgoIndex = i;
           return ncclSuccess;
