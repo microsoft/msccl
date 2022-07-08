@@ -98,11 +98,11 @@ namespace {
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
-            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset) * sizePerMscclChunk;
+            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
             for (int index = tid; index < thisNelem; index += nthreads){
               T o = dstPointer[dstoffset + index];
               for (int r = 0; r < numReductions; r++){
-                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]) * sizePerMscclChunk;
+                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
                 T t = srcPointer[srcoffset + index];
                 o = redFn(o, t);
               }
