@@ -424,4 +424,7 @@ public:
   __device__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return GenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
   }
+  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+    return;
+  }
 };

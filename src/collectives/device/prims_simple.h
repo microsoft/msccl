@@ -597,6 +597,8 @@ class Primitives<
   __device__ __forceinline__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN) {
     genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, false);
   }
+  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+  }
   __device__ __forceinline__ void
   scatter(intptr_t inpIx, int totalElem, int peerElem, int skip, int shift) {
     ScatterGatherOp<0, 0, 0, 1>(inpIx, -1, totalElem, peerElem, skip, shift, /*postOp=*/false);

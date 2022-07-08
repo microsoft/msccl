@@ -286,6 +286,68 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
   }
 
+  template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
+  __device__ __forceinline__ void LLMSCCLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+    nelem = nelem < 0 ? 0 : nelem;
+    T *srcElts = srcs[0];
+    T *dstElts = dsts[0];
+    nelem -= tid*EltPerLine;
+    srcElts += tid*EltPerLine;
+    dstElts += tid*EltPerLine;
+    if (MULTISRCS){
+      for (int i = 1; i < nsrcs; i++){
+        srcs[i] += tid*EltPerLine;
+      }
+    }
+    if (MULTIDSTS){
+      for (int i = 1; i < ndsts; i++){
+        dsts[i] += tid*EltPerLine;
+      }
+    }
+    int offset = tid;
+    int eltPerTrip = nthreads*EltPerLine;
+    while (nelem > 0) {
+      int eltInLine = EltPerLine < nelem ? EltPerLine : nelem;
+
+      DataLoader dl;
+      uint64_t data;
+      dl.loadBegin(srcElts, eltInLine);
+      srcElts += eltPerTrip;
+      data = dl.loadFinish();
+      if (REDUCE) {
+        uint64_t dataD;
+        dl.loadBegin(dstElts, eltInLine);
+        dstElts += eltPerTrip;
+        dataD = dl.loadFinish();
+        dataD = MULTI<RedOp,T>()(redOp, dataD, data);
+        if (MULTISRCS){
+          for (int i = 1; i < nsrcs; i++){
+            dl.loadBegin(srcs[i], eltInLine);
+            srcs[i] += eltPerTrip;
+            data = dl.loadFinish();
+            dataD = MULTI<RedOp,T>()(redOp, dataD, data);
+          }
+        }
+        storeData(dstElts, dataD, eltInLine);
+      }
+      if (COPY){
+        dstElts += eltPerTrip;
+        storeData(dstElts, data, eltInLine);
+        if (MULTIDSTS){
+          for (int i = 1; i < ndsts; i++){
+            dl.loadBegin(srcs[i], eltInLine);
+            srcs[i] += eltPerTrip;
+            data = dl.loadFinish();
+            dsts[i] += eltPerTrip;
+            storeData(dsts[i], data, eltInLine);
+          }
+        }
+      }
+      nelem -= eltPerTrip;
+      offset += nthreads;
+    }
+  }
+
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
     recvBuff[i] = (union ncclLLFifoLine*)conn->buffs[NCCL_PROTO_LL];
     recvStep[i] = conn->step;
@@ -384,5 +446,12 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
   __device__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+  }
+  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+    if (nsrcs == 1) {
+      return LLMSCCLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+    } else {
+      return LLMSCCLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+    }
   }
 };

@@ -97,16 +97,25 @@ namespace {
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
-            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-            for (int index = tid; index < thisNelem; index += nthreads){
-              T o = dstPointer[dstoffset + index];
-              for (int r = 0; r < numReductions; r++){
-                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-                T t = srcPointer[srcoffset + index];
-                o = redFn(o, t);
-              }
-              dstPointer[dstoffset + index] = o;
+            T* srcs[8];
+            T* dst = dstPointer + dstoffset;
+            for (int r = 0; r < numReductions; r++) {
+              srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
+              srcs[r] = srcPointer + srcoffset;
             }
+            prims.reduce(srcs, numReductions, &dst, 1, thisCount);
+            // volatile T* s = srcPointer;
+            // volatile T* d = dstPointer;
+            // dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+            // for (int index = tid; index < thisNelem; index += nthreads){
+            //   T o = d[dstoffset + index];
+            //   for (int r = 0; r < numReductions; r++){
+            //     srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
+            //     T t = s[srcoffset + index];
+            //     o = redFn(o, t);
+            //   }
+            //   d[dstoffset + index] = o;
+            // }
             step += numReductions-1;
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
             prims.recvCopySend(dstoffset, thisNelem);
