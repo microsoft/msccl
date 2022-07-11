@@ -103,7 +103,7 @@ namespace {
               srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
               srcs[r] = srcPointer + srcoffset;
             }
-            prims.reduce(srcs, numReductions, &dst, 1, thisCount);
+            prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
             // volatile T* s = srcPointer;
             // volatile T* d = dstPointer;
             // dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
