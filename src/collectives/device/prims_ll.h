@@ -105,6 +105,11 @@ class ncclLLPrimitives {
   // Using memcpy handles misaligned pointers.
   __device__ uint64_t readAL(uint64_t* src) {
     uint64_t val;
+/*    uint64_t val = 0;
+    volatile uint8_t* s = (volatile uint8_t*)src;
+    for (int i = 0; i < 8; i++){
+	    val += ((uint64_t)((*(s+i)))<<(8*i));
+    }*/
     memcpy((char*)&val, (char*)src, sizeof(uint64_t));
     return val;
   }
@@ -129,7 +134,6 @@ class ncclLLPrimitives {
     for (; offset<npack; offset+=nthreads) {
       // Recv : local, then intra-node, then inter-node
       uint64_t val = SRC ? readAL(srcPack+offset) : readLL(0, offset);
-      if (SRC == 2) val = MULTI<FUNC, T>()(readAL(dstPack+offset), val);
       if (RECV) {
         if (SRC) val = MULTI<FUNC, T>()(readLL(0, offset), val);
         for (int i=1; i<NRECV && i<nrecv; i++) {
