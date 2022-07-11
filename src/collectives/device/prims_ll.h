@@ -317,7 +317,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
       if (REDUCE) {
         uint64_t dataD;
         dl.loadBegin(dstElts, eltInLine);
-        dstElts += eltPerTrip;
         dataD = dl.loadFinish();
         dataD = MULTI<RedOp,T>()(redOp, dataD, data);
         if (MULTISRCS){
@@ -329,17 +328,18 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
           }
         }
         storeData(dstElts, dataD, eltInLine);
+        dstElts += eltPerTrip;
       }
       if (COPY){
-        dstElts += eltPerTrip;
         storeData(dstElts, data, eltInLine);
+        dstElts += eltPerTrip;
         if (MULTIDSTS){
           for (int i = 1; i < ndsts; i++){
             dl.loadBegin(srcs[i], eltInLine);
             srcs[i] += eltPerTrip;
             data = dl.loadFinish();
-            dsts[i] += eltPerTrip;
             storeData(dsts[i], data, eltInLine);
+            dsts[i] += eltPerTrip;
           }
         }
       }
