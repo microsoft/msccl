@@ -70,10 +70,9 @@ namespace {
         int16_t dependentPointer = msccltran->depencePointer;
         int16_t numDependences = msccltran->numDependences;
         if (msccltran->numDependences > 0){
-          int index = tid;
-          if (index < numDependences){
-            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+index];
-            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+index];
+          if (tid < numDependences){
+            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
+            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
             uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
             while ((mscclFlags + dependentBid)->flag < goalFlag){
             };
@@ -97,7 +96,8 @@ namespace {
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
-            T* srcs[8];
+            T* srcs[MSCCL_MAX_REDUCE_FUSION];
+            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
             T* dst = dstPointer + dstoffset;
             for (int r = 0; r < numReductions; r++) {
               srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
@@ -108,13 +108,14 @@ namespace {
             // volatile T* d = dstPointer;
             // dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
             // for (int index = tid; index < thisNelem; index += nthreads){
-            //   T o = d[dstoffset + index];
+            //   T o = load(&dstPointer[dstoffset + index]);//dstPointer[dstoffset + index];
             //   for (int r = 0; r < numReductions; r++){
             //     srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-            //     T t = s[srcoffset + index];
+            //     T t = load(&srcPointer[srcoffset + index]);//srcPointer[srcoffset + index];
             //     o = redFn(o, t);
             //   }
-            //   d[dstoffset + index] = o;
+            //   store(&dstPointer[dstoffset + index], o);
+            //   // dstPointer[dstoffset + index] = o;
             // }
             step += numReductions-1;
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
@@ -133,7 +134,7 @@ namespace {
         if (msccltran->has_dependence){
           __syncthreads();
           if (tid == nthreads-1){
-            __threadfence();
+            // __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
             mscclFlags[bid].flag = curFlag;
           }

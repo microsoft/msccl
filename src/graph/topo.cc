@@ -1115,7 +1115,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
                     numReductions++;
                     msccltran->numReductions = numReductions - msccltran->reductionPointer;
 
-                    if (has_dependence){
+                    if (has_dependence || numReductions == MSCCL_MAX_REDUCE_FUSION){
                       oldReductionDstBuffer = -1;
                       oldReductionDstOffset = -1;
                     } else {

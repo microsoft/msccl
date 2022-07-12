@@ -8,6 +8,7 @@
 #define MSCCL_MAX_NUM_THREAD_BLOCKS (108*2) // set this to 108 which is the number of SMs on A100
 #define MSCCL_MAX_NUM_ALGOS 4
 #define MSCCL_MAX_COUNT 72 // make sure this does not overflow wrt the size of mscclWorkElem::mscclMaxAllowCount
+#define MSCCL_MAX_REDUCE_FUSION 16
 
 #define MSCCL_SLICESTEPS (NCCL_STEPS/4)
 #define MSCCL_CHUNKSTEPS (NCCL_STEPS/2)
