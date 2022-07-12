@@ -179,7 +179,7 @@ namespace {
           else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
             prims.recvReduceCopy(srcoffset, dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_LOCAL_COPY)
-            prims.localCopy(srcoffset, dstoffset, thisNelem);
+            prims.localCopy(srcPointer+srcoffset, dstPointer+dstoffset, thisNelem);
           else
             return;
         }

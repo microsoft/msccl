@@ -622,10 +622,11 @@ class Primitives<
     genericOp<0, 1, 1, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
   }
   // MSCCL local copy
-  __device__ __forceinline__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN) {
-    genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, false);
+  __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
+    // return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+    return MSCCLgenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
-  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+  __device__ __forceinline__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
     if (nsrcs == 1) {
       return MSCCLgenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
     } else {

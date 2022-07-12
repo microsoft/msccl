@@ -444,8 +444,9 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
   }
-  __device__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+  __device__ void localCopy(T* srcs, T* dsts, int eltN) {
+    // return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+    return MSCCLLLGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
     if (nsrcs == 1) {
