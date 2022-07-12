@@ -287,7 +287,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
-  __device__ __forceinline__ void LLMSCCLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+  __device__ __forceinline__ void MSCCLLLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
     nelem = nelem < 0 ? 0 : nelem;
     T *srcElts = srcs[0];
     T *dstElts = dsts[0];
@@ -449,9 +449,9 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
     if (nsrcs == 1) {
-      return LLMSCCLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+      return MSCCLLLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
     } else {
-      return LLMSCCLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+      return MSCCLLLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
   }
 };
