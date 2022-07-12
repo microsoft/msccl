@@ -820,10 +820,10 @@ ncclResult_t mscclAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struc
 static int myrank;
 
 ncclResult_t mscclAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
-  struct xmlHandler handlers[] = { { "tb", mscclAlgoXmlthreadblock } };
   int thisrank;
   NCCLCHECK(xmlGetAttrInt(head, "id", &thisrank));
   if (thisrank == myrank){
+    struct xmlHandler handlers[] = { { "tb", mscclAlgoXmlthreadblock } };
     NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   } else {
     NCCLCHECK(xmlLoadSub(file, xmlGraph, head, NULL, 0));
