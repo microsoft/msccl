@@ -659,10 +659,9 @@ ncclResult_t mscclProtocolStrToId(const char *protocol, int *protocolId) {
 ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* str, struct mscclAlgorithm* mscclAlgo) {
   INFO(NCCL_INIT, "MSCCL: Parsing algorithm %s", str);
   struct ncclXml* xml;
-
   NCCLCHECK(ncclCalloc(&xml, 1));
-  NCCLCHECK(mscclGetXmlAlgoFromFile(str, xml));
   int rank = comm->rank;
+  NCCLCHECK(mscclGetXmlAlgoFromFile(str, xml, rank));
 
   // zeroing out all entries.
   memset(mscclAlgo, 0, sizeof(struct mscclAlgorithm));
