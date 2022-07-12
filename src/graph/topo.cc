@@ -661,8 +661,8 @@ ncclResult_t mscclGetAlgoFromXMLAndSetComm(struct ncclComm* comm, const char* st
   struct ncclXml* xml;
 
   NCCLCHECK(ncclCalloc(&xml, 1));
-  NCCLCHECK(mscclGetXmlAlgoFromFile(str, xml));
   int rank = comm->rank;
+  NCCLCHECK(mscclGetXmlAlgoFromFile(str, xml, rank));
 
   // zeroing out all entries.
   memset(mscclAlgo, 0, sizeof(struct mscclAlgorithm));

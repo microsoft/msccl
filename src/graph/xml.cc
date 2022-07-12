@@ -817,19 +817,25 @@ ncclResult_t mscclAlgoXmlthreadblock(FILE* file, struct ncclXml* xmlGraph, struc
   return ncclSuccess;
 }
 
-ncclResult_t mscclAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+ncclResult_t mscclAlgoXmlGpu(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head, int myrank) {
   struct xmlHandler handlers[] = { { "tb", mscclAlgoXmlthreadblock } };
-  NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  int thisrank;
+  NCCLCHECK(xmlGetAttrInt(head, "id", &thisrank));
+  if (thisrank == myrank){
+    NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
+  } else {
+    NCCLCHECK(xmlLoadSub(file, xmlGraph, head, NULL, 1));
+  }
   return ncclSuccess;
 }
 
-ncclResult_t mscclAlgoXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head) {
+ncclResult_t mscclAlgoXmlLoad(FILE* file, struct ncclXml* xmlGraph, struct ncclXmlNode* head, int myrank) {
   struct xmlHandler handlers[] = { { "gpu", mscclAlgoXmlGpu } };
   NCCLCHECK(xmlLoadSub(file, xmlGraph, head, handlers, 1));
   return ncclSuccess;
 }
 
-ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml) {
+ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml, int myrank) {
   FILE* file = fopen(xmlGraphFile, "r");
   if (file == NULL) {
     WARN("Could not open XML MSCCL graph file %s : %s", xmlGraphFile, strerror(errno));
