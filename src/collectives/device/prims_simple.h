@@ -231,6 +231,34 @@ class Primitives<
     }
   }
 
+  template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
+  __device__ __forceinline__ void MSCCLgenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+    nelem = nelem < 0 ? 0 : nelem;
+    if (tid < nworkers) {
+      if (REDUCE){
+        srcs[nsrcs] = dsts[0];
+        nsrcs++;
+        if (MULTISRCS){
+          ReduceOrCopyMulti<Unroll, RedOp, T, 3, MSCCL_MAX_REDUCE_FUSION, 1, 1, 0>
+            (tid, nworkers, ncclShmem.redOpArgs, false, nsrcs, (T const**)srcs, 1, (T**)dsts, nelem);
+        } else {
+          ReduceOrCopyMulti<Unroll, RedOp, T, 2, 2, 1, 1, 0>
+            (tid, nworkers, ncclShmem.redOpArgs, false, 2, (T const**)srcs, 1, (T**)dsts, nelem);
+        }
+      }
+      if (COPY){
+        ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, 0>
+          (tid, nworkers, ncclShmem.redOpArgs, false, 1, (T const**)srcs, 1, (T**)dsts, nelem);
+        if (MULTISRCS) {
+          for (int i = 1; i < nsrcs; i++){
+            ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, 0>
+              (tid, nworkers, ncclShmem.redOpArgs, false, 1, (T const**)&srcs[i], 1, (T**)&dsts[i], nelem);
+          }
+        }
+      }
+    }
+  }
+
   // Scatter/Gather generic op
   // skip: my own rank order in the buffer chunks
   // shift: peer offset to avoid all ranks sending to or receiving from same peer
@@ -598,6 +626,11 @@ class Primitives<
     genericOp<0, 0, 0, 0, Input, Output>(inpIx, outIx, -1, eltN, false);
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+    if (nsrcs == 1) {
+      return MSCCLgenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+    } else {
+      return MSCCLgenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+    }
   }
   __device__ __forceinline__ void
   scatter(intptr_t inpIx, int totalElem, int peerElem, int skip, int shift) {
