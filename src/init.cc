@@ -754,8 +754,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     if (comm->nRanks == 1) continue;
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->ring.prev, 1, &channel->ring.next, 0), ret, affinity_restore);
   }
-  // use nChannelsRingOrTree in getAlgoInfo so that we honor NCCL decisions
-  comm->nChannelsRingOrTree = comm->nChannels;
+  // use nChannelsOrgNCCL in getAlgoInfo so that we honor NCCL decisions
+  comm->nChannelsOrgNCCL = comm->nChannels;
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, affinity_restore);
   free(rings);
   INFO(NCCL_INIT, "Connected all rings");

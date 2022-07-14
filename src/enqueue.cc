@@ -211,7 +211,7 @@ static ncclResult_t setupLaunch(struct ncclQueueInfo* eqInfo, int usingCudaGraph
       params->gridDim.x = mscclAlgo->nBlocks;
       eqInfo->maxChannels = 0;
     } else {
-      int nChannels = std::max(comm->nChannels, comm->p2pnChannels);
+      int nChannels = std::max(comm->nChannelsOrgNCCL, comm->p2pnChannels);
       for (int c=0; c<nChannels; c++) {
         if (comm->channels[c].workCount) params->gridDim.x = c+1;
       }
@@ -483,7 +483,7 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
     TRACE(NCCL_COLL, "%ld Bytes -> Algo %d proto %d time %f", info->nBytes, info->algorithm, info->protocol, minTime);
   }
 
-  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannelsRingOrTree; // Honor NCCL decision
+  int nc = (info->nChannels > 0) ? info->nChannels : comm->nChannelsOrgNCCL; // Honor NCCL decision
   int nt = comm->maxThreads[info->algorithm][info->protocol];
   if (info->algorithm == NCCL_ALGO_MSCCL){
     nc = 0; // set nchannels for MSCCL to 0 since we will use first inlined work for work
@@ -838,7 +838,7 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
     comm->enqueueInfo->maxChannels = 0; // nchannels with MSCCL is set to 0 since first is always inlined and MSCCL can be used only that way
   } else {
     params->gridDim.x += info->nChannels;
-    params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannels);
+    params->gridDim.x = std::min<unsigned>(params->gridDim.x, comm->nChannelsOrgNCCL);
     comm->enqueueInfo->maxChannels = params->gridDim.x;  // params may be varied by a second graph hence we need to capture it here
   }
 
@@ -875,7 +875,7 @@ static ncclResult_t ncclSetupCollKernel(struct ncclInfo* info) {
 static inline int findShortestChannel(ncclComm_t comm) {
   size_t minSize = SIZE_MAX;
   int minC = 0;
-  for (int c=0; c<comm->nChannels; c++) {
+  for (int c=0; c<comm->nChannelsOrgNCCL; c++) {
     struct ncclChannel* channel = comm->channels+c;
     if (channel->totalSize < minSize) {
       minSize = channel->totalSize;
@@ -923,14 +923,14 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
       channelSize = NCCL_AGG_CHANNEL_SIZE * std::min(16, comm->nRanks);
     }
     // Reduce the per-channel size if we cannot fully utilize the channels
-    while (comm->asyncTotalSize < channelSize * comm->nChannelsRingOrTree && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
+    while (comm->asyncTotalSize < channelSize * comm->nChannelsOrgNCCL && channelSize > NCCL_MIN_CHANNEL_SIZE) channelSize /= 2;
     // Check whether the ops have same reduce and data types (and hence can be packed in same ncclWork)
     int channelUsed = 0;
     int homogeneous = 1;
     int allCollNetSupport = comm->collNetSupport;
     for (int c = 0; c < comm->asyncOpCount; c++) {
       struct ncclInfo* info = comm->asyncOps+c;
-      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannelsRingOrTree); // assign number of channels
+      info->nChannels = std::min(std::max(1, (int)DIVUP(info->nBytes, channelSize)), comm->nChannelsOrgNCCL); // assign number of channels
       channelUsed += info->nChannels;
       // We can use fast path if all collectives are the same
       homogeneous &= info->coll == comm->asyncOps[0].coll &&
@@ -944,7 +944,7 @@ ncclResult_t ncclSetupAsyncKernels(ncclComm_t comm) {
     total.comm = comm;
     total.coll = comm->asyncOps[0].coll;
     total.nBytes = comm->asyncTotalSize;
-    total.nChannels = std::min(channelUsed, comm->nChannels);
+    total.nChannels = std::min(channelUsed, comm->nChannelsOrgNCCL);
     int perChannelOps = DIVUP(channelUsed, total.nChannels);
     if (homogeneous) NCCLCHECK(getAlgoInfo(&total, allCollNetSupport, perChannelOps));
     // Set for each op

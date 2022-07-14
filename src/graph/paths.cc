@@ -648,7 +648,7 @@ static int nextPow2(int v) {
 }
 
 ncclResult_t ncclTopoComputeP2pChannels(struct ncclComm* comm) {
-  comm->p2pnChannels = std::min(comm->nChannels, (int)ncclParamMaxP2pNChannels());
+  comm->p2pnChannels = std::min(comm->nChannelsOrgNCCL, (int)ncclParamMaxP2pNChannels());
   comm->p2pnChannels = std::max(comm->p2pnChannels, (int)ncclParamMinP2pNChannels());
   int minChannels = comm->p2pnChannels;
   // We need to loop through all local GPUs to have a global picture
