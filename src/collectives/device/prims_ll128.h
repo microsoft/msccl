@@ -319,6 +319,85 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL128, P2p>:
     if (RECV) postRecv();
   }
 
+  template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
+  __device__ __forceinline__ void MSCCLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+    T const *srcPtr = srcs[0];
+    T       *dstPtr = dsts[0];
+    int wireOffset = WireWordPerSlice*warp + 2*wid;
+    const int nwarps = nthreads/WARP_SIZE;
+    nelem = nelem < 0 ? 0 : nelem;
+
+    nelem -= DataEltPerSlice*warp;
+    srcPtr += DataEltPerSlice*warp;
+    dstPtr += DataEltPerSlice*warp;
+    if (MULTISRCS){
+      for (int i = 1; i < nsrcs; i++){
+        srcs[i] += DataEltPerSlice*warp;
+      }
+    }
+    if (MULTIDSTS){
+      for (int i = 1; i < ndsts; i++){
+        dsts[i] += DataEltPerSlice*warp;
+      }
+    }    
+    while (nelem > 0) {
+      const int eltInSlice = min(nelem, DataEltPerSlice);
+      uint64_t regs[NCCL_LL128_SHMEM_ELEMS_PER_THREAD];
+      loadRegsBegin(regs, srcPtr, eltInSlice);
+      loadRegsFinish(regs);
+      if (REDUCE){
+        uint64_t regsD[NCCL_LL128_SHMEM_ELEMS_PER_THREAD];
+        loadRegsBegin(regsD, dstPtr, eltInSlice);
+        loadRegsFinish(regsD);
+        #pragma unroll
+        for (int u=0; u<NCCL_LL128_SHMEM_ELEMS_PER_THREAD; u+=2) {
+          regsD[u] = MULTI<RedOp, T>()(redOp, regs[u], regsD[u]);
+          if (!flagThread)
+            regsD[u+1] = MULTI<RedOp, T>()(redOp, regs[u+1], regsD[u+1]);
+        }
+        if (MULTISRCS){
+          for (int i = 1; i < nsrcs; i++){
+            loadRegsBegin(regs, srcs[i], eltInSlice);
+            loadRegsFinish(regs);
+            for (int u=0; u<NCCL_LL128_SHMEM_ELEMS_PER_THREAD; u+=2) {
+              regsD[u] = MULTI<RedOp, T>()(redOp, regs[u], regsD[u]);
+              if (!flagThread)
+                regsD[u+1] = MULTI<RedOp, T>()(redOp, regs[u+1], regsD[u+1]);
+            }
+          }
+        }
+        storeRegs(dstPtr, regsD, eltInSlice);
+      }
+      if (COPY){
+        storeRegs(dstPtr, regs, eltInSlice);
+        if (MULTIDSTS){
+          for (int i = 1; i < nsrcs; i++){
+            loadRegsBegin(regs, srcs[i], eltInSlice);
+            loadRegsFinish(regs);
+            storeRegs(dsts[i], regs, eltInSlice);
+          }
+        }
+      }
+
+      wireOffset += WireWordPerSlice*nwarps;
+      srcPtr += DataEltPerSlice*nwarps;
+      dstPtr += DataEltPerSlice*nwarps;
+      if (MULTISRCS){
+        for (int i = 1; i < nsrcs; i++){
+          srcs[i] += DataEltPerSlice*nwarps;
+        }
+      }
+      if (MULTIDSTS){
+        for (int i = 1; i < ndsts; i++){
+          dsts[i] += DataEltPerSlice*nwarps;
+        }
+      }    
+      nelem -= DataEltPerSlice*nwarps;
+    }
+
+    barrier();
+  }
+
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
     recvBuff[i] = (uint64_t*)conn->buffs[NCCL_PROTO_LL128];
     recvStep[i] = conn->step;
@@ -421,7 +500,15 @@ public:
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
     return GenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
   }
-  __device__ void localCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    return GenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+  __device__ void localCopy(T* srcs, T* dsts, int eltN) {
+    // return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+    return MSCCLGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+  }
+  __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+    if (nsrcs == 1) {
+      return MSCCLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+    } else {
+      return MSCCLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+    }
   }
 };

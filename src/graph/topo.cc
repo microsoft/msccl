@@ -1115,7 +1115,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
                     numReductions++;
                     msccltran->numReductions = numReductions - msccltran->reductionPointer;
 
-                    if (has_dependence){
+                    if (has_dependence || numReductions == MSCCL_MAX_REDUCE_FUSION){
                       oldReductionDstBuffer = -1;
                       oldReductionDstOffset = -1;
                     } else {
@@ -1164,6 +1164,9 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
           }
         }
         // make sure that threblocks are in order. Something like 0, 2, 3 is not allowed.
+        if (blockExists[0] == 1){
+          mscclAlgo->nBlocks = 1;
+        }
         for (int i = 1; i < MSCCL_MAX_NUM_THREAD_BLOCKS; i++){
           if (blockExists[i] == 1 && blockExists[i-1] == 0){
             WARN("MSCCL: threadblock %d is missing", i);
@@ -1173,6 +1176,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             mscclAlgo->nBlocks = i+1;
           }
         }
+
       }
     }
   }

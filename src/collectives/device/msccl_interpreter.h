@@ -15,6 +15,45 @@
   MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * MSCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
 namespace {
+  // a copy of the volatile load/store from prims_ll
+  template<typename U>
+  __device__ static U load(U *src) {
+    union {
+      U elt;
+      uint16_t u2;
+      uint32_t u4;
+      uint64_t u8;
+    };
+    if(sizeof(U) == 1)
+      asm("ld.volatile.global.b8 %0,[%1];" : "=r"(u4) : "l"(src));
+    else if(sizeof(U) == 2)
+      asm("ld.volatile.global.b16 %0,[%1];" : "=h"(u2) : "l"(src));
+    else if(sizeof(U) == 4)
+      asm("ld.volatile.global.b32 %0,[%1];" : "=r"(u4) : "l"(src));
+    else
+      asm("ld.volatile.global.b64 %0,[%1];" : "=l"(u8) : "l"(src));
+    return elt;
+  }
+
+  template<typename U>
+  __device__ static void store(U *dst, U val) {
+    union {
+      U elt;
+      uint16_t u2;
+      uint32_t u4;
+      uint64_t u8;
+    };
+    elt = val;
+    if(sizeof(U) == 1)
+      asm("st.volatile.global.b8 [%0],%1;" :: "l"(dst), "r"(u4));
+    else if(sizeof(U) == 2)
+      asm("st.volatile.global.b16 [%0],%1;" :: "l"(dst), "h"(u2));
+    else if(sizeof(U) == 4)
+      asm("st.volatile.global.b32 [%0],%1;" :: "l"(dst), "r"(u4));
+    else
+      asm("st.volatile.global.b64 [%0],%1;" :: "l"(dst), "l"(u8));
+  }
+
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
     const int tid = threadIdx.x;
@@ -70,10 +109,9 @@ namespace {
         int16_t dependentPointer = msccltran->depencePointer;
         int16_t numDependences = msccltran->numDependences;
         if (msccltran->numDependences > 0){
-          int index = tid;
-          if (index < numDependences){
-            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+index];
-            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+index];
+          if (tid < numDependences){
+            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
+            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
             uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
             while ((mscclFlags + dependentBid)->flag < goalFlag){
             };
@@ -97,16 +135,40 @@ namespace {
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
-            dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-            for (int index = tid; index < thisNelem; index += nthreads){
-              T o = dstPointer[dstoffset + index];
-              for (int r = 0; r < numReductions; r++){
-                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-                T t = srcPointer[srcoffset + index];
-                o = redFn(o, t);
+            if (thisNelem < nthreads){
+              if (tid < thisNelem){
+                dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+                T o = load(dstPointer + dstoffset+tid);
+                for (int r = 0; r < numReductions; r++){
+                  srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
+                  T t = load(srcPointer + srcoffset + tid);
+                  o = redFn(t,o);
+                }
+                store(dstPointer+dstoffset+tid, o);
               }
-              dstPointer[dstoffset + index] = o;
+            } else {
+              T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
+              dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+              T* dst = dstPointer + dstoffset;
+              for (int r = 0; r < numReductions; r++) {
+                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
+                srcs[r] = srcPointer + srcoffset;
+              }
+              prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
             }
+            // volatile T* s = srcPointer;
+            // volatile T* d = dstPointer;
+            // dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
+            // for (int index = tid; index < thisNelem; index += nthreads){
+            //   T o = load(&dstPointer[dstoffset + index]);//dstPointer[dstoffset + index];
+            //   for (int r = 0; r < numReductions; r++){
+            //     srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
+            //     T t = load(&srcPointer[srcoffset + index]);//srcPointer[srcoffset + index];
+            //     o = redFn(o, t);
+            //   }
+            //   store(&dstPointer[dstoffset + index], o);
+            //   // dstPointer[dstoffset + index] = o;
+            // }
             step += numReductions-1;
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
             prims.recvCopySend(dstoffset, thisNelem);
@@ -117,14 +179,14 @@ namespace {
           else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
             prims.recvReduceCopy(srcoffset, dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_LOCAL_COPY)
-            prims.localCopy(srcoffset, dstoffset, thisNelem);
+            prims.localCopy(srcPointer+srcoffset, dstPointer+dstoffset, thisNelem);
           else
             return;
         }
         if (msccltran->has_dependence){
           __syncthreads();
           if (tid == nthreads-1){
-            __threadfence();
+            // __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
             mscclFlags[bid].flag = curFlag;
           }

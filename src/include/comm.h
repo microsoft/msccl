@@ -129,7 +129,7 @@ struct ncclComm {
   // Channels for collectives
   int nChannels;
   // This is due to MSCCL because an MSCCL algorithm may use more channels than the comm
-  int nChannelsRingOrTree;
+  int nChannelsOrgNCCL;
   // Channels (per peer) for p2p
   int p2pnChannels;
   int p2pnChannelsPerPeer;
