@@ -14,7 +14,7 @@ MSCCL is the product of many great researchers and interns at Microsoft Research
 - [GC3: An Optimizing Compiler for GPU Collective Communication](https://arxiv.org/abs/2201.11840) -- Under submission
 - [Synthesizing optimal collective algorithms](https://dl.acm.org/doi/10.1145/3437801.3441620) -- PPoPP'21 (Best Paper Award)
 - [Breaking the Computation and Communication Abstraction Barrier in Distributed Machine Learning Workloads](https://arxiv.org/abs/2105.05720) -- ASPLOS'22
-- [Synthesizing Collective Communication Algorithms for Heterogeneous Networks with TACCL](https://arxiv.org/abs/2111.04867) -- Under submission
+- [TACCL: Guiding Collective Algorithm Synthesis using Communication Sketches](https://arxiv.org/abs/2111.04867) -- NSDI'23
 
 Please consider citing our work if you use MSCCL in your research. Also, please contact us if you have any questions or need an optimized collective communication algorithm for a specific topology.
 

@@ -16,7 +16,7 @@
 #define MAX_STR_LEN 255
 #define MAX_ATTR_COUNT 16
 #define MAX_SUBS 1024
-#define MAX_NODES (1<<22)
+#define MAX_NODES (1<<12) 
 
 #define NODE_TYPE_NONE 0
 #define NODE_TYPE_OPEN 1
@@ -47,6 +47,8 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
 ncclResult_t ncclTopoDumpXmlToFile(const char* xmlTopoFile, struct ncclXml* xml);
 #define NCCL_GRAPH_XML_VERSION 1
 ncclResult_t ncclTopoGetXmlGraphFromFile(const char* xmlGraphFile, struct ncclXml* xml);
+ncclResult_t mscclGetXmlAlgoFromFile(const char* xmlGraphFile, struct ncclXml* xml, int myrank);
+ncclResult_t mscclGetXmlConfigFromFile(const char* xmlGraphFile, struct ncclXml* xml);
 
 /* Auto-detect functions */
 ncclResult_t ncclTopoFillGpu(struct ncclXml* xml, const char* busId, struct ncclXmlNode** gpuNode);
