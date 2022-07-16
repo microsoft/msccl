@@ -1099,6 +1099,97 @@ ncclResult_t ncclCommInitAll(ncclComm_t* comms, int ndev, const int* devlist) {
   return ncclSuccess;
 }
 
+NCCL_API(ncclResult_t, mscclLoadDynamicAlgo, ncclComm_t* comm);
+ncclResult_t mscclLoadDynamicAlgo(ncclComm_t* comm){
+  if (getenv("MSCCL_XML_FILES")) {
+    struct mscclHostCommInfo* mscclInfo = &comm->mscclHostComm;
+    if (getenv("MSCCL_XML_FILES")){
+      NCCLCHECK(mscclGetAllAlgoFromXMLFilesAndSetInfo(getenv("MSCCL_XML_FILES"), mscclInfo, ncclMaxNchannels(), comm->rank, comm->nRanks));
+    }
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < mscclInfo->numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &mscclInfo->mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        numValidMSCCLAlgos++;
+        // Make sure MSCCL at least has mscclAlgo->nChannels
+        mscclMinRequireNChannels = std::max(mscclMinRequireNChannels, mscclAlgo->nChannels);
+      } else {
+        WARN("MSCCL should have ignored all invalid algorithms at this point!");
+        return ncclInternalError;
+      }
+    }
+  }
+
+  if (numValidMSCCLAlgos > 0 && comm->nRanks > 1) {
+    // first allocate the channels if they are not allocated
+    NCCLCHECKGOTO(setupMSCCLChannel(comm, mscclMinRequireNChannels), ret, affinity_restore);
+    comm->nChannels = std::max(comm->nChannels, mscclMinRequireNChannels); // extending the comm nChannels
+
+    // now go over each algorithm and queue all of the necessary connections
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+
+          int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nSendPeers; p++)
+            sendPeers[p] = mscclChannel->sendPeerInfo[p].peer;
+
+          int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++)
+            recvPeers[p] = mscclChannel->recvPeerInfo[p].peer;
+
+          NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nRecvPeers, recvPeers, mscclChannel->nSendPeers, sendPeers, 0), ret, affinity_restore);
+        }
+      }
+    }
+
+    // connect MSCCL connections
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for shared buffer for net.cc
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
+    INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
+    comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+
+    // now figure out if proxies are needed
+    for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
+      struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
+      if (mscclAlgo->isValid){
+        mscclAlgo->needsProxy = 0;
+        for (int c=0; c<mscclAlgo->nChannels; c++) {
+          struct ncclChannel* channel = comm->channels+c;
+          struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
+
+          for (int p = 0; p < mscclChannel->nSendPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxySend, mscclChannel->sendPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++){
+            int needsProxy = 0;
+            NCCLCHECK(ConnectionNeedsProxy(channel, proxyRecv, mscclChannel->recvPeerInfo[p].peer, 0, &needsProxy));
+            if (needsProxy){
+              mscclAlgo->needsProxy = 1;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  comm->mscclHostComm.workIndex = 1; // start workIndex from 1 since flags are initialized to 0
+  comm->mscclHostComm.flagsNeedReset = 0; // since we just allocated them
+  NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.mscclInfo, &comm->mscclHostComm.mscclDevComm, 1));
+
+  // Duplicate the dev comm on the device
+  NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
+}
+
+
 static ncclResult_t ncclGraphHelperDestroy(ncclComm* comm) {
   auto res = comm->graphHelperResources;
   if (comm->graphHelperThread && res) {

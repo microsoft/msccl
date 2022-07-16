@@ -72,6 +72,10 @@ ncclResult_t pncclCommInitRank(ncclComm_t* comm, int nranks, ncclUniqueId commId
 ncclResult_t  ncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 ncclResult_t pncclCommInitAll(ncclComm_t* comm, int ndev, const int* devlist);
 
+
+ncclResult_t mscclLoadDynamicAlgo(ncclComm_t* comm);
+ncclResult_t pmscclLoadDynamicAlgo(ncclComm_t* comm);
+
 /* Frees resources associated with communicator object, but waits for any operations
  * that might still be running on the device. */
 ncclResult_t  ncclCommDestroy(ncclComm_t comm);
