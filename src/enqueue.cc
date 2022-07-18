@@ -605,6 +605,9 @@ static ncclResult_t computeColl(struct ncclInfo* info /* input */, struct ncclWo
   NCCLCHECK(getAlgoInfo(info, collNetTypeSupport, 1));
 
 comp_next:
+  // in case we got here from aggregation case, set mscclAlgoIndex to -1
+  if (info->algorithm != NCCL_ALGO_MSCCL) info->mscclInfo.mscclAlgoIndex = -1;
+
   // Set nstepsPerLoop and nchunksPerLoop
   NCCLCHECK(getPatternInfo(info));
   NCCLCHECK(getLoopInfo(info));
