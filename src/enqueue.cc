@@ -364,7 +364,7 @@ static ncclResult_t ncclLaunchProxy(struct ncclQueueInfo* eqInfo) {
   // Also, starting the proxies after the CUDA launch seems to be better for
   // performance (latency).
   ncclComm_t comm = eqInfo->comm;
-  if (eqInfo->maxChannels == 0 && eqInfo->elemList->begin()->work.elems->mscclWork.mscclAlgoIndex == -1) return ncclSuccess;
+  if (eqInfo->elemList->count() == 0 || (eqInfo->maxChannels == 0 && eqInfo->elemList->begin()->work.elems->mscclWork.mscclAlgoIndex == -1)) return ncclSuccess;
 
   for (int r=0; r<eqInfo->maxChannels; r++) {
     struct ncclChannel* channel = comm->channels+r;
