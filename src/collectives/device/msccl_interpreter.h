@@ -169,7 +169,7 @@ namespace {
             //   store(&dstPointer[dstoffset + index], o);
             //   // dstPointer[dstoffset + index] = o;
             // }
-            step += numReductions-1;
+            if (c == 0) step += (numReductions-1); // only advance step once!
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
             prims.recvCopySend(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
