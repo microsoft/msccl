@@ -821,10 +821,13 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
 
   const char* collectiveType;
   NCCLCHECK(xmlGetAttrStr(topNode, "coll", &collectiveType));
+  int inputNChunksMultiplier = 1;
+  int outputNChunksMultiplier = 1;
   if (strcmp(collectiveType, "allreduce") == 0){
     mscclAlgo->collectiveType = ncclFuncAllReduce;
   } else if (strcmp(collectiveType, "allgather") == 0){
     mscclAlgo->collectiveType = ncclFuncAllGather;
+    inputNChunksMultiplier = nRanks;
   } else if (strcmp(collectiveType, "reduce") == 0){
     mscclAlgo->collectiveType = ncclFuncReduce;
   } else if (strcmp(collectiveType, "broadcast") == 0){
@@ -833,6 +836,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
     mscclAlgo->collectiveType = ncclFuncAllToAll;
   } else if (strcmp(collectiveType, "reduce_scatter") == 0){
     mscclAlgo->collectiveType = ncclFuncReduceScatter;
+    outputNChunksMultiplier = nRanks;
   } else if (strcmp(collectiveType, "custom") == 0){
     mscclAlgo->collectiveType = ncclFuncCustomCollective;
   } else {
@@ -877,6 +881,10 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
         NCCLCHECK(xmlGetAttrInt(node, "s_chunks", &nScratchChunks));
         if (nScratchChunks < 0){
           WARN("MSCCL: nScratchChunks must be not negative. nScratchChunks: %d", nScratchChunks);
+          return ncclInvalidUsage;
+        }
+        if ((nInputChunks > 0 && nInputChunks*inputNChunksMultiplier != nchunksPerLoop) || (nOutputChunks > 0 && nOutputChunks*outputNChunksMultiplier != nchunksPerLoop)){
+          WARN("Inconsistency between i_chunks/o_chunks (%d/%d) and nchunksperloop (%d) for collective %s", nInputChunks, nOutputChunks, nchunksPerLoop, collectiveType);
           return ncclInvalidUsage;
         }
         mscclAlgo->nScratchChunks = nScratchChunks;
