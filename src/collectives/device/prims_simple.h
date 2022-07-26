@@ -257,6 +257,7 @@ class Primitives<
         }
       }
     }
+    barrier();
   }
 
   // Scatter/Gather generic op
@@ -569,6 +570,9 @@ class Primitives<
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
   }
+  __device__ __forceinline__ void sendWithBarrier(intptr_t inpIx, int eltN) {
+    send(inpIx, eltN);
+  }  
   __device__ __forceinline__ void sendFromOutput(intptr_t outIx, int eltN) {
     genericOp<0, 0, 0, 1, Output, -1>(outIx, -1, -1, eltN, false);
   }

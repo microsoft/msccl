@@ -54,6 +54,10 @@ namespace {
       asm("st.volatile.global.b64 [%0],%1;" :: "l"(dst), "l"(u8));
   }
 
+  inline __device__ void barrier(int nthreads) {
+    asm volatile ("bar.sync %1, %0;" :: "r"(nthreads), "r"(15));
+  }
+
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
     const int tid = threadIdx.x;
@@ -117,7 +121,7 @@ namespace {
             };
           }
           step += msccltran->numDependences-1;
-          __syncthreads();
+          barrier(nthreads);
         }
 
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
@@ -130,7 +134,7 @@ namespace {
           int thisCount = min(mscclMaxAllowedCount, count-c);
           int thisNelem = nelem*thisCount;
           if (msccltran->type == MSCCL_SEND)
-            prims.send(srcoffset, thisNelem);
+            prims.sendWithBarrier(srcoffset, thisNelem);
           else if (msccltran->type == MSCCL_RECV)
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
@@ -146,6 +150,7 @@ namespace {
                 }
                 store(dstPointer+dstoffset+tid, o);
               }
+              barrier(nthreads);
             } else {
               T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
               dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
@@ -156,19 +161,6 @@ namespace {
               }
               prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
             }
-            // volatile T* s = srcPointer;
-            // volatile T* d = dstPointer;
-            // dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-            // for (int index = tid; index < thisNelem; index += nthreads){
-            //   T o = load(&dstPointer[dstoffset + index]);//dstPointer[dstoffset + index];
-            //   for (int r = 0; r < numReductions; r++){
-            //     srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-            //     T t = load(&srcPointer[srcoffset + index]);//srcPointer[srcoffset + index];
-            //     o = redFn(o, t);
-            //   }
-            //   store(&dstPointer[dstoffset + index], o);
-            //   // dstPointer[dstoffset + index] = o;
-            // }
             if (c == 0) step += (numReductions-1); // only advance step once!
           } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
             prims.recvCopySend(dstoffset, thisNelem);
@@ -184,7 +176,6 @@ namespace {
             return;
         }
         if (msccltran->has_dependence){
-          __syncthreads();
           if (tid == nthreads-1){
             // __threadfence();
             uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
