@@ -134,7 +134,7 @@ namespace {
           int thisCount = min(mscclMaxAllowedCount, count-c);
           int thisNelem = nelem*thisCount;
           if (msccltran->type == MSCCL_SEND)
-            prims.sendWithBarrier(srcoffset, thisNelem);
+            prims.sendWithBarrier(srcoffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
           else if (msccltran->type == MSCCL_RECV)
             prims.recv(dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_REDUCE) {
