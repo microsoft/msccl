@@ -426,6 +426,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
   __device__ void sendWithBarrier(intptr_t inpIx, int eltN) {
     send(inpIx, eltN);
+    // only primitive.instruction where there is no barrier at the end
     barrier();
   }  
   __device__ void sendFromOutput(intptr_t outIx, int eltN) {
