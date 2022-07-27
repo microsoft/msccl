@@ -176,6 +176,7 @@ namespace {
             return;
         }
         if (msccltran->has_dependence && tid == nthreads-1){
+	  __threadfence();
           uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
           mscclFlags[bid].flag = curFlag;
         }
