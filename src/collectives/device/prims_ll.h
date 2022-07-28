@@ -212,8 +212,8 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     #pragma unroll
     for(int i=0; i < EltPerLine; i++) {
       if (i==0 || i < eltN)
-        //store(dst+i, elt[i]);
-        dst[i] = elt[i];
+        store(dst+i, elt[i]);
+        // dst[i] = elt[i];
     }
   }
 

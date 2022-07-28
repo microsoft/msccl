@@ -88,6 +88,7 @@ namespace {
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
     uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
+    int8_t needsFence = ncclShmem.mscclShmem.needsFence;
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
@@ -176,6 +177,7 @@ namespace {
             return;
         }
         if (msccltran->has_dependence && tid == nthreads-1){
+	        if (needsFence) __threadfence();
           uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
           mscclFlags[bid].flag = curFlag;
         }
