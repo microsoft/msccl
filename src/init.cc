@@ -479,6 +479,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // needs declaration early to avoid goto compilation bug
   int mscclMinRequireNChannels = 0;
   int numValidMSCCLAlgos = 0;
+  int mscclHighestTransportType = TRANSPORT_P2P; // this is captured by all calls to ncclTransportP2pSetup since MSCCL might resue a ring/tree connection
+  int highestTransportType; // used as an output for each call
 
   int rank = comm->rank;
   int nranks = comm->nRanks;
@@ -756,7 +758,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   }
   // use nChannelsOrgNCCL in getAlgoInfo so that we honor NCCL decisions
   comm->nChannelsOrgNCCL = comm->nChannels;
-  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, affinity_restore);
+  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0, &highestTransportType), ret, affinity_restore);
+  if (highestTransportType > mscclHighestTransportType) mscclHighestTransportType = highestTransportType;
   free(rings);
   INFO(NCCL_INIT, "Connected all rings");
 
@@ -767,7 +770,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, NCCL_MAX_TREE_ARITY, channel->tree.down, 1, &channel->tree.up, 0), ret, affinity_restore);
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, 1, &channel->tree.up, NCCL_MAX_TREE_ARITY, channel->tree.down, 0), ret, affinity_restore);
   }
-  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0), ret, affinity_restore);
+  NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &treeGraph, 0, &highestTransportType), ret, affinity_restore);
+  if (highestTransportType > mscclHighestTransportType) mscclHighestTransportType = highestTransportType;
   INFO(NCCL_INIT, "Connected all trees");
 
   // Read MSCCL algorithms first, but do not connect them yet.
@@ -821,9 +825,11 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
 
     // connect MSCCL connections
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 1; // hack to avoid a global change for shared buffer for net.cc
-    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0), ret, affinity_restore);
+    NCCLCHECKGOTO(ncclTransportP2pSetup(comm, NULL, 0, &highestTransportType), ret, affinity_restore);
+    if (highestTransportType > mscclHighestTransportType) mscclHighestTransportType = highestTransportType;
     INFO(NCCL_INIT, "Connected %d MSCCL algorithms", numValidMSCCLAlgos);
     comm->mscclHostComm.inMSCCLConnectionSetupPhase = 0; // changing it back to 0 to avoid problems in the future if there was more connections
+    comm->mscclHostComm.mscclDevComm.needsFence = (mscclHighestTransportType > TRANSPORT_P2P) ? 1 : 0;
 
     // now figure out if proxies are needed
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){

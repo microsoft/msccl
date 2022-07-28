@@ -120,7 +120,7 @@ struct mscclAlgorithm {
   struct mscclChannelInfo mscclChannels[MAXCHANNELS];
   // number of scratch chunks that MSCCL will use
   int nScratchChunks;
-  int needsProxy;
+  int8_t needsProxy;
 };
 
 // Only related MSCCL algorithm elements necessary for a threadblock
@@ -129,12 +129,14 @@ struct mscclSharedMemoryInfo {
   volatile struct mscclFlag* flags;
   void* scratchBuffer;
   int nchunksPerLoop;
+  int8_t needsFence;
   uint32_t workIndex;
 };
 
 // All MSCCL algorithm info that will be in ncclDevComm
 struct mscclDevCommInfo {
   struct mscclAlgorithm mscclAlgos[MSCCL_MAX_NUM_ALGOS];
+  int8_t needsFence; // a global flag to indicate whether we need to have a fence for any of the MSCCL algos
   // allocate enough MSCCL flags (MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL * MAXCHANNELS) to synchronize across thread blocks
   struct mscclFlag* flags;
   // declaration for scratchBuffer. This is only to be accessed by the host

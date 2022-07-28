@@ -701,7 +701,7 @@ comp_next:
     return ncclInternalError;
   }
 
-  if (info->protocol == NCCL_PROTO_SIMPLE && (chunkSize % ((info->nThreads-WARP_SIZE)*sizeof(uint64_t)/ncclTypeSize(info->datatype))) != 0){
+  if (info->protocol == NCCL_PROTO_SIMPLE && info->algorithm == NCCL_ALGO_MSCCL && (chunkSize % ((info->nThreads-WARP_SIZE)*sizeof(uint64_t)/ncclTypeSize(info->datatype))) != 0){
     WARN("chunkSize (%d) should be divisble by (nthreads-WARP_SIZE) (%d) for Simple protocol", chunkSize, info->nThreads-WARP_SIZE);
     return ncclInternalError;
   }
