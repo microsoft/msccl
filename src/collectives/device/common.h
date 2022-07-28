@@ -199,11 +199,13 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       ncclShmem.mscclShmem.needsFence = *(&((ncclDevCommAndChannels*)comm)->mscclInfo->needsFence);
     // MSCCL algorithms always have only one workElement in the queue
     copyToShmem(&ncclShmem.work, &first, tid, nthreads);
-    __syncthreads();
+    __syncthreads(); // publish ncclShmem
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
-    RunWorkMSCCL<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
-    return;
+    if (ncclShmem.work.header.funcIndex == FnIndex){
+      RunWorkMSCCL<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
+      return;
+    }
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
@@ -214,8 +216,8 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
       // Copy first elem to work and zero out the rest
       copyToShmem(&ncclShmem.work, &first, tid, nthreads);
     }
+    __syncthreads(); // publish ncclShmem
   }
-  __syncthreads(); // publish ncclShmem
 
   ncclWork *workFifoHost = ncclShmem.channel.workFifo;
   ncclWork *workFifoDev = ncclShmem.channel.workFifoDev;
@@ -236,7 +238,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
 
   SkipLoadWork:
     workFifoIx = (workFifoIx + 1)%NCCL_MAX_OPS;
-    if (tid == 0)
+    if (tid == 0 && (Algo != NCCL_ALGO_MSCCL))
       channel->index = workFifoIx; // write back to real channel, not shmem shadow
 
     __syncwarp();
