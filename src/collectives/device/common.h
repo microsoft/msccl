@@ -112,11 +112,21 @@ struct RunWork {
   }
 };
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+template<typename T, typename RedOp>
 struct RunWorkMSCCL {
   // A shortcut for MSCCL work since we are for sure running one kernel at a time
-  __device__ __forceinline__ void run(ncclWork *w) {
-    RunWorkElement<Fn, T, RedOp, Algo, Proto>().run(&w->elems[0]);
+  __device__ __forceinline__ void run(ncclWork *w, int proto) {
+    if (threadIdx.x == 0) printf("YOOOoo 000\n");
+    if (proto == NCCL_PROTO_LL){
+	    if (threadIdx.x == 0) printf("YOOOO1\n");
+      RunWorkElement<ncclFuncCustomCollective, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
+    } else if (proto == NCCL_PROTO_LL128) {
+	    if (threadIdx.x == 0) printf("YOOOO2\n");
+      RunWorkElement<ncclFuncCustomCollective, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128>().run(&w->elems[0]);
+    } else if (proto == NCCL_PROTO_LL) {
+	    if (threadIdx.x == 0) printf("YOOOO3\n");
+      RunWorkElement<ncclFuncCustomCollective, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE>().run(&w->elems[0]);
+    }
   }
 };
 
@@ -202,10 +212,9 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     __syncthreads(); // publish ncclShmem
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
-    if (ncclShmem.work.header.funcIndex == FnIndex){
-      RunWorkMSCCL<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
-      return;
-    }
+    int proto = (FnIndex - 1 - ncclNumTypes) % NCCL_NUM_PROTOCOLS;
+    RunWorkMSCCL<T, RedOp>().run(&ncclShmem.work, proto);
+    return;
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];

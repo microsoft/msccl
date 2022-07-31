@@ -71,7 +71,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
           } else {
             NVTX3_FUNC_RANGE_IN(nccl_domain);
             struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
-                                    sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+                                    sendbuff, recvbuff, sendcount*comm->nRanks, datatype, ncclSum, 0, comm, stream, /* Args */
                                     MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
             info.algorithm = NCCL_ALGO_MSCCL;
             info.mscclInfo.mscclAlgoIndex = reg->algoIndex;
@@ -96,7 +96,7 @@ ncclResult_t ncclAllToAll(const void *sendbuff, void *recvbuff, size_t sendcount
         } else {
           NVTX3_FUNC_RANGE_IN(nccl_domain);
           struct ncclInfo info = {ncclFuncAllToAll, "AllToAll",
-                                  sendbuff, recvbuff, sendcount, datatype, ncclSum, 0, comm, stream, /* Args */
+                                  sendbuff, recvbuff, sendcount*comm->nRanks, datatype, ncclSum, 0, comm, stream, /* Args */
                                   MSCCL_CHUNKSTEPS, MSCCL_SLICESTEPS};
           info.algorithm = NCCL_ALGO_MSCCL;
           info.mscclInfo.mscclAlgoIndex = mscclAlgoIndex;
