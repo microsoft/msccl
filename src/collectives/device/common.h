@@ -120,7 +120,7 @@ struct RunWorkMSCCL {
       RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
     } else if (proto == NCCL_PROTO_LL128) {
       RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128>().run(&w->elems[0]);
-    } else if (proto == NCCL_PROTO_LL) {
+    } else if (proto == NCCL_PROTO_SIMPLE) {
       RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE>().run(&w->elems[0]);
     }
   }
