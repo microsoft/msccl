@@ -4,10 +4,10 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include "collectives.h"
+#include "primitives.h"
 #include "msccl_interpreter.h"
 
-
- 
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncCustomCollective, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {

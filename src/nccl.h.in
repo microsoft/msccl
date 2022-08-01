@@ -293,6 +293,17 @@ ncclResult_t pncclncclAllToAll(const void* sendbuff, void* recvbuff, size_t send
     ncclDataType_t datatype, ncclComm_t comm, cudaStream_t stream);
 
 /*
+ * Custom-Collective
+ *
+ * Runs MSCCL interpreter for a given mscclAlgorithmIndex
+ *
+ */
+ncclResult_t  ncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, int mscclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream);
+ncclResult_t pncclCustomCollective(const void* sendbuff, void* recvbuff, size_t count,
+    ncclDataType_t datatype, ncclRedOp_t op, int mscclAlgorithmIndex, ncclComm_t comm, cudaStream_t stream);
+
+/*
  * Send
  *
  * Send data from sendbuff to rank peer.

@@ -112,11 +112,11 @@ struct RunWork {
   }
 };
 
-template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
+template<ncclFunc_t Fn, typename T, typename RedOp>
 struct RunWorkMSCCL {
   // A shortcut for MSCCL work since we are for sure running one kernel at a time
   __device__ __forceinline__ void run(ncclWork *w) {
-    RunWorkElement<Fn, T, RedOp, Algo, Proto>().run(&w->elems[0]);
+    RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
   }
 };
 
@@ -203,7 +203,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
     if (ncclShmem.work.header.funcIndex == FnIndex){
-      RunWorkMSCCL<Fn, T, RedOp, Algo, Proto>().run(&ncclShmem.work);
+      RunWorkMSCCL<Fn, T, RedOp>().run(&ncclShmem.work);
       return;
     }
   } else {
