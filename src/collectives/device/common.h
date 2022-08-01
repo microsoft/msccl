@@ -115,14 +115,8 @@ struct RunWork {
 template<ncclFunc_t Fn, typename T, typename RedOp>
 struct RunWorkMSCCL {
   // A shortcut for MSCCL work since we are for sure running one kernel at a time
-  __device__ __forceinline__ void run(ncclWork *w, int proto) {
-    if (proto == NCCL_PROTO_LL){
-      RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
-    } else if (proto == NCCL_PROTO_LL128) {
-      RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128>().run(&w->elems[0]);
-    } else if (proto == NCCL_PROTO_SIMPLE) {
-      RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE>().run(&w->elems[0]);
-    }
+  __device__ __forceinline__ void run(ncclWork *w) {
+    RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
   }
 };
 
@@ -208,9 +202,10 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     __syncthreads(); // publish ncclShmem
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
-    int proto = (ncclShmem.work.header.funcIndex - 1 - ncclNumTypes) % NCCL_NUM_PROTOCOLS;
-    RunWorkMSCCL<Fn, T, RedOp>().run(&ncclShmem.work, proto);
-    return;
+    if (ncclShmem.work.header.funcIndex == FnIndex){
+      RunWorkMSCCL<Fn, T, RedOp>().run(&ncclShmem.work);
+      return;
+    }
   } else {
     // get address of channel without incurring indirect load from ncclDevCom::channels
     channel = &((ncclDevCommAndChannels*)comm)->channels[bid];
@@ -228,7 +223,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   ncclWork *workFifoDev = ncclShmem.channel.workFifoDev;
   int workFifoIx = ncclShmem.channel.index;
 
-  if (bid == 0 && first.header.type != ncclWorkTypeUnused)
+  if ((Algo == NCCL_ALGO_MSCCL || bid == 0) && first.header.type != ncclWorkTypeUnused)
     goto SkipLoadWork;
 
   while (true) {
