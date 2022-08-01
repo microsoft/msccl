@@ -97,7 +97,6 @@ struct RunWorkElement {
   }
 };
 
-
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto>
 struct RunWork {
   // This __forceinline__ is necessary. The compiler was inserting a function call
@@ -209,7 +208,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     __syncthreads(); // publish ncclShmem
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
-    int proto = (FnIndex - 1 - ncclNumTypes) % NCCL_NUM_PROTOCOLS;
+    int proto = (ncclShmem.work.header.funcIndex - 1 - ncclNumTypes) % NCCL_NUM_PROTOCOLS;
     RunWorkMSCCL<Fn, T, RedOp>().run(&ncclShmem.work, proto);
     return;
   } else {
@@ -229,7 +228,7 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   ncclWork *workFifoDev = ncclShmem.channel.workFifoDev;
   int workFifoIx = ncclShmem.channel.index;
 
-  if ((Algo == NCCL_ALGO_MSCCL || bid == 0) && first.header.type != ncclWorkTypeUnused)
+  if (bid == 0 && first.header.type != ncclWorkTypeUnused)
     goto SkipLoadWork;
 
   while (true) {

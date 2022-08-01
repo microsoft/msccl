@@ -82,7 +82,6 @@ struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_LL
   }
 };
 
-
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncBroadcast, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {

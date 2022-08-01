@@ -357,7 +357,6 @@ ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
             info->algorithm = NCCL_ALGO_MSCCL;
             info->protocol = reg->protocol;
             info->mscclInfo.mscclAlgoIndex = reg->algoIndex;
-	    info->count = totalCount;
             return ncclSuccess;
           }
         }
@@ -371,7 +370,6 @@ ncclResult_t ncclTopoGetMSCCLAlgo(struct ncclInfo* info) {
           info->algorithm = NCCL_ALGO_MSCCL;
           info->protocol = mscclAlgo->protocol;
           info->mscclInfo.mscclAlgoIndex = i;
-	  info->count = totalCount;
           return ncclSuccess;
         }
       }
