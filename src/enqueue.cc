@@ -678,7 +678,6 @@ comp_next:
   int chunkEffectiveSize = chunkSize;
   if (info->protocol == NCCL_PROTO_LL) chunkEffectiveSize /= 2;
   if (info->protocol == NCCL_PROTO_LL128) chunkEffectiveSize = (chunkSize / NCCL_LL128_LINEELEMS) * NCCL_LL128_DATAELEMS;
-  //if (info->comm->rank == 0) printf("Coll %d, size %ld -> %dx%d, chunkSize %d (algo %d proto%d)\n", info->coll, info->nBytes, info->nChannels, info->nThreads, chunkSize, info->algorithm, info->protocol);
   // msccl might use multiple channels per loop. therefore, the division by info->comm->mscclAlgo.nChannels is necessary if the algo is MSCCL.
   int nLoops = (int)(DIVUP(info->nBytes, (size_t) (((info->algorithm == NCCL_ALGO_MSCCL) ? 1 : info->nChannels) * (size_t)info->nchunksPerLoop*(size_t)chunkEffectiveSize)));
   // nsteps is completely incorrect for MSCCL algorithm. See getLoopInfo. It will be adjusted properly in ncclProxySaveColl.
