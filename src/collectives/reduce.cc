@@ -13,8 +13,8 @@ ncclResult_t ncclReduce(const void* sendbuff, void* recvbuff, size_t count,
     ncclDataType_t datatype, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream) {
   NVTX3_FUNC_RANGE_IN(nccl_domain);
   struct ncclInfo info = { ncclFuncReduce, "Reduce",
-    sendbuff, recvbuff, (recvbuff == sendbuff), count, datatype, op, root, comm, stream, /* Args */
+    sendbuff, recvbuff, count, datatype, op, root, comm, stream, /* Args */
     REDUCE_CHUNKSTEPS, REDUCE_SLICESTEPS };
-  info.mscclAlgoIndex = -1;
+  info.algorithm = -1;    
   return ncclEnqueueCheck(&info);
 }

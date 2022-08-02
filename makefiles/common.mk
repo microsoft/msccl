@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2015-2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2015-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # See LICENSE.txt for license information
 #
@@ -23,7 +23,6 @@ CUDA_MAJOR = $(shell echo $(CUDA_VERSION) | cut -d "." -f 1)
 CUDA_MINOR = $(shell echo $(CUDA_VERSION) | cut -d "." -f 2)
 #$(info CUDA_VERSION ${CUDA_MAJOR}.${CUDA_MINOR})
 
-
 # You should define NVCC_GENCODE in your environment to the minimal set
 # of archs to reduce compile time.
 CUDA8_GENCODE = -gencode=arch=compute_35,code=sm_35 \
@@ -39,7 +38,7 @@ CUDA11_PTX    = -gencode=arch=compute_80,code=compute_80
 
 # Include Ampere support if we're using CUDA11 or above
 ifeq ($(shell test "0$(CUDA_MAJOR)" -ge 11; echo $$?),0)
-  NVCC_GENCODE ?= $(CUDA8_GENCODE) $(CUDA9_GENCODE) $(CUDA9_PTX) $(CUDA11_GENCODE) $(CUDA11_PTX)
+  NVCC_GENCODE ?= $(CUDA8_GENCODE) $(CUDA9_GENCODE) $(CUDA11_GENCODE) $(CUDA11_PTX)
 # Include Volta support if we're using CUDA9 or above
 else ifeq ($(shell test "0$(CUDA_MAJOR)" -ge 9; echo $$?),0)
   NVCC_GENCODE ?= $(CUDA8_GENCODE) $(CUDA9_GENCODE) $(CUDA9_PTX)
@@ -55,7 +54,7 @@ CXXFLAGS   := -DCUDA_MAJOR=$(CUDA_MAJOR) -DCUDA_MINOR=$(CUDA_MINOR) -fPIC -fvisi
 # Maxrregcount needs to be set accordingly to NCCL_MAX_NTHREADS (otherwise it will cause kernel launch errors)
 # 512 : 120, 640 : 96, 768 : 80, 1024 : 60
 # We would not have to set this if we used __launch_bounds__, but this only works on kernels, not on functions.
-NVCUFLAGS  := -ccbin $(CXX) $(NVCC_GENCODE) -std=c++11 -Xptxas -maxrregcount=96 -Xfatbin -compress-all
+NVCUFLAGS  := -ccbin $(CXX) $(NVCC_GENCODE) -std=c++11 --expt-extended-lambda -Xptxas -maxrregcount=96 -Xfatbin -compress-all
 # Use addprefix so that we can specify more than one path
 NVLDFLAGS  := -L${CUDA_LIB} -lcudart -lrt
 

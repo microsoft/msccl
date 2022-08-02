@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2016-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2016-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,12 +9,11 @@
 
 #include "graph.h"
 #include "core.h"
-#include <sched.h>
 
 #define LOC_WIDTH 5000.0
 #define SM60_NVLINK_WIDTH 18.0
-#define SM70_NVLINK_WIDTH 21.0
-#define SM80_NVLINK_WIDTH 21.0
+#define SM70_NVLINK_WIDTH 22.0
+#define SM80_NVLINK_WIDTH 22.0
 #define SM86_NVLINK_WIDTH 12.0
 #define PCI_WIDTH 12.0           // PCI Gen3 x16
 #define QPI_WIDTH 6.0
@@ -27,8 +26,7 @@
 
 // Intel CPU convert GPU P2P traffic into 64B PCI TLPs, so GPU
 // to GPU traffic consumes more PCI bandwidth.
-#define INTEL_P2P(speed) (speed*9/12)
-#define INTEL_P2P_OVERHEAD(speed) (speed*12/9)
+#define INTEL_P2P_OVERHEAD(speed) (speed*6/5)
 
 #define NCCL_TOPO_NODE_TYPES 7
 #define GPU 0
@@ -45,18 +43,36 @@ extern const char* topoNodeTypeStr[];
 // Skipping 2 for PATH_NVB
 #define LINK_PCI 3
 // Skipping 4 for PATH_PXB
-// Skipping 5 for PATH_PHB
-#define LINK_SYS 6
-#define LINK_NET 7
+// Skipping 5 for PATH_PXN
+// Skipping 6 for PATH_PHB
+#define LINK_SYS 7
+#define LINK_NET 8
 extern const char* topoLinkTypeStr[];
 
+// Local (myself)
 #define PATH_LOC 0
+
+// Connection traversing NVLink
 #define PATH_NVL 1
+
+// Connection through NVLink using an intermediate GPU
 #define PATH_NVB 2
+
+// Connection traversing at most a single PCIe bridge
 #define PATH_PIX 3
+
+// Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
 #define PATH_PXB 4
-#define PATH_PHB 5
-#define PATH_SYS 6
+
+// Connection between a GPU and a NIC using an intermediate GPU. Used to enable rail-local, aggregated network send/recv operations.
+#define PATH_PXN 5
+
+// Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+#define PATH_PHB 6
+
+// Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+#define PATH_SYS 7
+#define PATH_DIS 7
 extern const char* topoPathTypeStr[];
 
 struct ncclTopoNode;
@@ -95,6 +111,7 @@ struct ncclTopoNode {
       uint64_t asic;
       int port;
       float width;
+      float latency;
       int gdrSupport;
       int collSupport;
       int maxChannels;
@@ -105,6 +122,9 @@ struct ncclTopoNode {
       int model;
       cpu_set_t affinity;
     }cpu;
+    struct {
+      uint64_t device;
+    }pci;
   };
   int nlinks;
   struct ncclTopoLink links[NCCL_TOPO_MAX_LINKS];
@@ -131,8 +151,7 @@ ncclResult_t ncclTopoRemoveNode(struct ncclTopoSystem* system, int type, int id)
 ncclResult_t ncclTopoConnectNodes(struct ncclTopoNode* node, struct ncclTopoNode* remNode, int type, float width);
 ncclResult_t ncclTopoPrintPaths(struct ncclTopoSystem* system);
 ncclResult_t ncclTopoLoadSystem(const char* xmlTopoFile, struct ncclTopoSystem* system);
-
-ncclResult_t ncclTopoGetLocalNet(struct ncclTopoSystem* system, int rank, int64_t* id, int rr);
+ncclResult_t ncclTopoGetIntermediateRank(struct ncclTopoSystem* system, int rank, int netDev, int* intermediateRank);
 
 ncclResult_t ncclTopoGetSystemFromXml(struct ncclXml* xml, struct ncclTopoSystem** topoSystem);
 ncclResult_t ncclTopoGetGraphFromXml(struct ncclXmlNode *xmlGraphs, struct ncclTopoSystem* system, struct ncclTopoGraph* graph, int* nChannels);
@@ -140,11 +159,11 @@ ncclResult_t ncclTopoGetXmlFromGraphs(int ngraphs, struct ncclTopoGraph** graphs
 
 ncclResult_t ncclTopoGetCompCap(struct ncclTopoSystem* system, int* ccMin, int* ccMax);
 
-// MSCCL get algorithms from XML file and set the communicator
-ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetComm(struct ncclComm* comm, const char* str);
+// Read algorithms from XML files and set the mscclInfo
+ncclResult_t mscclGetAllAlgoFromXMLFilesAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks);
+// Read MSCCL config, get algorithms and set the mscclInfo
+ncclResult_t mscclGetAllAlgoFromConfigAndSetInfo(const char* str, struct mscclHostCommInfo* mscclInfo, int maxNChannels, int rank, int nRanks);
 
-// Read MSCCL config, get algorithms and set the communicator
-ncclResult_t mscclGetAllAlgoFromMSCCLConfigAndSetComm(struct ncclComm* comm, const char* str);
 
 static ncclResult_t ncclTopoIdToIndex(struct ncclTopoSystem* system, int type, int64_t id, int* index) {
   *index = -1;

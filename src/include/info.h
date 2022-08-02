@@ -1,5 +1,5 @@
 /*************************************************************************
- * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * See LICENSE.txt for license information
  ************************************************************************/
@@ -9,8 +9,9 @@
 
 #include "nccl.h"
 #include "devcomm.h"
+#include "collectives.h"
 
-typedef enum {
+typedef enum : uint8_t {
   ncclPatternRing,
   ncclPatternRingTwice,
   ncclPatternPipelineFrom,
@@ -18,9 +19,10 @@ typedef enum {
   ncclPatternTreeUp,
   ncclPatternTreeDown,
   ncclPatternTreeUpDown,
-  ncclPatternCollTreeUp,
-  ncclPatternCollTreeDown,
-  ncclPatternMsccl
+  ncclPatternMSCCL,
+  ncclPatternCollTreeUpDown,
+  ncclPatternSend,
+  ncclPatternRecv
 } ncclPattern_t;
 
 // Used to pass NCCL call information between functions
@@ -30,20 +32,18 @@ struct ncclInfo {
   // NCCL Coll Args
   const void* sendbuff;
   void* recvbuff;
-  int inplace; // needed for msccl
   size_t count;
   ncclDataType_t datatype;
   ncclRedOp_t op;
-  int root;
+  int root; // peer for p2p operations
   ncclComm_t comm;
   cudaStream_t stream;
   // Algorithm details
   int chunkSteps;
   int sliceSteps;
   // Computed later
+  ncclDevRedOpFull opFull;
   int algorithm;
-  int mscclAlgoIndex; // Used to indentify MSCCL algorithm
-  mscclComputeOp_t mscclComputeOp; // msccl operation for custom compute
   int protocol;
   ncclPattern_t pattern;
   int nChannels;
@@ -51,14 +51,10 @@ struct ncclInfo {
   size_t nBytes;
   int nstepsPerLoop;
   int nchunksPerLoop;
-  ssize_t sendbytes;
-  ssize_t recvbytes;
-  uint32_t delta;
+  int chunkSize;
   int channelId;
-  
-  // MSCCL scratch buffer is passed as an arg
-  // this scratchBuffer can be accessed on the device. The management of this memory is on mscclAlgorithm
-  void* scratchbuff;
+
+  struct mscclWorkInfo mscclInfo;
 };
 
 #endif
