@@ -54,7 +54,7 @@ $ cd ../
 The compiler's generated code is an XML file (`test.xml`) that is fed to MSCCL runtime. To evaluate its performance, execute the following command line on an Azure NDv4 node or any 8xA100 system:
 
 ```sh
-$ mpirun -np 8 -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x MSCCL_XML_FILES=test.xml -x NCCL_ALGO=MSCCL,RING,TREE  nccl-tests/build/all_reduce_perf -b 128 -e 32MB -f 2 -g 1 -c 1 -n 1000 -w 1000 -z 0
+$ mpirun -np 8 -x LD_LIBRARY_PATH=msccl/build/lib/:$LD_LIBRARY_PATH -x NCCL_DEBUG=INFO -x NCCL_DEBUG_SUBSYS=INIT,ENV -x MSCCL_XML_FILES=test.xml -x NCCL_ALGO=MSCCL,RING,TREE  nccl-tests/build/all_reduce_perf -b 128 -e 32MB -f 2 -g 1 -c 1 -n 100 -w 100 -G 100 -z 0
 ```
 
 If everything is installed correctly, you should see the following output in log:
@@ -63,7 +63,7 @@ If everything is installed correctly, you should see the following output in log
 [0] NCCL INFO Connected 1 MSCCL algorithms
 ```
 
-`test.xml` is passed in to the runtime by `MSCCL_XML_FILES` in the command line. You may evaluate the performance of `test.xml` by comparing in-place (the new algorithm) vs out-of-place (default ring algorithm) and it should up-to 2x faster on 8xA100 NVLink-interconnected GPUs. [MSCCL toolkit](https://github.com/microsoft/msccl-tools) has a rich set of algorithms for different Azure SKUs and collective operations with significant speedups over vanilla NCCL.
+`test.xml` is passed in to the runtime by `MSCCL_XML_FILES` in the command line. You may evaluate the performance of `test.xml` by comparing in-place (the new algorithm) vs out-of-place (default ring algorithm) and it should up-to 2-3x faster on 8xA100 NVLink-interconnected GPUs. [MSCCL toolkit](https://github.com/microsoft/msccl-tools) has a rich set of algorithms for different Azure SKUs and collective operations with significant speedups over vanilla NCCL.
 
 ## Build
 
