@@ -9,6 +9,9 @@
 
 #include "nccl.h"
 #include "align.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit_struct.h"
+#endif
 #include <stdint.h>
 
 #define NCCL_NUM_FUNCTIONS 7 // Send/Recv not included for now
@@ -282,6 +285,12 @@ struct ncclDevComm {
   struct ncclChannel* channels;
 
   struct mscclDevCommInfo* mscclInfo;
+
+#if defined(ENABLE_NPKIT)
+  NpKitEventCollectContext* npKitEventCollectContexts;
+  uint64_t* cpuTimestamp;
+#endif
+
 };
 
 struct ncclDevCommAndChannels {

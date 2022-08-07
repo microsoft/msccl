@@ -7,6 +7,9 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
+#if defined(ENABLE_NPKIT)
+#include "npkit/npkit.h"
+#endif
 
 #define MSCCL_MAX_ITER 65536
 
@@ -81,9 +84,34 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
+#if defined(ENABLE_NPKIT)
+    int npKitCtxIdx = bid;
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_CPU)
+    if (tid == 0) {
+      uint64_t* cpuTimestamp = ncclShmem.comm.cpuTimestamp;
+      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *cpuTimestamp,
+          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    }
+#endif
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_TIME_SYNC_GPU)
+    if (tid == 0) {
+      NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_GPU, 0, 0, clock64(),
+          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+    }
+#endif
+
     RedOp redFn(args->redOpArg);
     Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
+
+#if defined(ENABLE_NPKIT)
+    if (tid == 0) {
+      prims.npKitCtxIdx = npKitCtxIdx;
+    }
+#endif
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
@@ -134,6 +162,15 @@ namespace {
           dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
           int thisCount = min(mscclMaxAllowedCount, count-c);
           int thisNelem = nelem*thisCount;
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_ENTRY)
+          if (tid == 0) {
+            NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_ENTRY, size*sizeof(T), 0, clock64(),
+                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+            prims.npKitDataProcessTotalTime = 0;
+          }
+#endif
+
           if (msccltran->type == MSCCL_SEND)
             prims.sendWithBarrier(srcoffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
           else if (msccltran->type == MSCCL_RECV)
@@ -141,6 +178,14 @@ namespace {
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             if (thisNelem < nthreads){
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_ENTRY)
+              if (tid == 0) {
+                NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_ENTRY, thisNelem*sizeof(T), 0, clock64(),
+                    ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              }
+#endif
+
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
                 T o = load(dstPointer + dstoffset+tid);
@@ -152,6 +197,14 @@ namespace {
                 store(dstPointer+dstoffset+tid, o);
               }
               barrier(nthreads);
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_REDUCE_EXIT)
+              if (tid == 0) {
+                NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_REDUCE_EXIT, thisNelem*sizeof(T), 0, clock64(),
+                    ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+              }
+#endif
+
             } else {
               T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
               dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
@@ -173,8 +226,23 @@ namespace {
             prims.recvReduceCopy(srcoffset, dstoffset, thisNelem);
           else if (msccltran->type == MSCCL_LOCAL_COPY)
             prims.localCopy(srcPointer+srcoffset, dstPointer+dstoffset, thisNelem);
-          else
+          else {
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_EXIT)
+            if (tid == 0) {
+              NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_EXIT, size*sizeof(T), prims.npKitDataProcessTotalTime, clock64(),
+                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+            }
+#endif
             return;
+          }
+
+#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_MSCCL_EXIT)
+          if (tid == 0) {
+            NpKit::CollectGpuEvent(NPKIT_EVENT_MSCCL_EXIT, size*sizeof(T), prims.npKitDataProcessTotalTime, clock64(),
+                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
+          }
+#endif
+
         }
         if (msccltran->has_dependence && tid == nthreads-1){
 	        if (needsFence) __threadfence();
