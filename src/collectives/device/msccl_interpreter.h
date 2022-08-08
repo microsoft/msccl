@@ -179,7 +179,7 @@ namespace {
         }
         if (msccltran->has_dependence && tid == nthreads-1){
 	        if (needsFence) __threadfence();
-          mscclFlags[bid].flag = static_cast<uint64_t>(COMPUTE_FLAG(workIndex, iter, step));
+          mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, iter, step);
         }
         step++;
       }
