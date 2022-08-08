@@ -142,14 +142,14 @@ namespace {
             if (thisNelem < nthreads){
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-                T* region = dstPointer + dstoffset +tid;
-                T o = load(region);
+                T* dst_index = dstPointer + dstoffset +tid;
+                T o = load(dst_index);
                 for (int r = 0; r < numReductions; r++){
                   srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
                   T t = load(srcPointer + srcoffset + tid);
                   o = redFn(t,o);
                 }
-                store(region, o);
+                store(dst_index, o);
               }
               barrier(nthreads);
             } else {
@@ -178,7 +178,7 @@ namespace {
         }
         if (msccltran->has_dependence && tid == nthreads-1){
 	        if (needsFence) __threadfence();
-          mscclFlags[bid].flag = COMPUTE_FLAG(workIndex, iter, step);
+          mscclFlags[bid].flag = static_cast<uint64_t>(COMPUTE_FLAG(workIndex, iter, step));
         }
         step++;
       }
