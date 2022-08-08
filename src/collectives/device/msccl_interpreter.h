@@ -68,7 +68,6 @@ namespace {
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
     T* thisOutput = (T*)args->recvbuff;
-    T* thisScratch = (T*)ncclShmem.mscclShmem.scratchBuffer;
     int recvPeer = mscclTB->recvpeer;
     int sendPeer = mscclTB->sendpeer;
 
@@ -125,8 +124,8 @@ namespace {
           barrier(nthreads);
         }
 
-        srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-        dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
+        srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : (T*)ncclShmem.mscclShmem.scratchBuffer);
+        dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : (T*)ncclShmem.mscclShmem.scratchBuffer);
         prims.setDataPtrs(srcPointer, dstPointer);
         int count = msccltran->count;
         for (int c = 0; c < count; c += mscclMaxAllowedCount) {
