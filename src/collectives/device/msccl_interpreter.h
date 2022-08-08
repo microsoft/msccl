@@ -142,13 +142,14 @@ namespace {
             if (thisNelem < nthreads){
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-                T o = load(dstPointer + dstoffset+tid);
+                T* region = dstPointer + dstoffset +tid;
+                T o = load(region);
                 for (int r = 0; r < numReductions; r++){
                   srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
                   T t = load(srcPointer + srcoffset + tid);
                   o = redFn(t,o);
                 }
-                store(dstPointer+dstoffset+tid, o);
+                store(region, o);
               }
               barrier(nthreads);
             } else {
