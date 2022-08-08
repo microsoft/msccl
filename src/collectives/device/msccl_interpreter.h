@@ -10,7 +10,7 @@
 
 #define MSCCL_MAX_ITER 65536
 
-// flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead 
+// flags are a 3-tuple of (workindex, gridoffset_iter, step) and it follows a lexicographical order. a threadblock is ahead of another iff its flag is ahead
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * MSCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
@@ -111,17 +111,17 @@ namespace {
       for (int i = 0; i < mscclTB->nsteps; i++){
         struct mscclTransfer* msccltran = &mscclTB->transfers[i];
         // first wait if there is a dependence
-        int16_t dependentPointer = msccltran->depencePointer;
         int16_t numDependences = msccltran->numDependences;
-        if (msccltran->numDependences > 0){
+        if (numDependences > 0){
           if (tid < numDependences){
+            int16_t dependentPointer = msccltran->depencePointer;
             int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
             int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
             uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
             while ((mscclFlags + dependentBid)->flag < goalFlag){
             };
           }
-          step += msccltran->numDependences-1;
+          step += numDependences-1;
           barrier(nthreads);
         }
 
@@ -143,13 +143,14 @@ namespace {
             if (thisNelem < nthreads){
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-                T o = load(dstPointer + dstoffset+tid);
+                T* dst_index = dstPointer + dstoffset +tid;
+                T o = load(dst_index);
                 for (int r = 0; r < numReductions; r++){
                   srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
                   T t = load(srcPointer + srcoffset + tid);
                   o = redFn(t,o);
                 }
-                store(dstPointer+dstoffset+tid, o);
+                store(dst_index, o);
               }
               barrier(nthreads);
             } else {
@@ -178,8 +179,7 @@ namespace {
         }
         if (msccltran->has_dependence && tid == nthreads-1){
 	        if (needsFence) __threadfence();
-          uint64_t curFlag = COMPUTE_FLAG(workIndex, iter, step);
-          mscclFlags[bid].flag = curFlag;
+          mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, iter, step);
         }
         step++;
       }
