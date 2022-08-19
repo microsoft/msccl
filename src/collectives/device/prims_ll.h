@@ -4,9 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
-#endif
 
 template<typename T, typename RedOp, typename Fan, int Direct, int P2p>
 class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
@@ -37,21 +35,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   union ncclLLFifoLine* recvBuff[MaxRecv];
   union ncclLLFifoLine* sendBuff[MaxSend];
 
-#if defined(ENABLE_NPKIT)
-public:
-  int npKitCtxIdx = 0;
-  uint64_t npKitDataProcessEntryTime = 0;
-  uint64_t npKitDataProcessExitTime = 0;
-  uint64_t npKitDataProcessTotalTime = 0;
-private:
-#endif
-
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-  uint64_t npKitWaitRecvDataProcessSize = 0;
-  uint64_t npKitWaitRecvEntryTime = 0;
-  uint64_t npKitWaitRecvExitTime = 0;
-  uint64_t npKitWaitRecvTotalTime = 0;
-#endif
+  NPKIT_GPU_PRIMS_DECL_FIELDS()
 
   inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*stepLines; }
   inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*stepLines; }
@@ -76,12 +60,8 @@ private:
   }
 
   inline __device__ void waitSend(int nbytes) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_WAIT_SEND_ENTRY, nbytes, 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_PRIMS_WAIT_BEGIN()
+
     if (sendConnHeadPtr) {
       int spins = 0;
       while (sendConnHeadCache + NCCL_STEPS < sendConnHead + 1) {
@@ -95,12 +75,8 @@ private:
       sendConnHead += 1;
     }
     barrier();
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_WAIT_SEND_EXIT, nbytes, 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_PRIMS_WAIT_END()
   }
 
   inline __device__ void incRecv(int i) {
@@ -126,28 +102,18 @@ private:
     uint32_t data1, flag1, data2, flag2;
     int spins = 0;
 
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-    int npkitWaitRecvSpins = 0;
-    if (tid == 0) {
-      npKitWaitRecvEntryTime = clock64();
-    }
-#endif
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN()
 
     do {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4));
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-      npkitWaitRecvSpins++;
-#endif
+
+      NPKIT_GPU_PRIMS_WAIT_INC_SPIN()
+
       if (checkAbort(spins, 0)) break;
     } while ((flag1 != flag) || (flag2 != flag));
     uint64_t val64 = data1 + (((uint64_t)data2) << 32);
 
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-    if (tid == 0) {
-      npKitWaitRecvExitTime = clock64();
-      npKitWaitRecvTotalTime += (npKitWaitRecvExitTime - npKitWaitRecvEntryTime) * (npkitWaitRecvSpins - 1) / npkitWaitRecvSpins;
-    }
-#endif
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN()
 
     return val64;
   }
@@ -167,28 +133,18 @@ private:
     uint32_t flag = recvFlag(i);
     int spins = 0;
 
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-    int npkitWaitRecvSpins = 0;
-    if (tid == 0) {
-      npKitWaitRecvEntryTime = clock64();
-    }
-#endif
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN()
 
     while (line[i].flag1 != flag || line[i].flag2 != flag) {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-      npkitWaitRecvSpins++;
-#endif
+
+      NPKIT_GPU_PRIMS_WAIT_INC_SPIN()
+
       if (checkAbort(spins, 0)) break;
     }
     uint64_t val64 = line[i].data1 + (((uint64_t)line[i].data2) << 32);
 
-#if defined(ENABLE_NPKIT) && (defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT) || defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME))
-    if (tid == 0) {
-      npKitWaitRecvExitTime = clock64();
-      npKitWaitRecvTotalTime += (npKitWaitRecvExitTime - npKitWaitRecvEntryTime) * (npkitWaitRecvSpins - 1) / npkitWaitRecvSpins;
-    }
-#endif
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN()
 
     return val64;
   }
@@ -289,6 +245,8 @@ private:
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
   __device__ __forceinline__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
+    NPKIT_GPU_PRIMS_OP_INIT()
+
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
     T *srcElts = SrcBuf == -1 ? nullptr : userBufs[SrcBuf] + srcIx;
@@ -297,22 +255,6 @@ private:
     // Always waitSend in case of cleanup
     nelem = nelem < 0 ? 0 : nelem;
     if (SEND) waitSend(divUp(nelem, EltPerLine)*sizeof(ncclLLFifoLine));
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
-    if (tid == 0) {
-      npKitWaitRecvTotalTime = 0;
-      npKitWaitRecvDataProcessSize = nelem*sizeof(T);
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY,
-          npKitWaitRecvDataProcessSize, 0, clock64(), ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-    if (tid == 0) {
-      npKitWaitRecvTotalTime = 0;
-      npKitDataProcessEntryTime = clock64();
-    }
-#endif
 
     nelem -= tid*EltPerLine;
     srcElts += tid*EltPerLine;
@@ -361,22 +303,6 @@ private:
       nelem -= eltPerTrip;
       offset += nthreads;
     }
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-    if (tid == 0) {
-      npKitDataProcessExitTime = clock64();
-      npKitDataProcessTotalTime += npKitDataProcessExitTime - npKitDataProcessEntryTime - npKitWaitRecvTotalTime;
-    }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT,
-          npKitWaitRecvDataProcessSize, npKitWaitRecvTotalTime, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-
     if (RECV) {
       for (int i=0; i < MaxRecv; i++) incRecv(i);
       postRecv();
@@ -390,21 +316,7 @@ private:
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void MSCCLLLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
-    if (tid == 0) {
-      npKitWaitRecvTotalTime = 0;
-      npKitWaitRecvDataProcessSize = nelem*sizeof(T);
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY,
-          npKitWaitRecvDataProcessSize, 0, clock64(), ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-    if (tid == 0) {
-      npKitWaitRecvTotalTime = 0;
-      npKitDataProcessEntryTime = clock64();
-    }
-#endif
+    NPKIT_GPU_PRIMS_OP_INIT()
 
     nelem = nelem < 0 ? 0 : nelem;
     T *srcElts = srcs[0];
@@ -465,21 +377,6 @@ private:
       offset += nthreads;
     }
     barrier();
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-    if (tid == 0) {
-      npKitDataProcessExitTime = clock64();
-      npKitDataProcessTotalTime += npKitDataProcessExitTime - npKitDataProcessEntryTime - npKitWaitRecvTotalTime;
-    }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_ENTRY) && defined(ENABLE_NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_LL_DATA_PROCESS_EXIT,
-          npKitWaitRecvDataProcessSize, npKitWaitRecvTotalTime, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
   }
 
   __device__ __forceinline__ void loadRecvConn(struct ncclConnInfo* conn, int i) {
@@ -555,175 +452,87 @@ private:
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void sendWithBarrier(intptr_t inpIx, int eltN) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
-    send(inpIx, eltN);
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+
+    LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
     // only primitive.instruction where there is no barrier at the end
     barrier();
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }  
   __device__ void sendFromOutput(intptr_t outIx, int eltN) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<0, 1, Output, -1>(outIx, -1, eltN, false);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void recvReduceSend(intptr_t inpIx, int eltN) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<1, 1, Input, -1>(inpIx, -1, eltN, false);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_REDUCE_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void recvReduceCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<1, 0, Input, Output>(inpIx, outIx, eltN, postOp);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_REDUCE_COPY_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_REDUCE_COPY_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void copySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_COPY_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<0, 1, Input, Output>(inpIx, outIx, eltN, postOp);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_COPY_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void recvCopySend(intptr_t outIx, int eltN, bool postOp=false) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_COPY_SEND_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<1, 1, -1, Output>(-1, outIx, eltN, postOp);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_RECV_COPY_SEND_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_LOCAL_COPY_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_LOCAL_COPY_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_LOCAL_COPY_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0)
+
     // LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
     MSCCLLLGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_LOCAL_COPY_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_REDUCE_ENTRY)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0)
+
     if (nsrcs == 1) {
       MSCCLLLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
     } else {
       MSCCLLLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_REDUCE_EXIT)
-    if (tid == 0) {
-      NpKit::CollectGpuEvent(NPKIT_EVENT_REDUCE_EXIT, eltN*sizeof(T), 0, clock64(),
-          ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-    }
-#endif
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 };

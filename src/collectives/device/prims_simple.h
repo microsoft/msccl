@@ -4,9 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
-#if defined(ENABLE_NPKIT)
 #include "npkit/npkit.h"
-#endif
 
 template<typename T, typename RedOp, typename Fan, int Direct,
          int SlicePerChunk, int StepPerSlice, int Unroll, int P2p>
@@ -48,14 +46,7 @@ class Primitives<
   uint64_t volatile *connStepPtr;
   uint64_t connStepCache; // Cache last seen value of (*connStepPtr)
 
-#if defined(ENABLE_NPKIT)
-public:
-  int npKitCtxIdx = 0;
-  uint64_t npKitDataProcessEntryTime = 0;
-  uint64_t npKitDataProcessExitTime = 0;
-  uint64_t npKitDataProcessTotalTime = 0;
-private:
-#endif
+  NPKIT_GPU_PRIMS_DECL_FIELDS()
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -140,6 +131,8 @@ private:
   __device__ __forceinline__ void genericOp(
       intptr_t srcIx, intptr_t dstIx, intptr_t remoteIx, int nelem, bool postOp
     ) {
+    NPKIT_GPU_PRIMS_OP_INIT()
+
     constexpr int DirectRecv = 1 && Direct && DirectRecv1;
     constexpr int DirectSend = 1 && Direct && DirectSend1;
     constexpr int Src = SrcBuf != -1;
@@ -187,98 +180,32 @@ private:
           ncclShmem.groups[group].srcs[0] = userBuff + srcIx + offset;
         if (Dst && (flags & (DstBuf==Input ? RoleInput : RoleOutput)))
           ncclShmem.groups[group].dsts[0] = userBuff + dstIx + offset;
+
+        NPKIT_GPU_PRIMS_WAIT_BEGIN()
+
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(dstIx, remoteIx, offset, sliceSize);
         subBarrier();
+
+        NPKIT_GPU_PRIMS_WAIT_END()
+
         if (DirectRecv && ncclShmem.groups[group].srcs[0] == ncclShmem.groups[group].dsts[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
           if (Send) {
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY)
-            if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY, sliceSize*sizeof(T), 0, clock64(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-            }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-            if (tid == 0) {
-              npKitDataProcessEntryTime = clock64();
-            }
-#endif
-
             // (1-Send) is only there to avoid compilation errors in case MaxSend=0 (and Send=0).
             ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, (1-Send)+MaxSend, 0>
               (tid, nworkers, nullptr, false,
                1, (T const**)ncclShmem.groups[group].srcs,
                fan.nsend(), (T**)ncclShmem.groups[group].dsts+1,
                sliceSize);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-            if (tid == 0) {
-              npKitDataProcessExitTime = clock64();
-              npKitDataProcessTotalTime += npKitDataProcessExitTime - npKitDataProcessEntryTime;
-            }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
-            if (tid == 0) {
-              NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, sliceSize*sizeof(T), 0, clock64(),
-                  ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-            }
-#endif
-
           }
         } else if (DirectSend && !DirectRecv && SrcBuf != Input && ncclShmem.groups[group].dsts[Dst] == nullptr) {
           // For broadcast in CollNet to do empty send
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY)
-          if (tid == 0) {
-            NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY, sliceSize*sizeof(T), 0, clock64(),
-                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-          }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-          if (tid == 0) {
-            npKitDataProcessEntryTime = clock64();
-          }
-#endif
-
           ReduceOrCopyMulti<Unroll, RedOp, T, 1, 1, 1, 1, 0>
             (tid, nworkers, ncclShmem.redOpArgs, postOp,
              Recv, (T const**)ncclShmem.groups[group].srcs,
              Dst, (T**)ncclShmem.groups[group].dsts,
              sliceSize);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-          if (tid == 0) {
-            npKitDataProcessExitTime = clock64();
-            npKitDataProcessTotalTime += npKitDataProcessExitTime - npKitDataProcessEntryTime;
-          }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
-          if (tid == 0) {
-            NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, sliceSize*sizeof(T), 0, clock64(),
-                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-          }
-#endif
-
         } else {
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY)
-          if (tid == 0) {
-            NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_ENTRY, sliceSize*sizeof(T), 0, clock64(),
-                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-          }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-          if (tid == 0) {
-            npKitDataProcessEntryTime = clock64();
-          }
-#endif
-
           constexpr int PreOpN = SrcBuf != Input ? 0 :
                                  DirectRecv*MaxRecv == NCCL_MAX_DIRECT_ARITY ? (1+NCCL_MAX_DIRECT_ARITY) : 1;
           ReduceOrCopyMulti<Unroll, RedOp, T, Recv+Src, Recv*MaxRecv+Src, Send+Dst, Send*MaxSend+Dst, PreOpN>
@@ -286,21 +213,6 @@ private:
              Recv*fan.nrecv()+Src, (T const**)ncclShmem.groups[group].srcs,
              Send*fan.nsend()+Dst, (T**)ncclShmem.groups[group].dsts,
              sliceSize);
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_PRIM_COLLECT_DATA_PROCESS_TIME)
-          if (tid == 0) {
-            npKitDataProcessExitTime = clock64();
-            npKitDataProcessTotalTime += npKitDataProcessExitTime - npKitDataProcessEntryTime;
-          }
-#endif
-
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT)
-          if (tid == 0) {
-            NpKit::CollectGpuEvent(NPKIT_EVENT_PRIM_SIMPLE_REDUCE_OR_COPY_MULTI_EXIT, sliceSize*sizeof(T), 0, clock64(),
-                ncclShmem.comm.npKitEventCollectContexts + npKitCtxIdx);
-          }
-#endif
-
         }
         barrier(); // This barrier has a counterpart in following loop
         if (Send && (flags & RolePostSend) && index == 0) __threadfence_system();
@@ -318,11 +230,17 @@ private:
     #pragma unroll 1
     while (slice < SlicePerChunk) {
       sliceSize = sliceSize < nelem-offset ? sliceSize : nelem-offset;
+
+      NPKIT_GPU_PRIMS_WAIT_BEGIN()
+
       { // Only workers could have Wait roles so we know the slice must be empty
         // since we've exited the loop above.
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(0, 0, 0, 0);
       }
       barrier(); // Has couterpart in preceding worker-only loop.
+
+      NPKIT_GPU_PRIMS_WAIT_END()
+
       if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
       __syncwarp();
       postPeer<Recv, Send>();
@@ -333,6 +251,8 @@ private:
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void MSCCLgenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
+    NPKIT_GPU_PRIMS_OP_INIT()
+
     nelem = nelem < 0 ? 0 : nelem;
     if (tid < nworkers) {
       if (REDUCE){
@@ -668,74 +588,150 @@ private:
     if (flags & RoleOutput) userBuff = (T*)outputBuf;    
   }
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void sendWithBarrier(intptr_t inpIx, int eltN) {
-    send(inpIx, eltN);
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+
+    genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }  
   __device__ __forceinline__ void sendFromOutput(intptr_t outIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 0, 1, Output, -1>(outIx, -1, -1, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directSend(intptr_t inpIx, intptr_t remoteOutIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 1, 0, 1, Input, -1>(inpIx, -1, remoteOutIx, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directSendFromOutput(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 1, 0, 1, Output, -1>(outIx, -1, remoteOutIx, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 1, 0, -1, Output>(-1, outIx, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directRecv(intptr_t outIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<1, 0, 1, 0, -1, Output>(-1, outIx, -1, eltN, /*postOp=*/false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void copySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 0, 1, Input, Output>(inpIx, outIx, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 1, 0, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void recvCopySend(intptr_t outIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 1, 1, -1, Output>(-1, outIx, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directRecvCopySend(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<1, 1, 1, 1, -1, Output>(-1, outIx, remoteOutIx, eltN, false);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void recvCopyDirectSend(intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_DIRECT_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 1, 1, 1, -1, Output>(-1, outIx, remoteOutIx, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_DIRECT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void recvReduceCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 1, 0, Input, Output>(inpIx, outIx, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void recvReduceSend(intptr_t inpIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 1, 1, Input, -1>(inpIx, -1, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directRecvReduceSend(intptr_t inpIx, intptr_t remoteInpIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<1, 0, 1, 1, Input, -1>(inpIx, -1, remoteInpIx, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
 
   __device__ __forceinline__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     genericOp<0, 0, 1, 1, Input, Output>(inpIx, outIx, -1, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void directRecvReduceCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+
     // Direct is only for the send part
     genericOp<0, 1, 1, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   // MSCCL local copy
   __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
-    // return LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
-    return MSCCLgenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0)
+
+    // LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
+    MSCCLgenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0)
+
     if (nsrcs == 1) {
-      return MSCCLgenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
+      MSCCLgenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
     } else {
-      return MSCCLgenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
+      MSCCLgenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
+
+    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
   }
   __device__ __forceinline__ void
   scatter(intptr_t inpIx, int totalElem, int peerElem, int skip, int shift) {

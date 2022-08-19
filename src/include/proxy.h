@@ -60,9 +60,7 @@ struct ncclProxySubArgs {
   void* requests[NCCL_STEPS];
   void* profilingEvents[NCCL_STEPS];
 
-#if defined(ENABLE_NPKIT) && defined(ENABLE_NPKIT_EVENT_NET_SEND_ENTRY) && defined(ENABLE_NPKIT_EVENT_NET_SEND_EXIT)
-  int npKitSizesFifo[NCCL_STEPS];
-#endif
+  NPKIT_CPU_PROXY_DECL_FIELDS()
 };
 
 struct ncclProxyArgs {
