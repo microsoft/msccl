@@ -117,6 +117,6 @@ struct RunWorkElement<ncclFuncAllGather, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_L
 template<typename T, typename RedOp>
 struct RunWorkElement<ncclFuncAllGather, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runInterpreter<T, RedOp, ProtoLL128>(args, ncclShmem.comm.nRanks);
+    runInterpreter<T, RedOp, ProtoLL>(args, ncclShmem.comm.nRanks);
   }
 };
