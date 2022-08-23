@@ -89,24 +89,9 @@ struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_RING, NCCL_PROT
   }
 };
 
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_SIMPLE> {
+template<typename T, typename RedOp, int Proto>
+struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, Proto> {
   __device__ __forceinline__ void run(ncclWorkElem *args) {
-    using Proto = ProtoSimple<MSCCL_CHUNKSTEPS/MSCCL_SLICESTEPS, MSCCL_SLICESTEPS>;
-    runInterpreter<T, RedOp, Proto>(args, ncclShmem.comm.nRanks);
-  }
-};
-
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL128> {
-  __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runInterpreter<T, RedOp, ProtoLL128>(args, ncclShmem.comm.nRanks);
-  }
-};
-
-template<typename T, typename RedOp>
-struct RunWorkElement<ncclFuncReduceScatter, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL> {
-  __device__ __forceinline__ void run(ncclWorkElem *args) {
-    runInterpreter<T, RedOp, ProtoLL>(args, ncclShmem.comm.nRanks);
+    RunWorkElement<ncclFuncAllReduce, T, RedOp, NCCL_ALGO_MSCCL, Proto>().run(args);
   }
 };
