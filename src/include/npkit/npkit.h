@@ -64,9 +64,9 @@ class NpKit {
 
 #if defined(ENABLE_NPKIT_GPU_EVENTS)
 
-#define NPKIT_GPU_SET_CTX_ID(__ctx_id__, __thread_flag__) \
+#define NPKIT_GPU_SET_CTX_ID(__prims__) \
   if (__thread_flag__) { \
-    prims.npKitCtxIdx = __ctx_id__; \
+    __prims__.npKitCtxIdx = __ctx_id__; \
   }
 
 #define NPKIT_GPU_TREE_SPLIT_DECL_CTX_ID_AND_THREAD_FLAG() \
@@ -86,7 +86,9 @@ class NpKit {
 #define NPKIT_GPU_RECV_DECL_CTX_ID() \
   int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + 1;
 
-#define NPKIT_GPU_SYNC_TIME(__ctx_id__, __thread_flag__) \
+#define NPKIT_GPU_SYNC_TIME(__bid__, __tid__) \
+  int __ctx_id__ = __bid__; \
+  bool __thread_flag__ = (__tid__ == 0); \
   if (__thread_flag__) { \
     NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *(ncclShmem.comm.npKitCpuTimestamp), \
         ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
@@ -141,7 +143,7 @@ class NpKit {
 
 #else
 
-#define NPKIT_GPU_SET_CTX_ID(__ctx_id__, __thread_flag__)
+#define NPKIT_GPU_SET_CTX_ID(__prims__)
 
 #define NPKIT_GPU_TREE_SPLIT_DECL_CTX_ID_AND_THREAD_FLAG()
 
@@ -149,7 +151,7 @@ class NpKit {
 
 #define NPKIT_GPU_RECV_DECL_CTX_ID()
 
-#define NPKIT_GPU_SYNC_TIME(__ctx_id__, __thread_flag__)
+#define NPKIT_GPU_SYNC_TIME(__bid__, __tid__)
 
 #define NPKIT_GPU_COLLECT_EVENT(__ctx_id__, __type__, __size__, __rsvd__)
 

@@ -24,7 +24,7 @@ namespace {
     const ssize_t loopSize = nChannels*nranks*chunkSize;
     const ssize_t size = args->count;
 
-    NPKIT_GPU_SYNC_TIME(bid, (tid == 0))
+    NPKIT_GPU_SYNC_TIME(bid, tid);
 
     int minChunkSize;
     if (Proto::Id == NCCL_PROTO_LL)
@@ -36,7 +36,7 @@ namespace {
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg);
 
-    NPKIT_GPU_SET_CTX_ID(bid, (tid == 0))
+    NPKIT_GPU_SET_CTX_ID(prims);
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;
@@ -115,7 +115,7 @@ namespace {
     const ssize_t loopSize = int(nChannels*chunkSize);
     const ssize_t size = args->count;
 
-    NPKIT_GPU_SYNC_TIME(bid, (tid == 0))
+    NPKIT_GPU_SYNC_TIME(bid, tid);
 
     if (loopSize > size)
       chunkSize = divUp((int)size, int(nChannels*minChunkSize))*int(minChunkSize);
@@ -124,7 +124,7 @@ namespace {
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0> prims
         (tid, nthreads, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg);
 
-      NPKIT_GPU_SET_CTX_ID(bid, (tid == 0))
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
@@ -153,7 +153,7 @@ namespace {
       Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0> prims
         (tid, nthreads, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
 
-      NPKIT_GPU_SET_CTX_ID(bid, (tid == 0))
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
