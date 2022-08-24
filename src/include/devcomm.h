@@ -284,7 +284,7 @@ struct ncclDevComm {
 
   struct mscclDevCommInfo* mscclInfo;
 
-  NPKIT_GPU_COMM_DECL_FIELDS()
+  NPKIT_GPU_COMM_DECL_FIELDS();
 };
 
 struct ncclDevCommAndChannels {

@@ -35,7 +35,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   union ncclLLFifoLine* recvBuff[MaxRecv];
   union ncclLLFifoLine* sendBuff[MaxSend];
 
-  NPKIT_GPU_PRIMS_DECL_FIELDS()
+  NPKIT_GPU_PRIMS_DECL_FIELDS();
 
   inline __device__ int recvOffset(int i) { return (recvStep[i]%NCCL_STEPS)*stepLines; }
   inline __device__ int sendOffset(int i) { return (sendStep[i]%NCCL_STEPS)*stepLines; }
@@ -60,7 +60,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
 
   inline __device__ void waitSend(int nbytes) {
-    NPKIT_GPU_PRIMS_WAIT_BEGIN()
+    NPKIT_GPU_PRIMS_WAIT_BEGIN();
 
     if (sendConnHeadPtr) {
       int spins = 0;
@@ -76,7 +76,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
     barrier();
 
-    NPKIT_GPU_PRIMS_WAIT_END()
+    NPKIT_GPU_PRIMS_WAIT_END();
   }
 
   inline __device__ void incRecv(int i) {
@@ -102,18 +102,18 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     uint32_t data1, flag1, data2, flag2;
     int spins = 0;
 
-    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN()
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN();
 
     do {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4));
 
-      NPKIT_GPU_PRIMS_WAIT_INC_SPIN()
+      NPKIT_GPU_PRIMS_WAIT_INC_SPIN();
 
       if (checkAbort(spins, 0)) break;
     } while ((flag1 != flag) || (flag2 != flag));
     uint64_t val64 = data1 + (((uint64_t)data2) << 32);
 
-    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN()
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN();
 
     return val64;
   }
@@ -133,18 +133,18 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     uint32_t flag = recvFlag(i);
     int spins = 0;
 
-    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN()
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN();
 
     while (line[i].flag1 != flag || line[i].flag2 != flag) {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
 
-      NPKIT_GPU_PRIMS_WAIT_INC_SPIN()
+      NPKIT_GPU_PRIMS_WAIT_INC_SPIN();
 
       if (checkAbort(spins, 0)) break;
     }
     uint64_t val64 = line[i].data1 + (((uint64_t)line[i].data2) << 32);
 
-    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN()
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN();
 
     return val64;
   }
@@ -245,7 +245,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
   __device__ __forceinline__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-    NPKIT_GPU_PRIMS_OP_INIT()
+    NPKIT_GPU_PRIMS_OP_INIT();
 
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
@@ -316,7 +316,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void MSCCLLLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
-    NPKIT_GPU_PRIMS_OP_INIT()
+    NPKIT_GPU_PRIMS_OP_INIT();
 
     nelem = nelem < 0 ? 0 : nelem;
     T *srcElts = srcs[0];
@@ -452,80 +452,80 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
 
   __device__ void send(intptr_t inpIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ void sendWithBarrier(intptr_t inpIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<0, 1, Input, -1>(inpIx, -1, eltN, false);
     // only primitive.instruction where there is no barrier at the end
     barrier();
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T));
   }  
   __device__ void sendFromOutput(intptr_t outIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<0, 1, Output, -1>(outIx, -1, eltN, false);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T));
   }
   __device__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<1, 0, -1, Output>(-1, outIx, eltN, postOp);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T));
   }
   __device__ void recvReduceSend(intptr_t inpIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<1, 1, Input, -1>(inpIx, -1, eltN, false);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ void recvReduceCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<1, 0, Input, Output>(inpIx, outIx, eltN, postOp);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_EXIT, eltN*sizeof(T));
   }
   __device__ void copySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<0, 1, Input, Output>(inpIx, outIx, eltN, postOp);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ void recvCopySend(intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<1, 1, -1, Output>(-1, outIx, eltN, postOp);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
 
     LLGenericOp<1, 1, Input, Output>(inpIx, outIx, eltN, postOp);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ void localCopy(T* srcs, T* dsts, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0);
 
     // LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
     MSCCLLLGenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T));
   }
   __device__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0);
 
     if (nsrcs == 1) {
       MSCCLLLGenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);
@@ -533,6 +533,6 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
       MSCCLLLGenericOp<1,0,1,0>(srcs, nsrcs, dsts, 1, eltN);
     }
 
-    NPKIT_GPU_COLLECT_EVENT(npKitCtxIdx, NPKIT_EVENT_REDUCE_EXIT, eltN*sizeof(T), npKitWaitTotalTime)
+    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_EXIT, eltN*sizeof(T));
   }
 };

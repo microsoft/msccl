@@ -60,7 +60,7 @@ struct ncclProxySubArgs {
   void* requests[NCCL_STEPS];
   void* profilingEvents[NCCL_STEPS];
 
-  NPKIT_CPU_PROXY_DECL_FIELDS()
+  NPKIT_CPU_PROXY_DECL_FIELDS();
 };
 
 struct ncclProxyArgs {

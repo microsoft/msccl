@@ -66,29 +66,10 @@ class NpKit {
 
 #define NPKIT_GPU_SET_CTX_ID(__prims__) \
   if (__thread_flag__) { \
-    __prims__.npKitCtxIdx = __ctx_id__; \
+    __prims__.__ctx_id__ = __ctx_id__; \
   }
 
-#define NPKIT_GPU_TREE_SPLIT_DECL_CTX_ID_AND_THREAD_FLAG() \
-  bool isNpKitThread = false; \
-  int npKitCtxIdx = 0; \
-  if (threadIdx.x == 0) { \
-    isNpKitThread = true; \
-    npKitCtxIdx = bid * 2; \
-  } else if (tree->up != -1 && threadIdx.x == nthreadsSplit) { \
-    isNpKitThread = true; \
-    npKitCtxIdx = bid * 2 + 1; \
-  }
-
-#define NPKIT_GPU_SEND_DECL_CTX_ID() \
-  int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P;
-
-#define NPKIT_GPU_RECV_DECL_CTX_ID() \
-  int npKitCtxIdx = blockIdx.x * NCCL_MAX_WORK_ELEMENTS_P2P + 1;
-
-#define NPKIT_GPU_SYNC_TIME(__bid__, __tid__) \
-  int __ctx_id__ = __bid__; \
-  bool __thread_flag__ = (__tid__ == 0); \
+#define NPKIT_GPU_SYNC_TIME_SHARED() \
   if (__thread_flag__) { \
     NpKit::CollectGpuEvent(NPKIT_EVENT_TIME_SYNC_CPU, 0, 0, *(ncclShmem.comm.npKitCpuTimestamp), \
         ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
@@ -96,7 +77,34 @@ class NpKit {
         ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
   }
 
-#define NPKIT_GPU_COLLECT_EVENT(__ctx_id__, __type__, __size__, __rsvd__) \
+#define NPKIT_GPU_SYNC_TIME(__bid__, __tid__) \
+  int __ctx_id__ = __bid__; \
+  bool __thread_flag__ = (__tid__ == 0); \
+  NPKIT_GPU_SYNC_TIME_SHARED()
+
+#define NPKIT_GPU_SYNC_TIME_TREE_SPLIT(__bid__, __tid__, __nthreadsSplit__) \
+  bool __thread_flag__ = false; \
+  int __ctx_id__ = 0; \
+  if (__tid__ == 0) { \
+    __thread_flag__ = true; \
+    __ctx_id__ = __bid__ * 2; \
+  } else if (tree->up != -1 && __tid__ == __nthreadsSplit__) { \
+    __thread_flag__ = true; \
+    __ctx_id__ = __bid__ * 2 + 1; \
+  } \
+  NPKIT_GPU_SYNC_TIME_SHARED()
+
+#define NPKIT_GPU_SYNC_TIME_SEND(__bid__, __tid__) \
+  int __ctx_id__ = __bid__ * NCCL_MAX_WORK_ELEMENTS_P2P; \
+  bool __thread_flag__ = (__tid__ == 0); \
+  NPKIT_GPU_SYNC_TIME_SHARED()
+
+#define NPKIT_GPU_SYNC_TIME_RECV(__bid__, __tid__) \
+  int __ctx_id__ = __bid__ * NCCL_MAX_WORK_ELEMENTS_P2P + 1; \
+  bool __thread_flag__ = (__tid__ == 0); \
+  NPKIT_GPU_SYNC_TIME_SHARED()
+
+#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__, __rsvd__) \
   if (tid == 0) { \
     NpKit::CollectGpuEvent(__type__, __size__, __rsvd__, clock64(), \
         ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
@@ -104,32 +112,32 @@ class NpKit {
 
 #define NPKIT_GPU_PRIMS_DECL_FIELDS() \
   public: \
-    int npKitCtxIdx = 0; \
+    int __ctx_id__ = 0; \
   private: \
-    uint64_t npKitWaitEntryTime = 0; \
-    uint64_t npKitWaitExitTime = 0; \
-    uint64_t npKitWaitTotalTime = 0;
+    uint64_t __npKitWaitEntryTime__ = 0; \
+    uint64_t __npKitWaitExitTime__ = 0; \
+    uint64_t __npKitWaitTotalTime__ = 0;
 
 #define NPKIT_GPU_PRIMS_OP_INIT() \
   if (tid == 0) { \
-    npKitWaitTotalTime = 0; \
+    __npKitWaitTotalTime__ = 0; \
   }
 
 #define NPKIT_GPU_PRIMS_WAIT_BEGIN() \
   if (tid == 0) { \
-    npKitWaitEntryTime = clock64(); \
+    __npKitWaitEntryTime__ = clock64(); \
   }
 
 #define NPKIT_GPU_PRIMS_WAIT_END() \
   if (tid == 0) { \
-    npKitWaitExitTime = clock64(); \
-    npKitWaitTotalTime += npKitWaitExitTime - npKitWaitEntryTime; \
+    __npKitWaitExitTime__ = clock64(); \
+    __npKitWaitTotalTime__ += __npKitWaitExitTime__ - __npKitWaitEntryTime__; \
   }
 
 #define NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN() \
   int npKitWaitSpins = 0; \
   if (tid == 0) { \
-    npKitWaitEntryTime = clock64(); \
+    __npKitWaitEntryTime__ = clock64(); \
   }
 
 #define NPKIT_GPU_PRIMS_WAIT_INC_SPIN() \
@@ -137,23 +145,23 @@ class NpKit {
 
 #define NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN() \
   if (tid == 0) { \
-    npKitWaitExitTime = clock64(); \
-    npKitWaitTotalTime += (npKitWaitExitTime - npKitWaitEntryTime) * (npKitWaitSpins - 1) / npKitWaitSpins; \
+    __npKitWaitExitTime__ = clock64(); \
+    __npKitWaitTotalTime__ += (__npKitWaitExitTime__ - __npKitWaitEntryTime__) * (npKitWaitSpins - 1) / npKitWaitSpins; \
   }
 
 #else
 
 #define NPKIT_GPU_SET_CTX_ID(__prims__)
 
-#define NPKIT_GPU_TREE_SPLIT_DECL_CTX_ID_AND_THREAD_FLAG()
+#define NPKIT_GPU_SYNC_TIME_TREE_SPLIT(__bid__, __tid__, __nthreadsSplit__)
 
-#define NPKIT_GPU_SEND_DECL_CTX_ID()
+#define NPKIT_GPU_SYNC_TIME_SEND(__bid__, __tid__)
 
-#define NPKIT_GPU_RECV_DECL_CTX_ID()
+#define NPKIT_GPU_SYNC_TIME_RECV(__bid__, __tid__)
 
 #define NPKIT_GPU_SYNC_TIME(__bid__, __tid__)
 
-#define NPKIT_GPU_COLLECT_EVENT(__ctx_id__, __type__, __size__, __rsvd__)
+#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__, __rsvd__)
 
 #define NPKIT_GPU_PRIMS_DECL_FIELDS()
 

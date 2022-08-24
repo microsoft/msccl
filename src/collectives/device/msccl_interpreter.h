@@ -82,13 +82,13 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
-    NPKIT_GPU_SYNC_TIME(bid, (tid == 0))
+    NPKIT_GPU_SYNC_TIME(bid, tid);
 
     RedOp redFn(args->redOpArg);
     Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
 
-    NPKIT_GPU_SET_CTX_ID(bid, (tid == 0))
+    NPKIT_GPU_SET_CTX_ID(prims);
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
@@ -146,7 +146,7 @@ namespace {
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             if (thisNelem < nthreads){
-              NPKIT_GPU_COLLECT_EVENT(bid, NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T), 0)
+              NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T), 0);
 
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
@@ -160,7 +160,7 @@ namespace {
               }
               barrier(nthreads);
 
-              NPKIT_GPU_COLLECT_EVENT(bid, NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T), 0)
+              NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T), 0);
             } else {
               T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
               dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;

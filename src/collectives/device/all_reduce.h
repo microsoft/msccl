@@ -206,8 +206,7 @@ namespace {
       nthreadsSplit = (nthreads*7/(10*WARP_SIZE))*WARP_SIZE;
     }
 
-    NPKIT_GPU_TREE_SPLIT_DECL_CTX_ID_AND_THREAD_FLAG()
-    NPKIT_GPU_SYNC_TIME(npKitCtxIdx, isNpKitThread)
+    NPKIT_GPU_SYNC_TIME_TREE_SPLIT(bid, tid, nthreadsSplit);
 
     if (loopSize > size)
       chunkSize = divUp((int)size, nChannels*int(minChunkSize))*int(minChunkSize);
@@ -217,7 +216,7 @@ namespace {
       Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0>
         prims(tid, nthreads, tree->down, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
 
-      NPKIT_GPU_SET_CTX_ID(npKitCtxIdx, isNpKitThread)
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -237,7 +236,7 @@ namespace {
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/1, Proto, 0>
         prims(tid, nthreadsSplit, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg, 0*Proto::MaxGroupWidth);
 
-      NPKIT_GPU_SET_CTX_ID(npKitCtxIdx, isNpKitThread)
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
@@ -259,7 +258,7 @@ namespace {
       Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0>
         prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg, 1*Proto::MaxGroupWidth);
 
-      NPKIT_GPU_SET_CTX_ID(npKitCtxIdx, isNpKitThread)
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
