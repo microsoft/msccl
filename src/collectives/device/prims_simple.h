@@ -131,7 +131,7 @@ class Primitives<
   __device__ __forceinline__ void genericOp(
       intptr_t srcIx, intptr_t dstIx, intptr_t remoteIx, int nelem, bool postOp
     ) {
-    NPKIT_GPU_PRIMS_OP_INIT();
+    NPKIT_GPU_PRIMS_OP_INIT(tid);
 
     constexpr int DirectRecv = 1 && Direct && DirectRecv1;
     constexpr int DirectSend = 1 && Direct && DirectSend1;
@@ -181,12 +181,12 @@ class Primitives<
         if (Dst && (flags & (DstBuf==Input ? RoleInput : RoleOutput)))
           ncclShmem.groups[group].dsts[0] = userBuff + dstIx + offset;
 
-        NPKIT_GPU_PRIMS_WAIT_BEGIN();
+        NPKIT_GPU_PRIMS_WAIT_BEGIN(tid);
 
         waitPeer<DirectRecv, DirectSend, Recv, Send, Src, Dst>(dstIx, remoteIx, offset, sliceSize);
         subBarrier();
 
-        NPKIT_GPU_PRIMS_WAIT_END();
+        NPKIT_GPU_PRIMS_WAIT_END(tid);
 
         if (DirectRecv && ncclShmem.groups[group].srcs[0] == ncclShmem.groups[group].dsts[0]) {
           // We can only have one direct receive. Since srcs[0] == dstPtr+offset, skip one copy
@@ -231,7 +231,7 @@ class Primitives<
     while (slice < SlicePerChunk) {
       sliceSize = sliceSize < nelem-offset ? sliceSize : nelem-offset;
 
-      NPKIT_GPU_PRIMS_WAIT_BEGIN();
+      NPKIT_GPU_PRIMS_WAIT_BEGIN(tid);
 
       { // Only workers could have Wait roles so we know the slice must be empty
         // since we've exited the loop above.
@@ -239,7 +239,7 @@ class Primitives<
       }
       barrier(); // Has couterpart in preceding worker-only loop.
 
-      NPKIT_GPU_PRIMS_WAIT_END();
+      NPKIT_GPU_PRIMS_WAIT_END(tid);
 
       if (Send && (flags & RolePostSend) && sliceSize > 0 && index == 0) __threadfence_system();
       __syncwarp();
@@ -251,7 +251,7 @@ class Primitives<
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void MSCCLgenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
-    NPKIT_GPU_PRIMS_OP_INIT();
+    NPKIT_GPU_PRIMS_OP_INIT(tid);
 
     nelem = nelem < 0 ? 0 : nelem;
     if (tid < nworkers) {

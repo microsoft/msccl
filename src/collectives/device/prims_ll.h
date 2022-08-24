@@ -60,7 +60,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
   }
 
   inline __device__ void waitSend(int nbytes) {
-    NPKIT_GPU_PRIMS_WAIT_BEGIN();
+    NPKIT_GPU_PRIMS_WAIT_BEGIN(tid);
 
     if (sendConnHeadPtr) {
       int spins = 0;
@@ -76,7 +76,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
     barrier();
 
-    NPKIT_GPU_PRIMS_WAIT_END();
+    NPKIT_GPU_PRIMS_WAIT_END(tid);
   }
 
   inline __device__ void incRecv(int i) {
@@ -102,7 +102,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     uint32_t data1, flag1, data2, flag2;
     int spins = 0;
 
-    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN();
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN(tid);
 
     do {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(data1), "=r"(flag1), "=r"(data2), "=r"(flag2) : "l"(&src->i4));
@@ -113,7 +113,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     } while ((flag1 != flag) || (flag2 != flag));
     uint64_t val64 = data1 + (((uint64_t)data2) << 32);
 
-    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN();
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN(tid);
 
     return val64;
   }
@@ -133,7 +133,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     uint32_t flag = recvFlag(i);
     int spins = 0;
 
-    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN();
+    NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN(tid);
 
     while (line[i].flag1 != flag || line[i].flag2 != flag) {
       asm("ld.volatile.global.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(line[i].data1), "=r"(line[i].flag1), "=r"(line[i].data2), "=r"(line[i].flag2) : "l"(&src->i4));
@@ -144,7 +144,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
     }
     uint64_t val64 = line[i].data1 + (((uint64_t)line[i].data2) << 32);
 
-    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN();
+    NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN(tid);
 
     return val64;
   }
@@ -245,7 +245,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
 
   template <int RECV, int SEND, int SrcBuf, int DstBuf>
   __device__ __forceinline__ void LLGenericOp(intptr_t srcIx, intptr_t dstIx, int nelem, bool postOp) {
-    NPKIT_GPU_PRIMS_OP_INIT();
+    NPKIT_GPU_PRIMS_OP_INIT(tid);
 
     constexpr int SRC = SrcBuf != -1 ? 1 : 0;
     constexpr int DST = DstBuf != -1 ? 1 : 0;
@@ -316,7 +316,7 @@ class Primitives<T, RedOp, Fan, Direct, ProtoLL, P2p>:
 
   template <int REDUCE, int COPY, int MULTISRCS, int MULTIDSTS>
   __device__ __forceinline__ void MSCCLLLGenericOp(T** srcs, int nsrcs, T** dsts, int ndsts, int nelem) {
-    NPKIT_GPU_PRIMS_OP_INIT();
+    NPKIT_GPU_PRIMS_OP_INIT(tid);
 
     nelem = nelem < 0 ? 0 : nelem;
     T *srcElts = srcs[0];

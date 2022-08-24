@@ -124,33 +124,33 @@ class NpKit {
     uint64_t __npKitWaitExitTime__ = 0; \
     uint64_t __npKitWaitTotalTime__ = 0;
 
-#define NPKIT_GPU_PRIMS_OP_INIT() \
-  if (tid == 0) { \
+#define NPKIT_GPU_PRIMS_OP_INIT(__tid__) \
+  if (__tid__ == 0) { \
     __npKitWaitTotalTime__ = 0; \
   }
 
-#define NPKIT_GPU_PRIMS_WAIT_BEGIN() \
-  if (tid == 0) { \
+#define NPKIT_GPU_PRIMS_WAIT_BEGIN(__tid__) \
+  if (__tid__ == 0) { \
     __npKitWaitEntryTime__ = clock64(); \
   }
 
-#define NPKIT_GPU_PRIMS_WAIT_END() \
-  if (tid == 0) { \
+#define NPKIT_GPU_PRIMS_WAIT_END(__tid__) \
+  if (__tid__ == 0) { \
     __npKitWaitExitTime__ = clock64(); \
     __npKitWaitTotalTime__ += __npKitWaitExitTime__ - __npKitWaitEntryTime__; \
   }
 
-#define NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN() \
+#define NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN(__tid__) \
   int npKitWaitSpins = 0; \
-  if (tid == 0) { \
+  if (__tid__ == 0) { \
     __npKitWaitEntryTime__ = clock64(); \
   }
 
 #define NPKIT_GPU_PRIMS_WAIT_INC_SPIN() \
   npKitWaitSpins++;
 
-#define NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN() \
-  if (tid == 0) { \
+#define NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN(__tid__) \
+  if (__tid__ == 0) { \
     __npKitWaitExitTime__ = clock64(); \
     __npKitWaitTotalTime__ += (__npKitWaitExitTime__ - __npKitWaitEntryTime__) * (npKitWaitSpins - 1) / npKitWaitSpins; \
   }
@@ -173,17 +173,17 @@ class NpKit {
 
 #define NPKIT_GPU_PRIMS_DECL_FIELDS
 
-#define NPKIT_GPU_PRIMS_OP_INIT()
+#define NPKIT_GPU_PRIMS_OP_INIT(__tid__)
 
-#define NPKIT_GPU_PRIMS_WAIT_BEGIN()
+#define NPKIT_GPU_PRIMS_WAIT_BEGIN(__tid__)
 
-#define NPKIT_GPU_PRIMS_WAIT_END()
+#define NPKIT_GPU_PRIMS_WAIT_END(__tid__)
 
-#define NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN()
+#define NPKIT_GPU_PRIMS_WAIT_BEGIN_WITH_SPIN(__tid__)
 
 #define NPKIT_GPU_PRIMS_WAIT_INC_SPIN()
 
-#define NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN()
+#define NPKIT_GPU_PRIMS_WAIT_END_WITH_SPIN(__tid__)
 
 #endif
 
