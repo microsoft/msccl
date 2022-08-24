@@ -22,7 +22,7 @@ struct NpKitEventCollectContext {
 
 #pragma pack(pop)
 
-#if defined(ENABLE_NPKIT_GPU_EVENTS)
+#if defined(ENABLE_NPKIT)
 
 #define NPKIT_GPU_COMM_DECL_FIELDS \
   NpKitEventCollectContext* npKitEventCollectContexts; \

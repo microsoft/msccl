@@ -62,7 +62,7 @@ class NpKit {
   static volatile bool cpu_timestamp_update_thread_should_stop_;
 };
 
-#if defined(ENABLE_NPKIT_GPU_EVENTS)
+#if defined(ENABLE_NPKIT)
 
 #define NPKIT_GPU_SET_CTX_ID(__prims__) \
   if (__thread_flag__) { \
@@ -187,7 +187,7 @@ class NpKit {
 
 #endif
 
-#if defined(ENABLE_NPKIT_CPU_EVENTS)
+#if defined(ENABLE_NPKIT)
 
 #define NPKIT_CPU_COLLECT_EVENT(__ctx_id__, __type__, __size__, __rsvd__) \
   NpKit::CollectCpuEvent(__type__, __size__, __rsvd__, \
@@ -204,7 +204,7 @@ class NpKit {
 
 #endif
 
-#if defined(ENABLE_NPKIT_CPU_EVENTS) || defined(ENABLE_NPKIT_GPU_EVENTS)
+#if defined(ENABLE_NPKIT)
 
 #define NPKIT_INIT() \
   NCCLCHECK(NpKit::Init(comm->rank)); \
@@ -214,10 +214,9 @@ class NpKit {
 #define NPKIT_TEARDOWN() \
   const char* npKitDumpDir = getenv("NPKIT_DUMP_DIR"); \
   if (npKitDumpDir == nullptr) { \
-    WARN("NPKIT_DUMP_DIR is empty"); \
-  } else { \
-    NCCLCHECK(NpKit::Dump(npKitDumpDir)); \
+    npKitDumpDir = "/tmp/" \
   } \
+  NCCLCHECK(NpKit::Dump(npKitDumpDir)); \
   NCCLCHECK(NpKit::Shutdown());
 
 #else

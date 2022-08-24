@@ -12,6 +12,7 @@ DEBUG ?= 0
 TRACE ?= 0
 PROFAPI ?= 0
 NVTX ?= 1
+NPKIT ?= 0
 
 NVCC = $(CUDA_HOME)/bin/nvcc
 
@@ -49,7 +50,7 @@ endif
 
 CXXFLAGS   := -DCUDA_MAJOR=$(CUDA_MAJOR) -DCUDA_MINOR=$(CUDA_MINOR) -fPIC -fvisibility=hidden \
               -Wall -Wno-unused-function -Wno-sign-compare -std=c++11 -Wvla \
-              -I $(CUDA_INC) $(NPKIT_FLAGS) \
+              -I $(CUDA_INC) \
               $(CXXFLAGS)
 # Maxrregcount needs to be set accordingly to NCCL_MAX_NTHREADS (otherwise it will cause kernel launch errors)
 # 512 : 120, 640 : 96, 768 : 80, 1024 : 60
@@ -89,6 +90,10 @@ endif
 
 ifeq ($(NVTX), 0)
 CXXFLAGS  += -DNVTX_DISABLE
+endif
+
+ifeq ($(NPKIT), 0)
+CXXFLAGS  += -DENABLE_NPKIT
 endif
 
 ifneq ($(KEEP), 0)

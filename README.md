@@ -121,15 +121,11 @@ For integration with PyTorch, follow the dockerfile in this repo. It has an exam
 
 ## NPKit Integration
 
-MSCCL integrates [NPKit](https://github.com/microsoft/npkit), a profiler framework that enables collecting fine-grained trace events in MSCCL components, especially in giant collective GPU kernels.
+MSCCL integrates [NPKit](https://github.com/microsoft/npkit), a profiler framework that enables collecting fine-grained trace events in MSCCL components that identifies transmission bottlenecks.
 
-Please check [NPKit sample workflow for MSCCL](https://github.com/microsoft/NPKit/tree/main/msccl_samples) as a fully automated usage example. It also provides good templates for the following manual instructions.
+To Enable NPKit, simply add `NPKIT=1` along with your make command. During execution, `NPKIT_DUMP_DIR` will be used to produce all of the output (one output file per rank). By default, `/tmp/` will be used.
 
-To manually build MSCCL with NPKit enabled, pass `NPKIT_FLAGS=-DENABLE_NPKIT_GPU_EVENTS -DENABLE_NPKIT_CPU_EVENTS` with make command. All NPKit compile-time switches are declared in the MSCCL code base on macros with prefix `ENABLE_NPKIT_`, and they control which information will be collected. Also please note that currently NPKit only supports collecting non-overlapped events on GPU, and `NPKIT_FLAGS` should follow this rule.
-
-To manually run MSCCL with NPKit enabled, environment variable `NPKIT_DUMP_DIR` needs to be set as the NPKit event dump directory. Also note that currently NPKit only supports 1 GPU per process.
-
-To manually analyze NPKit dump results, please leverage [npkit_trace_generator.py](https://github.com/microsoft/NPKit/blob/main/msccl_samples/npkit_trace_generator.py).
+To analyze NPKit output, run python script `tools/npkit_trace_generator.py` to get the final `.json` file which can be viewed by a trace viewer such as `edge://tracing` or `chrome://tracing`.
 
 ## Copyright
 
