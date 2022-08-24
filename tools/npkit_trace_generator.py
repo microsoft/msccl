@@ -214,9 +214,9 @@ def convert_npkit_dump_to_trace(npkit_dump_dir, output_dir, npkit_event_def):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--npkit_dump_dir', type=str, required=False, default="/tmp", help='NPKit dump directory.')
+    parser.add_argument('--input', type=str, required=False, default="/tmp", help='NPKit dump directory.')
     parser.add_argument('--output_dir', type=str, required=True, help='Path to output directory.')
     args = parser.parse_args()
 
     npkit_event_def = parse_npkit_event_header()
-    convert_npkit_dump_to_trace(args.npkit_dump_dir, args.output_dir, npkit_event_def)
+    convert_npkit_dump_to_trace(args.input, args.output_dir, npkit_event_def)
