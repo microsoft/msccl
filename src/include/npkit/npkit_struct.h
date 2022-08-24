@@ -24,24 +24,24 @@ struct NpKitEventCollectContext {
 
 #if defined(ENABLE_NPKIT_GPU_EVENTS)
 
-#define NPKIT_GPU_COMM_DECL_FIELDS() \
+#define NPKIT_GPU_COMM_DECL_FIELDS \
   NpKitEventCollectContext* npKitEventCollectContexts; \
   uint64_t* npKitCpuTimestamp;
 
 #else
 
-#define NPKIT_GPU_COMM_DECL_FIELDS()
+#define NPKIT_GPU_COMM_DECL_FIELDS
 
 #endif
 
 #if defined(ENABLE_NPKIT_CPU_EVENTS)
 
-#define NPKIT_CPU_PROXY_DECL_FIELDS() \
+#define NPKIT_CPU_PROXY_DECL_FIELDS \
   int npKitSizesFifo[NCCL_STEPS];
 
 #else
 
-#define NPKIT_CPU_PROXY_DECL_FIELDS()
+#define NPKIT_CPU_PROXY_DECL_FIELDS
 
 #endif
 

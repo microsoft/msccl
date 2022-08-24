@@ -46,7 +46,7 @@ class Primitives<
   uint64_t volatile *connStepPtr;
   uint64_t connStepCache; // Cache last seen value of (*connStepPtr)
 
-  NPKIT_GPU_PRIMS_DECL_FIELDS();
+  NPKIT_GPU_PRIMS_DECL_FIELDS
 
   // Don't use barrier 0 as it's used by the final sync
   inline __device__ void barrier() {
@@ -588,35 +588,35 @@ class Primitives<
     if (flags & RoleOutput) userBuff = (T*)outputBuf;    
   }
   __device__ __forceinline__ void send(intptr_t inpIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void sendWithBarrier(intptr_t inpIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 0, 1, Input, -1>(inpIx, -1, -1, eltN, false);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_EXIT, eltN*sizeof(T));
   }  
   __device__ __forceinline__ void sendFromOutput(intptr_t outIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 0, 1, Output, -1>(outIx, -1, -1, eltN, false);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_FROM_OUTPUT_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directSend(intptr_t inpIx, intptr_t remoteOutIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 1, 0, 1, Input, -1>(inpIx, -1, remoteOutIx, eltN, false);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directSendFromOutput(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_SEND_FROM_OUTPUT_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 1, 0, 1, Output, -1>(outIx, -1, remoteOutIx, eltN, false);
 
@@ -624,14 +624,14 @@ class Primitives<
   }
 
   __device__ __forceinline__ void recv(intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 1, 0, -1, Output>(-1, outIx, -1, eltN, postOp);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directRecv(intptr_t outIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_RECV_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_RECV_ENTRY, eltN*sizeof(T));
 
     genericOp<1, 0, 1, 0, -1, Output>(-1, outIx, -1, eltN, /*postOp=*/false);
 
@@ -639,14 +639,14 @@ class Primitives<
   }
 
   __device__ __forceinline__ void copySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 0, 1, Input, Output>(inpIx, outIx, -1, eltN, postOp);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 1, 0, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
 
@@ -654,21 +654,21 @@ class Primitives<
   }
 
   __device__ __forceinline__ void recvCopySend(intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 1, 1, -1, Output>(-1, outIx, -1, eltN, postOp);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directRecvCopySend(intptr_t outIx, intptr_t remoteOutIx, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_RECV_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<1, 1, 1, 1, -1, Output>(-1, outIx, remoteOutIx, eltN, false);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_RECV_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void recvCopyDirectSend(intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_COPY_DIRECT_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_COPY_DIRECT_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 1, 1, 1, -1, Output>(-1, outIx, remoteOutIx, eltN, postOp);
 
@@ -676,7 +676,7 @@ class Primitives<
   }
 
   __device__ __forceinline__ void recvReduceCopy(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 1, 0, Input, Output>(inpIx, outIx, -1, eltN, postOp);
 
@@ -684,14 +684,14 @@ class Primitives<
   }
 
   __device__ __forceinline__ void recvReduceSend(intptr_t inpIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 1, 1, Input, -1>(inpIx, -1, -1, eltN, postOp);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directRecvReduceSend(intptr_t inpIx, intptr_t remoteInpIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_RECV_REDUCE_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<1, 0, 1, 1, Input, -1>(inpIx, -1, remoteInpIx, eltN, postOp);
 
@@ -699,14 +699,14 @@ class Primitives<
   }
 
   __device__ __forceinline__ void recvReduceCopySend(intptr_t inpIx, intptr_t outIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     genericOp<0, 0, 1, 1, Input, Output>(inpIx, outIx, -1, eltN, postOp);
 
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_REDUCE_COPY_SEND_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void directRecvReduceCopySend(intptr_t inpIx, intptr_t outIx, intptr_t remoteOutIx, int eltN, bool postOp=false) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DIRECT_RECV_REDUCE_COPY_SEND_ENTRY, eltN*sizeof(T));
 
     // Direct is only for the send part
     genericOp<0, 1, 1, 1, Input, Output>(inpIx, outIx, remoteOutIx, eltN, postOp);
@@ -715,7 +715,7 @@ class Primitives<
   }
   // MSCCL local copy
   __device__ __forceinline__ void localCopy(T* srcs, T* dsts, int eltN) {
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_LOCAL_COPY_ENTRY, eltN*sizeof(T));
 
     // LLGenericOp<0, 0, Input, Output>(inpIx, outIx, eltN, postOp);
     MSCCLgenericOp<0,1,0,0>(&srcs, 1, &dsts, 1, eltN);
@@ -723,7 +723,7 @@ class Primitives<
     NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_LOCAL_COPY_EXIT, eltN*sizeof(T));
   }
   __device__ __forceinline__ void reduce(T** srcs, int nsrcs, T** dsts, int ndsts, int eltN){
-    NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T), 0);
+    NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_ENTRY, eltN*sizeof(T));
 
     if (nsrcs == 1) {
       MSCCLgenericOp<1,0,0,0>(srcs, 1, dsts, 1, eltN);

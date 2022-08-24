@@ -104,13 +104,19 @@ class NpKit {
   bool __thread_flag__ = (__tid__ == 0); \
   NPKIT_GPU_SYNC_TIME_SHARED()
 
-#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__, __rsvd__) \
+#define NPKIT_GPU_ENTER_EVENT(__type__, __size__) \
   if (tid == 0) { \
-    NpKit::CollectGpuEvent(__type__, __size__, __rsvd__, clock64(), \
+    NpKit::CollectGpuEvent(__type__, __size__, 0, clock64(), \
         ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
   }
 
-#define NPKIT_GPU_PRIMS_DECL_FIELDS() \
+#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__) \
+  if (tid == 0) { \
+    NpKit::CollectGpuEvent(__type__, __size__, __npKitWaitTotalTime__, clock64(), \
+        ncclShmem.comm.npKitEventCollectContexts + __ctx_id__); \
+  }
+
+#define NPKIT_GPU_PRIMS_DECL_FIELDS \
   public: \
     int __ctx_id__ = 0; \
   private: \
@@ -161,9 +167,11 @@ class NpKit {
 
 #define NPKIT_GPU_SYNC_TIME(__bid__, __tid__)
 
-#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__, __rsvd__)
+#define NPKIT_GPU_ENTER_EVENT(__type__, __size__)
 
-#define NPKIT_GPU_PRIMS_DECL_FIELDS()
+#define NPKIT_GPU_COLLECT_EVENT(__type__, __size__)
+
+#define NPKIT_GPU_PRIMS_DECL_FIELDS
 
 #define NPKIT_GPU_PRIMS_OP_INIT()
 

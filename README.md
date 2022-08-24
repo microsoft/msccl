@@ -125,7 +125,7 @@ MSCCL integrates [NPKit](https://github.com/microsoft/npkit), a profiler framewo
 
 Please check [NPKit sample workflow for MSCCL](https://github.com/microsoft/NPKit/tree/main/msccl_samples) as a fully automated usage example. It also provides good templates for the following manual instructions.
 
-To manually build MSCCL with NPKit enabled, pass `-DNPKIT_FLAGS="-DENABLE_NPKIT -DENABLE_NPKIT_...(other NPKit compile-time switches)"` with cmake command. All NPKit compile-time switches are declared in the MSCCL code base as macros with prefix `ENABLE_NPKIT_`, and they control which information will be collected. Also note that currently NPKit only supports collecting non-overlapped events on GPU, and `-DNPKIT_FLAGS` should follow this rule.
+To manually build MSCCL with NPKit enabled, pass `NPKIT_FLAGS=-DENABLE_NPKIT_GPU_EVENTS -DENABLE_NPKIT_CPU_EVENTS` with make command. All NPKit compile-time switches are declared in the MSCCL code base on macros with prefix `ENABLE_NPKIT_`, and they control which information will be collected. Also please note that currently NPKit only supports collecting non-overlapped events on GPU, and `NPKIT_FLAGS` should follow this rule.
 
 To manually run MSCCL with NPKit enabled, environment variable `NPKIT_DUMP_DIR` needs to be set as the NPKit event dump directory. Also note that currently NPKit only supports 1 GPU per process.
 

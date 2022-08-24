@@ -146,7 +146,7 @@ namespace {
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             if (thisNelem < nthreads){
-              NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T), 0);
+              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T));
 
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
@@ -160,7 +160,7 @@ namespace {
               }
               barrier(nthreads);
 
-              NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T), 0);
+              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T));
             } else {
               T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
               dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;

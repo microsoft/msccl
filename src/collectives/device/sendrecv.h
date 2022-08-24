@@ -17,11 +17,11 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
     if (args->peer == ncclShmem.comm.rank) {
       struct ncclWorkElemP2p* recvArgs = args-1;
       if (args->buff != recvArgs->buff) {
-        NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_ENTRY, args->count*sizeof(T), 0);
+        NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_SEND_ENTRY, args->count*sizeof(T));
 
         ReduceOrCopyMulti<COLL_UNROLL, RedOp, T, 1, 1, 1, 1, 0>(tid, nthreads, nullptr, false, 1, (const T**)&args->buff, 1, (T**)&recvArgs->buff, args->count);
 
-        NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_SEND_EXIT, args->count*sizeof(T), 0);
+        NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_SEND_EXIT, args->count*sizeof(T));
       }
     } else {
       using Proto = ProtoSimple<1, 1>;
@@ -31,7 +31,7 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       Primitives<T, RedOp, FanAsymmetric<0, 1>, 1, Proto, 1> prims
         (tid, nthreads, nullptr, &peer, args->buff, nullptr, /*redOpArg(ignored)=*/0, group);
 
-      NPKIT_GPU_SET_CTX_ID();
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       ssize_t offset = 0;
       do {
@@ -53,17 +53,17 @@ struct RunWork<ncclFuncSendRecv, T, RedOp, NCCL_ALGO_RING, NCCL_PROTO_SIMPLE> {
       Primitives<T, RedOp, FanAsymmetric<1, 0>, 1, Proto, 1> prims
         (tid, nthreads, &peer, nullptr, nullptr, args->buff, /*redOpArg(ignored)=*/0, group);
 
-      NPKIT_GPU_SET_CTX_ID();
+      NPKIT_GPU_SET_CTX_ID(prims);
 
       ssize_t offset = 0;
       do {
         int nelem = min(chunkSize, count-offset);
 
-        NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_ENTRY, nelem*sizeof(T), 0);
+        NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_ENTRY, nelem*sizeof(T));
 
         prims.directRecv(offset, nelem);
 
-        NPKIT_GPU_COLLECT_EVENT(NPKIT_EVENT_RECV_EXIT, nelem*sizeof(T), 0);
+        NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_RECV_EXIT, nelem*sizeof(T));
 
         offset += nelem;
       } while(offset < count);
