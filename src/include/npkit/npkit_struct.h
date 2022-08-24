@@ -34,7 +34,7 @@ struct NpKitEventCollectContext {
 
 #endif
 
-#if defined(ENABLE_NPKIT_CPU_EVENTS)
+#if defined(ENABLE_NPKIT)
 
 #define NPKIT_CPU_PROXY_DECL_FIELDS \
   int npKitSizesFifo[NCCL_STEPS];

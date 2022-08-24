@@ -214,7 +214,7 @@ class NpKit {
 #define NPKIT_TEARDOWN() \
   const char* npKitDumpDir = getenv("NPKIT_DUMP_DIR"); \
   if (npKitDumpDir == nullptr) { \
-    npKitDumpDir = "/tmp/" \
+    npKitDumpDir = "/tmp/"; \
   } \
   NCCLCHECK(NpKit::Dump(npKitDumpDir)); \
   NCCLCHECK(NpKit::Shutdown());

@@ -123,9 +123,9 @@ For integration with PyTorch, follow the dockerfile in this repo. It has an exam
 
 MSCCL integrates [NPKit](https://github.com/microsoft/npkit), a profiler framework that enables collecting fine-grained trace events in MSCCL components that identifies transmission bottlenecks.
 
-To Enable NPKit, simply add `NPKIT=1` along with your make command. During execution, `NPKIT_DUMP_DIR` will be used to produce all of the output (one output file per rank). By default, `/tmp/` will be used.
+To Enable NPKit, simply add `NPKIT=1` along with your make command. During execution, environment variable `NPKIT_DUMP_DIR` will be used to produce all of the output (one output file per rank). By default, `/tmp/` will be used.
 
-To analyze NPKit output, run python script `tools/npkit_trace_generator.py` to get the final `.json` file which can be viewed by a trace viewer such as `edge://tracing` or `chrome://tracing`.
+To analyze NPKit output, run python script `tools/npkit_trace_generator.py` to get the final `.json` file which can be viewed by a trace viewer such as Microsoft Edge `edge://tracing` or Google Chrome `chrome://tracing`.
 
 ## Copyright
 

@@ -9,9 +9,10 @@ from queue import Queue
 
 def parse_npkit_event_header():
     local_dir = os.path.dirname(__file__)
-    npkit_event_path = os.path.join(__file__, '../src/include/npkit/npkit_event.h')
-    if os.path.exists(npkit_event_path) == False:
-        print(f"couldn't find npkit_event.h file at {%s}.", npkit_event_path)
+    npkit_event_header_path = os.path.join(local_dir, '../src/include/npkit/npkit_event.h')
+    if os.path.exists(npkit_event_header_path) == False:
+        print(f"couldn't find npkit_event.h file at %s." % npkit_event_header_path)
+        exit(-1)
     npkit_event_def = {'id_to_type': {}, 'type_to_id': {}}
     with open(npkit_event_header_path, 'r') as f:
         lines = [x.strip() for x in f.readlines() if len(x.strip()) != 0]
