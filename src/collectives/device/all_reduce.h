@@ -8,6 +8,7 @@
 #include "collectives.h"
 #include "primitives.h"
 #include "msccl_interpreter.h"
+#include "npkit/npkit.h"
 
 namespace {
   template<typename T, typename RedOp, typename Proto>
@@ -23,6 +24,8 @@ namespace {
     const ssize_t loopSize = nChannels*nranks*chunkSize;
     const ssize_t size = args->count;
 
+    NPKIT_GPU_SYNC_TIME(bid, tid);
+
     int minChunkSize;
     if (Proto::Id == NCCL_PROTO_LL)
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T));
@@ -32,6 +35,8 @@ namespace {
     }
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
       (tid, nthreads, &ring->prev, &ring->next, args->sendbuff, args->recvbuff, args->redOpArg);
+
+    NPKIT_GPU_SET_CTX_ID(prims);
 
     for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
       ssize_t realChunkSize;
@@ -110,12 +115,17 @@ namespace {
     const ssize_t loopSize = int(nChannels*chunkSize);
     const ssize_t size = args->count;
 
+    NPKIT_GPU_SYNC_TIME(bid, tid);
+
     if (loopSize > size)
       chunkSize = divUp((int)size, int(nChannels*minChunkSize))*int(minChunkSize);
 
     { // Reduce : max number of recv is 3, max number of send is 1 (binary tree + local)
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/0, Proto, 0> prims
         (tid, nthreads, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg);
+
+      NPKIT_GPU_SET_CTX_ID(prims);
+
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -142,6 +152,9 @@ namespace {
     { // Broadcast : max number of recv is 1, max number of send is 3 (binary tree + local)
       Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0> prims
         (tid, nthreads, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
+
+      NPKIT_GPU_SET_CTX_ID(prims);
+
       if (tree->up == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -193,6 +206,8 @@ namespace {
       nthreadsSplit = (nthreads*7/(10*WARP_SIZE))*WARP_SIZE;
     }
 
+    NPKIT_GPU_SYNC_TIME_TREE_SPLIT(bid, tid, nthreadsSplit);
+
     if (loopSize > size)
       chunkSize = divUp((int)size, nChannels*int(minChunkSize))*int(minChunkSize);
 
@@ -200,6 +215,9 @@ namespace {
       // Reduce and broadcast. Max number of recv is 3, max number of send is 3
       Primitives<T, RedOp, FanSymmetric<NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0>
         prims(tid, nthreads, tree->down, tree->down, args->sendbuff, args->recvbuff, args->redOpArg);
+
+      NPKIT_GPU_SET_CTX_ID(prims);
+
       for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
         ssize_t offset = gridOffset + bid*int(chunkSize);
         int nelem = min(chunkSize, size-offset);
@@ -217,6 +235,9 @@ namespace {
        */
       Primitives<T, RedOp, FanAsymmetric<NCCL_MAX_DEV_ARITY, 1>, /*Direct=*/1, Proto, 0>
         prims(tid, nthreadsSplit, tree->down, &tree->up, args->sendbuff, args->recvbuff, args->redOpArg, 0*Proto::MaxGroupWidth);
+
+      NPKIT_GPU_SET_CTX_ID(prims);
+
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);
@@ -236,6 +257,9 @@ namespace {
       // Broadcast down. Max number of recv is 1, max number of send is 3 (binary tree + local)
       Primitives<T, RedOp, FanAsymmetric<1, NCCL_MAX_DEV_ARITY>, /*Direct=*/1, Proto, 0>
         prims(tid-nthreadsSplit, nthreads-nthreadsSplit, &tree->up, tree->down, args->sendbuff, args->recvbuff, args->redOpArg, 1*Proto::MaxGroupWidth);
+
+      NPKIT_GPU_SET_CTX_ID(prims);
+
       if (tree->down[0] == -1) {
         for (ssize_t gridOffset = 0; gridOffset < size; gridOffset += loopSize) {
           ssize_t offset = gridOffset + bid*int(chunkSize);

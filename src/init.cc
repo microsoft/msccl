@@ -17,6 +17,7 @@
 #include "graph.h"
 #include "argcheck.h"
 #include "graph/topo.h"
+#include "npkit/npkit.h"
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -301,6 +302,9 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   comm->mscclHostComm.workIndex = 1; // start workIndex from 1 since flags are initialized to 0
   comm->mscclHostComm.flagsNeedReset = 0; // since we just allocated them
   NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.mscclInfo, &comm->mscclHostComm.mscclDevComm, 1));
+
+  // Init NPKit
+  NPKIT_INIT();
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
@@ -1150,6 +1154,9 @@ static ncclResult_t commDestroy(ncclComm_t comm) {
 
   if (savedDevice != commDevice)
     CUDACHECK(cudaSetDevice(savedDevice));
+
+  // Dump NPKit events and shutdown
+  NPKIT_TEARDOWN();
 
   return ncclSuccess;
 }

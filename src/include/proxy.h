@@ -59,6 +59,8 @@ struct ncclProxySubArgs {
   uint64_t end;
   void* requests[NCCL_STEPS];
   void* profilingEvents[NCCL_STEPS];
+
+  NPKIT_CPU_PROXY_DECL_FIELDS
 };
 
 struct ncclProxyArgs {

@@ -7,6 +7,7 @@
 #include "devcomm.h"
 #include "primitives.h"
 #include "collectives.h"
+#include "npkit/npkit.h"
 
 #define MSCCL_MAX_ITER 65536
 
@@ -81,9 +82,13 @@ namespace {
       minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
     }
 
+    NPKIT_GPU_SYNC_TIME(bid, tid);
+
     RedOp redFn(args->redOpArg);
     Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
       (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
+
+    NPKIT_GPU_SET_CTX_ID(prims);
 
     const ssize_t size = args->count;
     const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
@@ -113,6 +118,8 @@ namespace {
         // first wait if there is a dependence
         int16_t numDependences = msccltran->numDependences;
         if (numDependences > 0){
+          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_ENTRY, msccltran->numDependences);
+          
           if (tid < numDependences){
             int16_t dependentPointer = msccltran->depencePointer;
             int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
@@ -123,6 +130,8 @@ namespace {
           }
           step += numDependences-1;
           barrier(nthreads);
+
+          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_EXIT, msccltran->numDependences);
         }
 
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
@@ -141,6 +150,8 @@ namespace {
           else if (msccltran->type == MSCCL_REDUCE) {
             int numReductions = msccltran->numReductions;
             if (thisNelem < nthreads){
+              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T));
+
               if (tid < thisNelem){
                 dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
                 T* dst_index = dstPointer + dstoffset +tid;
@@ -153,6 +164,8 @@ namespace {
                 store(dst_index, o);
               }
               barrier(nthreads);
+
+              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T));
             } else {
               T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
               dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
