@@ -304,7 +304,7 @@ static ncclResult_t devCommSetup(ncclComm_t comm) {
   NCCLCHECK(ncclCudaMemcpy(comm->hostDevComm.mscclInfo, &comm->mscclHostComm.mscclDevComm, 1));
 
   // Init NPKit
-  NPKIT_INIT()
+  NPKIT_INIT();
 
   // Duplicate the dev comm on the device
   NCCLCHECK(ncclCudaMemcpy(comm->devComm, &comm->hostDevComm, 1));
@@ -1156,7 +1156,7 @@ static ncclResult_t commDestroy(ncclComm_t comm) {
     CUDACHECK(cudaSetDevice(savedDevice));
 
   // Dump NPKit events and shutdown
-  NPKIT_TEARDOWN()
+  NPKIT_TEARDOWN();
 
   return ncclSuccess;
 }
