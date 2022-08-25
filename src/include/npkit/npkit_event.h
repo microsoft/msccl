@@ -53,7 +53,10 @@
 #define NPKIT_EVENT_NET_RECV_ENTRY                              0x27
 #define NPKIT_EVENT_NET_RECV_EXIT                               0x28
 
-#define NPKIT_EVENT_TIME_SYNC_GPU                               0x29
-#define NPKIT_EVENT_TIME_SYNC_CPU                               0x30
+#define NPKIT_EVENT_DEP_CHECK_ENTRY                             0x29
+#define NPKIT_EVENT_DEP_CHECK_EXIT                              0x2A
+
+#define NPKIT_EVENT_TIME_SYNC_GPU                               0x2B
+#define NPKIT_EVENT_TIME_SYNC_CPU                               0x2C
 
 #endif

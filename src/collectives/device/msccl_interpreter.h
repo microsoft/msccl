@@ -119,6 +119,8 @@ namespace {
         int16_t dependentPointer = msccltran->depencePointer;
         int16_t numDependences = msccltran->numDependences;
         if (msccltran->numDependences > 0){
+          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_ENTRY, msccltran->numDependences);
+
           if (tid < numDependences){
             int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
             int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
@@ -128,6 +130,8 @@ namespace {
           }
           step += msccltran->numDependences-1;
           barrier(nthreads);
+
+          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_EXIT, msccltran->numDependences);
         }
 
         srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
