@@ -577,21 +577,13 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
+static ncclResult_t checkMSCCLScratchPad(struct ncclInfo* info) {
   struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
   struct mscclHostCommInfo* mscclInfo = &info->comm->mscclHostComm;
   size_t sizeNeeded = (info->nBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
   if (sizeNeeded > mscclInfo->scratchBufferSize){
-    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevComm.scratchBuffer != NULL){
-      CUDACHECK(cudaFree(mscclInfo->mscclDevComm.scratchBuffer));
-    }
-    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeNeeded));
-    mscclInfo->scratchBufferSize = sizeNeeded;
-    // Not accessing any memory location on the device memory, but just getting their address
-    // Also make a dependence on the stream so that we wait for the previous call to be finished
-    // This hopefully happens very infrequently.
-    CUDACHECK(cudaMemcpyAsync((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), 
-      (char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
+    WARN("MSCCL: MSCCL scratch pad size is smaller than expected %lu < %lu\n", mscclInfo->scratchBufferSize, sizeNeeded);
+    return ncclInternalError;
   }
   return ncclSuccess;
 }
@@ -613,7 +605,7 @@ comp_next:
   NCCLCHECK(getLoopInfo(info));
 
   if (info->algorithm == NCCL_ALGO_MSCCL)
-    NCCLCHECK(adjustMSCCLScratchPad(info));
+    NCCLCHECK(checkMSCCLScratchPad(info));
 
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
