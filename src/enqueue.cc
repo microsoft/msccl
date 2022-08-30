@@ -1486,6 +1486,9 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
       NCCLCHECKGOTO(ncclSaveAsyncColl(info), ret, end);
     }
   } else {
+    // this is necessary as ncclSetupCollKernel skips nChannels assignment in case
+    // it has a garbage value
+    info->nChannels = 0;
     NCCLCHECKGOTO(checkSetStream(info), ret, end);
 
     INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",
