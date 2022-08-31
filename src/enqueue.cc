@@ -449,9 +449,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       WARN("MSCCL algorithms is not supposed to be used in async mode!");
       return ncclInvalidUsage;
     }
+    float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
     // if it is already decided that this is a MSCCL algorithm, then skip this part
     if (info->algorithm != NCCL_ALGO_MSCCL){
-      float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
       // Find algorithm / protocol.
       info->algorithm = -1;
       info->protocol = -1;
