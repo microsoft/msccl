@@ -1173,6 +1173,8 @@ ncclResult_t ncclEnqueueCollKernel(struct ncclComm* comm, struct ncclQueueElem* 
   struct ncclWorkElem* elem = work->elems;
   struct ncclProxyOp* proxyOp = &eqElem->proxyOp;
   int mscclAlgoIndex = elem->mscclWork.mscclAlgoIndex;
+  INFO(NCCL_COLL, "QQQQ elem nChannels %d funIndex %d mscclAlgoIndex %d count %d type %d", 
+    elem->nChannels, elem->header.funcIndex, mscclAlgoIndex, elem->count, elem->header.type);
   if (mscclAlgoIndex >= 0){
     // short circuit and only save proxy
     struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
@@ -1245,6 +1247,7 @@ void CUDART_CB ncclEnqueueHostSetup(void* arg) {
     } else {
       NCCLCHECKGOTO(ncclEnqueueCollKernel(comm, eqElem, aggMode), ret, cb_end);
     }
+    INFO(NCCL_COLL, "eqInfo->elemList->count() %d. CUDA graph mode %d", eqInfo->elemList->count(), USING_CUDA_GRAPH);
     eqElem = eqInfo->elemList->getNext();
   }
 
@@ -1253,7 +1256,7 @@ void CUDART_CB ncclEnqueueHostSetup(void* arg) {
 
 cb_end:
   if (ret != ncclSuccess) {
-    WARN("Failure in host setup : %s", ncclGetErrorString(ret));
+    WARN("Failure in host setup : %s. CUDA graph mode %d", ncclGetErrorString(ret), USING_CUDA_GRAPH);
   }
   eqInfo->ret = ret;
 }
