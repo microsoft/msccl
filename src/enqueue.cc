@@ -449,9 +449,9 @@ static ncclResult_t getAlgoInfo(struct ncclInfo* info, int collNetTypeSupport, i
       WARN("MSCCL algorithms is not supposed to be used in async mode!");
       return ncclInvalidUsage;
     }
+    float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
     // if it is already decided that this is a MSCCL algorithm, then skip this part
     if (info->algorithm != NCCL_ALGO_MSCCL){
-      float minTime = 3600000000.0; // Hopefully no operation will take an hour to complete.
       // Find algorithm / protocol.
       info->algorithm = -1;
       info->protocol = -1;
@@ -577,21 +577,13 @@ static ncclResult_t getLoopInfo(struct ncclInfo* info) {
   return ncclSuccess;
 }
 
-static ncclResult_t adjustMSCCLScratchPad(struct ncclInfo* info) {
+static ncclResult_t checkMSCCLScratchPad(struct ncclInfo* info) {
   struct mscclAlgorithm* mscclAlgo = &info->comm->mscclHostComm.mscclDevComm.mscclAlgos[info->mscclInfo.mscclAlgoIndex];
   struct mscclHostCommInfo* mscclInfo = &info->comm->mscclHostComm;
   size_t sizeNeeded = (info->nBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
   if (sizeNeeded > mscclInfo->scratchBufferSize){
-    if (mscclInfo->scratchBufferSize > 0 && mscclInfo->mscclDevComm.scratchBuffer != NULL){
-      CUDACHECK(cudaFree(mscclInfo->mscclDevComm.scratchBuffer));
-    }
-    NCCLCHECK(ncclCudaCalloc((char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeNeeded));
-    mscclInfo->scratchBufferSize = sizeNeeded;
-    // Not accessing any memory location on the device memory, but just getting their address
-    // Also make a dependence on the stream so that we wait for the previous call to be finished
-    // This hopefully happens very infrequently.
-    CUDACHECK(cudaMemcpyAsync((char**)&(((ncclDevCommAndChannels*)(info->comm->devComm))->mscclInfo->scratchBuffer), 
-      (char**)&mscclInfo->mscclDevComm.scratchBuffer, sizeof(char*), cudaMemcpyDefault, info->stream));
+    WARN("MSCCL: MSCCL scratch pad size is smaller than expected %lu < %lu\n", mscclInfo->scratchBufferSize, sizeNeeded);
+    return ncclInternalError;
   }
   return ncclSuccess;
 }
@@ -613,7 +605,7 @@ comp_next:
   NCCLCHECK(getLoopInfo(info));
 
   if (info->algorithm == NCCL_ALGO_MSCCL)
-    NCCLCHECK(adjustMSCCLScratchPad(info));
+    NCCLCHECK(checkMSCCLScratchPad(info));
 
   work->header.type = ncclWorkTypeColl;
   work->sendbuff = info->sendbuff;
@@ -1494,6 +1486,9 @@ ncclResult_t ncclEnqueueCheck(struct ncclInfo* info) {
       NCCLCHECKGOTO(ncclSaveAsyncColl(info), ret, end);
     }
   } else {
+    // this is necessary as ncclSetupCollKernel skips nChannels assignment in case
+    // it has a garbage value
+    info->nChannels = 0;
     NCCLCHECKGOTO(checkSetStream(info), ret, end);
 
     INFO(NCCL_COLL,"%s: opCount %lx sendbuff %p recvbuff %p count %zi datatype %d op %d root %d comm %p [nranks=%d] stream %p",

@@ -806,10 +806,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
     NCCLCHECKGOTO(setupMSCCLChannel(comm, mscclMinRequireNChannels), ret, affinity_restore);
     comm->nChannels = std::max(comm->nChannels, mscclMinRequireNChannels); // extending the comm nChannels
 
+    size_t mscclScratchBufferSize = 0;
     // now go over each algorithm and queue all of the necessary connections
     for (int mscclAlgoIndex = 0; mscclAlgoIndex < comm->mscclHostComm.numberOfMSCCLAlgorithms; mscclAlgoIndex++){
       struct mscclAlgorithm* mscclAlgo = &comm->mscclHostComm.mscclDevComm.mscclAlgos[mscclAlgoIndex];
       if (mscclAlgo->isValid){
+        size_t scratchSizeNeeded = (mscclAlgo->maxBytes * (size_t)(mscclAlgo->nScratchChunks)) / (size_t)(mscclAlgo->nchunksPerLoop);
+        mscclScratchBufferSize = std::max(mscclScratchBufferSize, scratchSizeNeeded);
         for (int c=0; c<mscclAlgo->nChannels; c++) {
           struct ncclChannel* channel = comm->channels+c;
           struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
@@ -825,6 +828,10 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
           NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nRecvPeers, recvPeers, mscclChannel->nSendPeers, sendPeers, 0), ret, affinity_restore);
         }
       }
+    }
+    if (mscclScratchBufferSize > 0){
+      NCCLCHECK(ncclCudaCalloc((char**)&comm->mscclHostComm.mscclDevComm.scratchBuffer, mscclScratchBufferSize));
+      comm->mscclHostComm.scratchBufferSize = mscclScratchBufferSize;
     }
 
     // connect MSCCL connections
