@@ -1253,7 +1253,7 @@ void CUDART_CB ncclEnqueueHostSetup(void* arg) {
 
 cb_end:
   if (ret != ncclSuccess) {
-    WARN("Failure in host setup : %s.", ncclGetErrorString(ret));
+    WARN("Failure in host setup : %s", ncclGetErrorString(ret));
   }
   eqInfo->ret = ret;
 }
