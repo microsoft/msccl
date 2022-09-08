@@ -1,0 +1,30 @@
+diff --git a/torch/csrc/cuda/nccl.cpp b/torch/csrc/cuda/nccl.cpp
+index 83729084ae..c471f9fdaa 100644
+--- a/torch/csrc/cuda/nccl.cpp
++++ b/torch/csrc/cuda/nccl.cpp
+@@ -659,18 +659,13 @@ void all2all_single_equal_split(
+   NCCL_CHECK(ncclAllToAll(sendbuff, recvbuff, count, type, comm, stream));
+ #else
+   NCCL_CHECK(ncclCommCount(comm, &numranks));
+-  NCCL_CHECK(ncclGroupStart());
+-  for (const auto r : c10::irange(numranks)) {
+-    // NCCL uses 0 byte message for synchronization
+-    // Avoid send/recv when message size is zero
+-    if (count != 0) {
+-      NCCL_CHECK(
+-          ncclSend(sendbuff + r * rankdiff, count, type, r, comm, stream));
+-      NCCL_CHECK(
+-          ncclRecv(recvbuff + r * rankdiff, count, type, r, comm, stream));
+-    }
+-  }
+-  NCCL_CHECK(ncclGroupEnd());
++  NCCL_CHECK(ncclAllToAll(
++			  sendbuff,
++			  recvbuff,
++			  count,
++			  type,
++			  to_nccl_comm(_comm),
++			  stream));
+ #endif
+ #else
+   AT_ERROR("all2all is only supported for NCCL lib version >= 2.7.0");
