@@ -11,7 +11,7 @@ MSCCL is an inter-accelerator communication framework that is built on top of [N
 
 MSCCL is the product of many great researchers and interns at Microsoft Research. Below is a list of our publications:
 
-- [GC3: An Optimizing Compiler for GPU Collective Communication](https://arxiv.org/abs/2201.11840) -- Under submission
+- [GC3: An Optimizing Compiler for GPU Collective Communication](https://arxiv.org/abs/2201.11840) -- ASPLOS'23
 - [Synthesizing optimal collective algorithms](https://dl.acm.org/doi/10.1145/3437801.3441620) -- PPoPP'21 (Best Paper Award)
 - [Breaking the Computation and Communication Abstraction Barrier in Distributed Machine Learning Workloads](https://arxiv.org/abs/2105.05720) -- ASPLOS'22
 - [TACCL: Guiding Collective Algorithm Synthesis using Communication Sketches](https://arxiv.org/abs/2111.04867) -- NSDI'23
