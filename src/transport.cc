@@ -23,11 +23,31 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
 };
 
 template <int type>
-static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType) {
+static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType, int preSelectedType=-1) {
   struct ncclPeerInfo* myInfo = comm->peerInfo+comm->rank;
   struct ncclPeerInfo* peerInfo = comm->peerInfo+peer;
   struct ncclConnector* connector = (type == 1) ? comm->channels[channelId].peers[peer].send + connIndex :
                                                   comm->channels[channelId].peers[peer].recv + connIndex;
+  if (preSelectedType >= 0){
+    // the type of transport is pre selected
+    if (preSelectedType >= NTRANSPORTS){
+      WARN("MSCCL: Selected transport type doesn't exist!");
+      return ncclSystemError;
+    }
+    struct ncclTransport *transport = ncclTransports+preSelectedType;
+    struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
+    int ret = 0;
+    NCCLCHECK(transport->canConnect(&ret, comm->topo, graph, myInfo, peerInfo));
+    if (ret) {
+      connector->transportComm = transportComm;
+      NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
+      if (transportType) *transportType = t;
+      return ncclSuccess;
+    } else {
+      WARN("MSCCL: Cannot make the requested transport!");
+      return ncclSystemError;
+    }
+  }
   for (int t=0; t<NTRANSPORTS; t++) {
     struct ncclTransport *transport = ncclTransports+t;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
