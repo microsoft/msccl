@@ -23,18 +23,19 @@ struct ncclTransport ncclTransports[NTRANSPORTS] = {
 };
 
 template <int type>
-static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, int* transportType, int preSelectedType=-1) {
+static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph* graph, struct ncclConnect* connect, int channelId, int peer, int connIndex, uint32_t mscclPreSelectedType, int* transportType) {
   struct ncclPeerInfo* myInfo = comm->peerInfo+comm->rank;
   struct ncclPeerInfo* peerInfo = comm->peerInfo+peer;
   struct ncclConnector* connector = (type == 1) ? comm->channels[channelId].peers[peer].send + connIndex :
-                                                  comm->channels[channelId].peers[peer].recv + connIndex;
-  if (preSelectedType >= 0){
-    // the type of transport is pre selected
-    if (preSelectedType >= NTRANSPORTS){
+                                                  comm->channels[channelId].peers[peer].recv + connIndex;  
+  if (mscclPreSelectedType > 0){ // 0 is default
+    // the type of transport is pre selected in here
+    if (mscclPreSelectedType > NTRANSPORTS){
       WARN("MSCCL: Selected transport type doesn't exist!");
       return ncclSystemError;
     }
-    struct ncclTransport *transport = ncclTransports+preSelectedType;
+    // 0 is default, 1..NTRANSPORTS-1 are mapped to 0..NTRANSPORTS-1
+    struct ncclTransport *transport = ncclTransports+mscclPreSelectedType-1;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
     int ret = 0;
     NCCLCHECK(transport->canConnect(&ret, comm->topo, graph, myInfo, peerInfo));
@@ -100,8 +101,13 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
     int recvPeer = (comm->rank - i + comm->nRanks) % comm->nRanks;
     int sendPeer = (comm->rank + i) % comm->nRanks;
-    uint32_t recvMask = comm->connectRecv[recvPeer];
-    uint32_t sendMask = comm->connectSend[sendPeer];
+    uint32_t connRecv = comm->connectRecv[recvPeer];
+    uint32_t recvMask = GET_MASK(connRecv);
+    uint32_t recvType = GET_TRANSPORT(connRecv);
+
+    uint32_t connSend = comm->connectSend[sendPeer];
+    uint32_t sendMask = GET_MASK(connSend);
+    uint32_t sendType = GET_TRANSPORT(connSend);
 
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
@@ -109,7 +115,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     TIME_START(0);
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
-        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, &type));
+        NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, recvType, &type));
         if (type > highestType) highestType = type;
       }
     }
@@ -118,7 +124,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     struct ncclConnect* sendData = recvData+recvChannels;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (sendMask & (1<<c)) {
-        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, &type));
+        NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, sendType, &type));
         if (type > highestType) highestType = type;
       }
     }

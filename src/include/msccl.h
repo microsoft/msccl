@@ -30,6 +30,12 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
 
+#define GET_MASK(__X__) \
+  ((__X__) - ((__X__) & (7 << 29)))
+
+#define GET_TRANSPORT(__X__) \
+  ((__X__) >> 29)
+
 static_assert(UINT8_MAX > MSCCL_MAX_COUNT, "mscclMaxAllowedCount datatype must be smaller than the allowed datatype");
 struct mscclWorkElem {
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
