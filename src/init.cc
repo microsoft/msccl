@@ -122,6 +122,8 @@ static ncclResult_t commFree(ncclComm_t comm) {
 
   free(comm->connectSend);
   free(comm->connectRecv);
+  free(comm->mscclConnTypes.sendTypes);
+  free(comm->mscclConnTypes.recvTypes);
   for (int peer=0; peer<comm->nRanks; peer++) {
     delete comm->p2pSends[peer];
     delete comm->p2pRecvs[peer];
@@ -269,6 +271,8 @@ static ncclResult_t commAlloc(ncclComm_t* comret, int ndev, int rank) {
   static_assert(MAXCHANNELS <= sizeof(*comm->connectRecv)*8, "comm->connectRecv must have enough bits for all channels");
   NCCLCHECK(ncclCalloc(&comm->connectSend, comm->nRanks));
   NCCLCHECK(ncclCalloc(&comm->connectRecv, comm->nRanks));
+  NCCLCHECK(ncclCalloc(&comm->mscclConnTypes.sendTypes, comm->nRanks));
+  NCCLCHECK(ncclCalloc(&comm->mscclConnTypes.recvTypes, comm->nRanks));
 
   comm->p2pSendCount = comm->p2pRecvCount = 0;
   NCCLCHECK(ncclCalloc(&comm->p2pSends, comm->nRanks));
@@ -818,12 +822,18 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
           struct mscclChannelInfo* mscclChannel = &mscclAlgo->mscclChannels[c];
 
           int sendPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-          for (int p = 0; p < mscclChannel->nSendPeers; p++)
+          int sendTypes[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nSendPeers; p++){
             sendPeers[p] = mscclChannel->sendPeerInfo[p].peer;
+            sendTypes[p] = mscclChannel->sendPeerInfo[p].connType;
+          }
 
           int recvPeers[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
-          for (int p = 0; p < mscclChannel->nRecvPeers; p++)
+          int recvTypes[MSCCL_MAX_NUM_THREAD_BLOCKS_PER_CHANNEL];
+          for (int p = 0; p < mscclChannel->nRecvPeers; p++){
             recvPeers[p] = mscclChannel->recvPeerInfo[p].peer;
+            recvTypes[p] = mscclChannel->recvPeerInfo[p].connType;
+          }
 
           NCCLCHECKGOTO(ncclTransportP2pConnect(comm, channel, mscclChannel->nRecvPeers, recvPeers, mscclChannel->nSendPeers, sendPeers, 0), ret, affinity_restore);
         }

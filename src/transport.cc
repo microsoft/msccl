@@ -101,14 +101,9 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int bootstrapTag = (i<<8) + (graph ? graph->id+1 : 0);
     int recvPeer = (comm->rank - i + comm->nRanks) % comm->nRanks;
     int sendPeer = (comm->rank + i) % comm->nRanks;
-    uint32_t connRecv = comm->connectRecv[recvPeer];
-    uint32_t recvMask = GET_MASK(connRecv);
-    uint32_t recvType = GET_TRANSPORT(connRecv);
-
-    uint32_t connSend = comm->connectSend[sendPeer];
-    uint32_t sendMask = GET_MASK(connSend);
-    uint32_t sendType = GET_TRANSPORT(connSend);
-
+    uint32_t recvMask = comm->connectRecv[recvPeer];
+    uint32_t sendMask = comm->connectSend[sendPeer];
+    
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
     int type;

@@ -97,6 +97,8 @@ struct ncclComm {
   uint32_t* connectSend;
   uint32_t* connectRecv;
 
+  struct mscclConnectionTypes mscclConnTypes;
+
   int rank;    // my rank in the communicator
   int nRanks;  // number of GPUs in communicator
   int cudaDev; // my cuda device index

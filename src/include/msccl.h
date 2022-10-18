@@ -30,12 +30,6 @@ static_assert(MSCCL_MAX_NUM_STEPS <= 256, "MSCCL interpreter doesn't allow for m
 #define MSCCL_REDUCE 7
 #define MSCCL_RES_ADD 8
 
-#define GET_MASK(__X__) \
-  ((__X__) - ((__X__) & (7 << 29)))
-
-#define GET_TRANSPORT(__X__) \
-  ((__X__) >> 29)
-
 static_assert(UINT8_MAX > MSCCL_MAX_COUNT, "mscclMaxAllowedCount datatype must be smaller than the allowed datatype");
 struct mscclWorkElem {
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
@@ -78,6 +72,7 @@ struct mscclThreadBlock {
 struct mscclChannelPeerInfo {
   // nchunksForPeer[i][j] represents the number of times chunks are sent in counts of j-1 for threadblock i. we do not keep counts of 0.
   int peer;
+  uint8_t connType;
   int nchunksForPeer[MSCCL_MAX_COUNT];
   int nCountExists;
   int counts[MSCCL_MAX_COUNT];
@@ -93,6 +88,17 @@ struct mscclChannelInfo {
 struct mscclFlag {
   uint64_t flag;
   uint64_t align[3]; // To avoid false sharing
+};
+
+// This is used to indicate which connection type to be used
+// Each 2 bits are used for a single channel.
+// 0 indicate default connection
+// 1 for P2p
+// 2 for SHM
+// 3 for NIC
+struct mscclConnectionTypes {
+  uint64_t* sendTypes;
+  uint64_t* recvTypes;
 };
 
 // gpuId is the one that is in comm->rank

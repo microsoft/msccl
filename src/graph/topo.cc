@@ -891,10 +891,25 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
         for (int t=0; t<node->nSubs; t++) {
           struct ncclXmlNode* threadblockNode = node->subs[t];
           if (strcmp(threadblockNode->name, "tb") == 0){
-            int bid, recvpeer, sendpeer, channelId;
+            int bid, recvpeer, sendpeer, recvtype, sendtype, channelId;
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "id", &bid));
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "recv", &recvpeer));
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "send", &sendpeer));
+
+            int hasrtype;
+            NCCLCHECK(xmlAttrExists(topNode, "rtype", &hasrtype));
+            if (hasrtype)
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "rtype", &recvtype));
+            else
+              recvtype = 0;
+
+            int hasstype;
+            NCCLCHECK(xmlAttrExists(topNode, "stype", &hasstype));
+            if (hasstype)
+              NCCLCHECK(xmlGetAttrInt(threadblockNode, "stype", &sendtype));
+            else
+              sendtype = 0;
+
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
             if (bid < 0){
               WARN("MSCCL: bid must be not negative. bid: %d", bid);
@@ -1162,10 +1177,12 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
 
             if (sTB->sendpeer >= 0){
               mscclChannel->sendPeerInfo[mscclChannel->nSendPeers].peer = sTB->sendpeer;
+              mscclChannel->sendPeerInfo[mscclChannel->nSendPeers].connType = sendtype;
               mscclChannel->nSendPeers++;
             }
             if (sTB->recvpeer >= 0){
               mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers].peer = sTB->recvpeer;
+              mscclChannel->recvPeerInfo[mscclChannel->nRecvPeers].connType = recvtype;
               mscclChannel->nRecvPeers++;
             }
           }
