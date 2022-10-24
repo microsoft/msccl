@@ -898,17 +898,19 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
 
             int hasrtype;
             NCCLCHECK(xmlAttrExists(topNode, "rtype", &hasrtype));
-            if (hasrtype)
+            if (hasrtype) {
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "rtype", &recvtype));
-            else
+            } else {
               recvtype = 0;
+            }
 
             int hasstype;
             NCCLCHECK(xmlAttrExists(topNode, "stype", &hasstype));
-            if (hasstype)
+            if (hasstype) {
               NCCLCHECK(xmlGetAttrInt(threadblockNode, "stype", &sendtype));
-            else
+            } else {
               sendtype = 0;
+            }
 
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "chan", &channelId));
             if (bid < 0){

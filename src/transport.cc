@@ -42,7 +42,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     if (ret) {
       connector->transportComm = transportComm;
       NCCLCHECK(transportComm->setup(comm, graph, myInfo, peerInfo, connect, connector, channelId, connIndex));
-      if (transportType) *transportType = t;
+      if (transportType) *transportType = mscclPreSelectedType-1;
       return ncclSuccess;
     } else {
       WARN("MSCCL: Cannot make the requested transport!");
@@ -65,18 +65,27 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
   return ncclSystemError;
 }
 
-ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int nsend, int* peerSend, int connIndex) {
+ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int* recvTypes, int nsend, int* peerSend, int* sendTypes, int connIndex) {
   TRACE(NCCL_INIT, "nsend %d nrecv %d", nsend, nrecv);
   uint32_t mask = 1 << channel->id;
+  uint64_t mscclMask = 1 << (2*channel->id); // use two bits for each type and channel
   for (int i=0; i<nrecv; i++) {
     int peer = peerRecv[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer].recv[connIndex].connected) continue;
     comm->connectRecv[peer] |= mask;
+    if (recvTypes){
+      // recvTypes should only have two bits.
+      comm->mscclConnTypes.recvTypes[peer] |= mscclMask * recvTypes[i];
+    }
   }
   for (int i=0; i<nsend; i++) {
     int peer = peerSend[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer].send[connIndex].connected) continue;
     comm->connectSend[peer] |= mask;
+    if (sendTypes){
+      // sendTypes should only have two bits.
+      comm->mscclConnTypes.sendTypes[peer] |= mscclMask * sendTypes[i];
+    }
   }
   return ncclSuccess;
 }
@@ -103,13 +112,17 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     int sendPeer = (comm->rank + i) % comm->nRanks;
     uint32_t recvMask = comm->connectRecv[recvPeer];
     uint32_t sendMask = comm->connectSend[sendPeer];
-    
+
+    uint64_t mscclRecvTypes = comm->mscclConnTypes.recvTypes[recvPeer];
+    uint64_t mscclSendTypes = comm->mscclConnTypes.sendTypes[sendPeer];
+
     struct ncclConnect* recvData = data;
     int sendChannels = 0, recvChannels = 0;
     int type;
     TIME_START(0);
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
+        uint32_t recvType = ((mscclRecvTypes >> (2*c)) & 3);
         NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, recvType, &type));
         if (type > highestType) highestType = type;
       }
@@ -119,6 +132,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     struct ncclConnect* sendData = recvData+recvChannels;
     for (int c=0; c<MAXCHANNELS; c++) {
       if (sendMask & (1<<c)) {
+        uint32_t sendType = ((mscclSendTypes >> (2*c)) & 3);
         NCCLCHECK(selectTransport<1>(comm, graph, sendData+sendChannels++, c, sendPeer, connIndex, sendType, &type));
         if (type > highestType) highestType = type;
       }
