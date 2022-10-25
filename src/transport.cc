@@ -34,7 +34,8 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
       WARN("MSCCL: Selected transport type doesn't exist!");
       return ncclSystemError;
     }
-    // 0 is default, 1..NTRANSPORTS-1 are mapped to 0..NTRANSPORTS-1
+    printf("QQQQQQQQQQQ %d\n", mscclPreSelectedType);
+    // 0 is default, 1 ... NTRANSPORTS are mapped to 0..NTRANSPORTS-1
     struct ncclTransport *transport = ncclTransports+mscclPreSelectedType-1;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
     int ret = 0;
@@ -50,6 +51,7 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
     }
   }
   for (int t=0; t<NTRANSPORTS; t++) {
+    printf("RRRRRR i = %d\n", t);
     struct ncclTransport *transport = ncclTransports+t;
     struct ncclTransportComm* transportComm = type == 1 ? &transport->send : &transport->recv;
     int ret = 0;
@@ -68,14 +70,15 @@ static ncclResult_t selectTransport(struct ncclComm* comm, struct ncclTopoGraph*
 ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* channel, int nrecv, int* peerRecv, int* recvTypes, int nsend, int* peerSend, int* sendTypes, int connIndex) {
   TRACE(NCCL_INIT, "nsend %d nrecv %d", nsend, nrecv);
   uint32_t mask = 1 << channel->id;
-  uint64_t mscclMask = 1 << (2*channel->id); // use two bits for each type and channel
+  uint64_t mscclMask = (uint64_t)1 << (2*channel->id); // use two bits for each type and channel
   for (int i=0; i<nrecv; i++) {
     int peer = peerRecv[i];
     if (peer == -1 || peer >= comm->nRanks || peer == comm->rank || channel->peers[peer].recv[connIndex].connected) continue;
     comm->connectRecv[peer] |= mask;
     if (recvTypes){
+      printf("TTTTTTT %llx %d id %d\n", mscclMask, recvTypes[i], channel->id);
       // recvTypes should only have two bits.
-      comm->mscclConnTypes.recvTypes[peer] |= mscclMask * recvTypes[i];
+      comm->mscclConnTypes.recvTypes[peer] |= (mscclMask * recvTypes[i]);
     }
   }
   for (int i=0; i<nsend; i++) {
@@ -84,7 +87,7 @@ ncclResult_t ncclTransportP2pConnect(struct ncclComm* comm, struct ncclChannel* 
     comm->connectSend[peer] |= mask;
     if (sendTypes){
       // sendTypes should only have two bits.
-      comm->mscclConnTypes.sendTypes[peer] |= mscclMask * sendTypes[i];
+      comm->mscclConnTypes.sendTypes[peer] |= (mscclMask * sendTypes[i]);
     }
   }
   return ncclSuccess;
@@ -123,6 +126,7 @@ ncclResult_t ncclTransportP2pSetup(struct ncclComm* comm, struct ncclTopoGraph* 
     for (int c=0; c<MAXCHANNELS; c++) {
       if (recvMask & (1<<c)) {
         uint32_t recvType = ((mscclRecvTypes >> (2*c)) & 3);
+	printf("channel %d recvType %d  %x\n", c, recvType, mscclRecvTypes);
         NCCLCHECK(selectTransport<0>(comm, graph, recvData+recvChannels++, c, recvPeer, connIndex, recvType, &type));
         if (type > highestType) highestType = type;
       }

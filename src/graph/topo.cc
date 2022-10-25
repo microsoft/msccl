@@ -897,7 +897,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             NCCLCHECK(xmlGetAttrInt(threadblockNode, "send", &sendpeer));
 
             int hasrtype;
-            NCCLCHECK(xmlAttrExists(topNode, "rtype", &hasrtype));
+            NCCLCHECK(xmlAttrExists(threadblockNode, "rtype", &hasrtype));
             if (hasrtype) {
 	      const char* rtype;
               NCCLCHECK(xmlGetAttrStr(threadblockNode, "rtype", &rtype));
@@ -916,7 +916,7 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             }
 
             int hasstype;
-            NCCLCHECK(xmlAttrExists(topNode, "stype", &hasstype));
+            NCCLCHECK(xmlAttrExists(threadblockNode, "stype", &hasstype));
             if (hasstype) {
 	      const char* stype;
               NCCLCHECK(xmlGetAttrStr(threadblockNode, "stype", &stype));

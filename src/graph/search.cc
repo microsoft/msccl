@@ -950,6 +950,7 @@ ncclResult_t ncclTopoGetNetDev(struct ncclComm* comm, int rank, struct ncclTopoG
     int ngpus = comm->topo->nodes[GPU].count;
     int index = graph->intra[channel*ngpus] == rank ? 0 : 1;
     *dev = graph->inter[channel*2+index];
+    printf("PPPPPPPP %d\n", *dev);
     NCCLCHECK(ncclTopoGetIntermediateRank(comm->topo, rank, *dev, proxyRank));
   } else if (peerRank == -1) {
     return ncclInternalError;

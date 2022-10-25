@@ -348,6 +348,7 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
 
   // Get GPU and NET
   int n, g;
+  printf("%p %d %d %d\n", system, NET, netDev, n);
   NCCLCHECK(ncclTopoIdToIndex(system, NET, netDev, &n));
   struct ncclTopoNode* net = system->nodes[NET].nodes+n;
   NCCLCHECK(ncclTopoIdToIndex(system, GPU, busId, &g));
