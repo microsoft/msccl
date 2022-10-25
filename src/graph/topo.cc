@@ -899,7 +899,18 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             int hasrtype;
             NCCLCHECK(xmlAttrExists(topNode, "rtype", &hasrtype));
             if (hasrtype) {
-              NCCLCHECK(xmlGetAttrInt(threadblockNode, "rtype", &recvtype));
+	      const char* rtype;
+              NCCLCHECK(xmlGetAttrStr(threadblockNode, "rtype", &rtype));
+              if (strcmp(rtype, "p2p") == 0){
+	        recvtype = 1; // 1 for p2p
+	      } else if (strcmp(rtype, "shm") == 0){
+	        recvtype = 2; // 2 for shm
+	      } if (strcmp(rtype, "nic") == 0){
+	        recvtype = 3; // 3 for nic
+	      } else {
+                WARN("Invalid connection type was used: %s", rtype);
+                return ncclInvalidUsage;
+	      }
             } else {
               recvtype = 0;
             }
@@ -907,7 +918,18 @@ ncclResult_t mscclGetAlgoFromXMLAndSetAlgo(const char* str, struct mscclAlgorith
             int hasstype;
             NCCLCHECK(xmlAttrExists(topNode, "stype", &hasstype));
             if (hasstype) {
-              NCCLCHECK(xmlGetAttrInt(threadblockNode, "stype", &sendtype));
+	      const char* stype;
+              NCCLCHECK(xmlGetAttrStr(threadblockNode, "stype", &stype));
+              if (strcmp(stype, "p2p") == 0){
+	        sendtype = 1; // 1 for p2p
+	      } else if (strcmp(stype, "shm") == 0){
+	        sendtype = 2; // 2 for shm
+	      } if (strcmp(stype, "nic") == 0){
+	        sendtype = 3; // 3 for nic
+	      } else {
+                WARN("Invalid connection type was used: %s", stype);
+                return ncclInvalidUsage;
+	      }
             } else {
               sendtype = 0;
             }
