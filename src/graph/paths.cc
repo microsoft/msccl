@@ -348,7 +348,6 @@ ncclResult_t ncclTopoCheckGdr(struct ncclTopoSystem* system, int64_t busId, int 
 
   // Get GPU and NET
   int n, g;
-  printf("%p %d %d %d\n", system, NET, netDev, n);
   NCCLCHECK(ncclTopoIdToIndex(system, NET, netDev, &n));
   struct ncclTopoNode* net = system->nodes[NET].nodes+n;
   NCCLCHECK(ncclTopoIdToIndex(system, GPU, busId, &g));
@@ -599,10 +598,10 @@ ncclResult_t ncclTopoTrimSystem(struct ncclTopoSystem* system, struct ncclComm* 
     NCCLCHECK(ncclTopoRemoveNode(system, GPU, g));
   }
 
-  if (system->nodes[GPU].count == comm->nRanks) {
-    for (int n=system->nodes[NET].count-1; n>=0; n--)
-      NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
-  }
+  // if (system->nodes[GPU].count == comm->nRanks) {
+  //   for (int n=system->nodes[NET].count-1; n>=0; n--)
+  //     NCCLCHECK(ncclTopoRemoveNode(system, NET, n));
+  // }
   free(domains);
   free(ids);
   return ncclSuccess;
