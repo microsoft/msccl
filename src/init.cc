@@ -536,6 +536,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   // Launch proxy service thread
   NCCLCHECK(ncclProxyCreate(comm));
 
+  int mscclOrgNetCount = comm->topo->nodes[NET].count;
+  if (mscclOrgNetCount == comm->nRanks)
+    comm->topo->nodes[NET].count = 0;
   // Get rings and trees
   struct ncclTopoGraph ringGraph;
   ringGraph.id = 0;
@@ -562,6 +565,9 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, ncclUniqueId* comm
   collNetGraph.minChannels = collNetGraph.maxChannels = ringGraph.nChannels;
   NCCLCHECK(ncclTopoCompute(comm->topo, &collNetGraph));
   NCCLCHECK(ncclTopoPrintGraph(comm->topo, &collNetGraph));
+
+  if (mscclOrgNetCount == comm->nRanks)
+    comm->topo->nodes[NET].count = mscclOrgNetCount;
 
   if (comm->rank == ncclParamGraphDumpFileRank()) {
     struct ncclTopoGraph* graphs[3] = { &ringGraph, &treeGraph, &collNetGraph };
