@@ -35,6 +35,7 @@ struct mscclWorkElem {
   uint8_t mscclMaxAllowedCount; // this is used in mscclAlgorithm to find the maximum number of counts that can be sent at the same time.
   int8_t mscclAlgoIndex; // identifies which msccl algorithm to use
   uint32_t workIndex;
+  volatile struct mscclFlag* flags;
 };
 
 struct mscclWorkInfo {

@@ -62,7 +62,7 @@ namespace {
   template<typename T, typename RedOp, typename Proto>
   __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
     const int tid = threadIdx.x;
-    const int nthreads = args->header.nWarps*WARP_SIZE;
+    const int nthreads = blockDim.x; //args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
     // struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
 
@@ -94,7 +94,7 @@ namespace {
     NPKIT_GPU_SET_CTX_ID(prims);
 
     const ssize_t size = args->count;
-    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/64;
+    const ssize_t sizePerMscclChunk = size/64;
     // uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
     // int8_t needsFence = ncclShmem.mscclShmem.needsFence;
 
@@ -102,26 +102,21 @@ namespace {
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
     const int64_t workIndex = args->mscclWork.workIndex;
-    volatile struct mscclFlag* mscclFlags = ncclShmem.mscclShmem.flags;
+    volatile struct mscclFlag* mscclFlags = args->mscclWork.flags; //ncclShmem.mscclShmem.flags;
     // return; // 3.04
     // for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
     {
       ssize_t gridOffset = 0;
       ssize_t realChunkSize;
-      if (Proto::Id == NCCL_PROTO_SIMPLE) {
-        realChunkSize = min(chunkSize, sizePerMscclChunk-gridOffset);
-        realChunkSize = roundUp(realChunkSize, (nthreads-WARP_SIZE)*sizeof(uint64_t)/sizeof(T));
-      }
-      else
-        realChunkSize = min(chunkSize, divUp(sizePerMscclChunk-gridOffset, minChunkSize)*minChunkSize);
+      realChunkSize = min(chunkSize, divUp(sizePerMscclChunk-gridOffset, minChunkSize)*minChunkSize);
       realChunkSize = int(realChunkSize);
       int nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
-
+      
       // ssize_t srcoffset, dstoffset;
       // T* srcPointer, * dstPointer;
       if (bid > 0){
         prims.setDataPtrs(thisInput, thisInput);
-        prims.sendWithBarrier(peer*nelem*8, 8*nelem);
+        prims.send(peer*nelem*8, 8*nelem);
         prims.recv(peer*nelem*8, 8*nelem);
         if (tid == nthreads-1){
           mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, 0, 0);
@@ -152,7 +147,7 @@ namespace {
       __syncthreads();
       if (bid > 0){
         // prims.setDataPtrs(thisInput, thisInput);
-        prims.sendWithBarrier(rank*nelem*8, 8*nelem);
+        prims.send(rank*nelem*8, 8*nelem);
         prims.recv(peer*nelem*8, 8*nelem);
       }
     }

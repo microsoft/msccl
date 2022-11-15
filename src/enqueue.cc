@@ -617,6 +617,7 @@ comp_next:
   work->redOpArg = info->opFull.scalarArg;
   work->redOpArgIsPtr = info->opFull.scalarArgIsPtr;
   work->mscclWork.mscclAlgoIndex = info->mscclInfo.mscclAlgoIndex;
+  work->mscclWork.flags = info->comm->mscclHostComm.mscclDevComm.flags;
 
   if (info->comm->nRanks == 1) {
     // one-rank reduce index

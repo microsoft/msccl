@@ -198,7 +198,10 @@ struct ncclWorkElem {
   uint64_t redOpArg;
 
   struct mscclWorkElem mscclWork;
+  int8_t pad[56];
 };
+// static_assert(sizeof(struct ncclWorkElem) == 128, "TTTTTTTTTTTTTTTTTTTTTTT");
+
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElem) == 0, "ncclWorkElem size must be a multiple of ncclWork size");
 
 struct ncclWorkElemP2p {
@@ -219,7 +222,9 @@ struct ncclWorkElemReg {
   void* dnInputs[NCCL_MAX_DIRECT_ARITY+1];
   void* dnOutputs[NCCL_MAX_DIRECT_ARITY+1];
   void* upOutputs[NCCL_MAX_DIRECT_ARITY+1];
+  int8_t pad[192];
 };
+// static_assert(sizeof(struct ncclWorkElemReg) == 320, "QQQQQQQQQQQQQQQQQ");
 static_assert(NCCL_WORK_SIZE % sizeof(struct ncclWorkElemReg) == 0, "ncclWork size must be a multiple of ncclWorkElemReg size");
 static_assert(sizeof(struct ncclWorkElemReg) % sizeof(struct ncclWorkElem) == 0, "ncclWorkElemReg size must be a multiple of ncclWorkElem size");
 

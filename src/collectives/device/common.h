@@ -181,20 +181,20 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   if (Algo == NCCL_ALGO_MSCCL){
     // return; // 1.37
     // get the address without causing a global load
-    struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
-    struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
+    // struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
+    // struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
     // causes a global memory load to channelId. This removes the need for a __syncthreads
-    int channelId = mscclTB->channelId;
+    int channelId = 0;
     channel = &((ncclDevCommAndChannels*)comm)->channels[channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
     // return; // 1.56
 
     // turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
     // return; // 2.08
-    if (tid == turn+WARP_SIZE)
-      ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
-    if (tid == turn+2*WARP_SIZE)
-      ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
+    // if (tid == turn+WARP_SIZE)
+    //   ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
+    // if (tid == turn+2*WARP_SIZE)
+    //   ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
     // if (wid == (2 % nWarps))
     //   ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
     // if (wid == (3 % nWarps))
