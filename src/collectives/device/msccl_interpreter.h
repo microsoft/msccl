@@ -64,14 +64,17 @@ namespace {
     const int tid = threadIdx.x;
     const int nthreads = args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
-    struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
+    // struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
 
     // User pointers for primitives
     T* thisInput = (T*)args->sendbuff;
     T* thisOutput = (T*)args->recvbuff;
-    T* thisScratch = (T*)ncclShmem.mscclShmem.scratchBuffer;
-    int recvPeer = mscclTB->recvpeer;
-    int sendPeer = mscclTB->sendpeer;
+    // int recvPeer = mscclTB->recvpeer;
+    // int sendPeer = mscclTB->sendpeer;
+    int rank = ncclShmem.comm.rank;
+    int peer = -1;
+    if (bid > 0)
+      peer = (rank > bid-1) ? (bid-1) : bid;
 
     const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? MSCCL_CHUNKSTEPS : 1));
     int minChunkSize;
@@ -85,21 +88,25 @@ namespace {
     NPKIT_GPU_SYNC_TIME(bid, tid);
 
     RedOp redFn(args->redOpArg);
-    Primitives<T, RedOp, FanAsymmetric<1,1>, 1, Proto, 0> prims
-      (tid, nthreads, &recvPeer, &sendPeer, thisInput, thisOutput, args->redOpArg);
+    Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
+      (tid, nthreads, &peer, &peer, thisInput, thisOutput, args->redOpArg);
 
     NPKIT_GPU_SET_CTX_ID(prims);
 
     const ssize_t size = args->count;
-    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/ncclShmem.mscclShmem.nchunksPerLoop;
-    uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
-    int8_t needsFence = ncclShmem.mscclShmem.needsFence;
+    const ssize_t sizePerMscclChunk = (size*sizeMultiplier)/64;
+    // uint16_t mscclMaxAllowedCount = args->mscclWork.mscclMaxAllowedCount;
+    // int8_t needsFence = ncclShmem.mscclShmem.needsFence;
+
 
     // msccl flags all start out with 0. this is used as a part of the flag to make sure different work items deal with different synchronization flags
     // this still needs more work. when we make a way around the queue, the flag might have been set to undesired values. will be fixed in subsequent versions.
-    const int64_t workIndex = ncclShmem.mscclShmem.workIndex;
+    const int64_t workIndex = args->mscclWork.workIndex;
     volatile struct mscclFlag* mscclFlags = ncclShmem.mscclShmem.flags;
-    for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
+    // return; // 3.04
+    // for (ssize_t gridOffset = 0, iter = 0; gridOffset < sizePerMscclChunk; gridOffset += chunkSize, iter++) {
+    {
+      ssize_t gridOffset = 0;
       ssize_t realChunkSize;
       if (Proto::Id == NCCL_PROTO_SIMPLE) {
         realChunkSize = min(chunkSize, sizePerMscclChunk-gridOffset);
@@ -110,91 +117,43 @@ namespace {
       realChunkSize = int(realChunkSize);
       int nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
 
-      ssize_t srcoffset, dstoffset;
-      T* srcPointer, * dstPointer;
-      int step = 0;
-      for (int i = 0; i < mscclTB->nsteps; i++){
-        struct mscclTransfer* msccltran = &mscclTB->transfers[i];
-        // first wait if there is a dependence
-        int16_t numDependences = msccltran->numDependences;
-        if (numDependences > 0){
-          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_ENTRY, msccltran->numDependences);
-          
-          if (tid < numDependences){
-            int16_t dependentPointer = msccltran->depencePointer;
-            int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
-            int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
-            uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-            while ((mscclFlags + dependentBid)->flag < goalFlag){
-            };
-          }
-          step += numDependences-1;
-          barrier(nthreads);
-
-          NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_DEP_CHECK_EXIT, msccltran->numDependences);
+      // ssize_t srcoffset, dstoffset;
+      // T* srcPointer, * dstPointer;
+      if (bid > 0){
+        prims.setDataPtrs(thisInput, thisInput);
+        prims.sendWithBarrier(peer*nelem*8, 8*nelem);
+        prims.recv(peer*nelem*8, 8*nelem);
+        if (tid == nthreads-1){
+          mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, 0, 0);
         }
-
-        srcPointer = (msccltran->srcbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->srcbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-        dstPointer = (msccltran->dstbuffer == MSCCL_INPUT_BUFFER) ? thisInput : ((msccltran->dstbuffer == MSCCL_OUTPUT_BUFFER) ? thisOutput : thisScratch);
-        prims.setDataPtrs(srcPointer, dstPointer);
-        int count = msccltran->count;
-        for (int c = 0; c < count; c += mscclMaxAllowedCount) {
-          srcoffset = gridOffset + (ssize_t) (msccltran->srcoffset+c) * sizePerMscclChunk;
-          dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-          int thisCount = min(mscclMaxAllowedCount, count-c);
-          int thisNelem = nelem*thisCount;
-          if (msccltran->type == MSCCL_SEND)
-            prims.sendWithBarrier(srcoffset, thisNelem); // LL.send is the only situation where there is no barrier at the end.
-          else if (msccltran->type == MSCCL_RECV)
-            prims.recv(dstoffset, thisNelem);
-          else if (msccltran->type == MSCCL_REDUCE) {
-            int numReductions = msccltran->numReductions;
-            if (thisNelem < nthreads){
-              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_ENTRY, thisNelem*sizeof(T));
-
-              if (tid < thisNelem){
-                dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-                T* dst_index = dstPointer + dstoffset +tid;
-                T o = load(dst_index);
-                for (int r = 0; r < numReductions; r++){
-                  srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-                  T t = load(srcPointer + srcoffset + tid);
-                  o = redFn(t,o);
-                }
-                store(dst_index, o);
-              }
-              barrier(nthreads);
-
-              NPKIT_GPU_ENTER_EVENT(NPKIT_EVENT_REDUCE_EXIT, thisNelem*sizeof(T));
-            } else {
-              T* srcs[MSCCL_MAX_REDUCE_FUSION+1]; // +1 is for SIMPLE protocol as dst is added in the list of srcs
-              dstoffset = gridOffset + (ssize_t) (msccltran->dstoffset+c) * sizePerMscclChunk;
-              T* dst = dstPointer + dstoffset;
-              for (int r = 0; r < numReductions; r++) {
-                srcoffset = gridOffset + (ssize_t) (mscclTB->reductionSrcOffsets[msccltran->reductionPointer+r]+c) * sizePerMscclChunk;
-                srcs[r] = srcPointer + srcoffset;
-              }
-              prims.reduce(srcs, numReductions, &dst, 1, thisNelem);
-            }
-            if (c == 0) step += (numReductions-1); // only advance step once!
-          } else if (msccltran->type == MSCCL_RECV_COPY_SEND)
-            prims.recvCopySend(dstoffset, thisNelem);
-          else if (msccltran->type == MSCCL_RECV_REDUCE_SEND)
-            prims.recvReduceSend(srcoffset, thisNelem);
-          else if (msccltran->type == MSCCL_RECV_REDUCE_COPY_SEND)
-            prims.recvReduceCopySend(srcoffset, dstoffset, thisNelem);
-          else if (msccltran->type == MSCCL_RECV_REDUCE_COPY)
-            prims.recvReduceCopy(srcoffset, dstoffset, thisNelem);
-          else if (msccltran->type == MSCCL_LOCAL_COPY)
-            prims.localCopy(srcPointer+srcoffset, dstPointer+dstoffset, thisNelem);
-          else
-            return;
+      }
+      if (tid < 7){
+        uint64_t goalFlag = COMPUTE_FLAG(workIndex, 0, 0);
+        while ((mscclFlags + tid+1)->flag < goalFlag){};
+      }
+      __syncthreads();
+      for (int index = tid; index < nelem; index += nthreads){
+        T o = load(thisInput+rank*nelem*8+bid*nelem+index);
+        for (int r = 0; r < 7; r++){
+          int nghr = (rank > r) ? r : r+1;
+          T t = load(thisInput+nghr*nelem*8+bid*nelem+index);
+          o = redFn(o, t);
         }
-        if (msccltran->has_dependence && tid == nthreads-1){
-	        if (needsFence) __threadfence();
-          mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, iter, step);
-        }
-        step++;
+        store(thisInput+rank*nelem*8+bid*nelem+index, o);
+      }
+      __syncthreads();
+      if (tid == nthreads-1){
+        mscclFlags[bid].flag = (uint64_t) COMPUTE_FLAG(workIndex, 0, 1);
+      }
+      if (tid < 8){
+        uint64_t goalFlag = COMPUTE_FLAG(workIndex, 0, 1);
+        while ((mscclFlags + tid)->flag < goalFlag){};
+      }
+      __syncthreads();
+      if (bid > 0){
+        // prims.setDataPtrs(thisInput, thisInput);
+        prims.sendWithBarrier(rank*nelem*8, 8*nelem);
+        prims.recv(peer*nelem*8, 8*nelem);
       }
     }
   }

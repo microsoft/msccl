@@ -131,6 +131,7 @@ struct mscclSharedMemoryInfo {
   int nchunksPerLoop;
   int8_t needsFence;
   uint32_t workIndex;
+  int8_t temp[1024];
 };
 
 // All MSCCL algorithm info that will be in ncclDevComm

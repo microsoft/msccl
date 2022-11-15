@@ -115,8 +115,8 @@ struct RunWork {
 template<ncclFunc_t Fn, typename T, typename RedOp>
 struct RunWorkMSCCL {
   // A shortcut for MSCCL work since we are for sure running one kernel at a time
-  __device__ __forceinline__ void run(ncclWork *w) {
-    RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(&w->elems[0]);
+  __device__ __forceinline__ void run(ncclWorkElem* w) {
+    RunWorkElement<Fn, T, RedOp, NCCL_ALGO_MSCCL, NCCL_PROTO_LL>().run(w);
   }
 };
 
@@ -170,14 +170,16 @@ extern __shared__ ncclShmemData ncclShmem;
 template<ncclFunc_t Fn, typename T, typename RedOp, int Algo, int Proto, int FnIndex>
 __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
   int tid = threadIdx.x;
-  int wid = threadIdx.x/WARP_SIZE;
-  int nWarps = blockDim.x/WARP_SIZE;
+  // int wid = threadIdx.x/WARP_SIZE;
+  // int nWarps = blockDim.x/WARP_SIZE;
   int nthreads = blockDim.x;
   int bid = blockIdx.x;
 
+  // return; // 1.15
   int turn = copyToShmem(&ncclShmem.comm, comm);
   ncclChannel *channel;
   if (Algo == NCCL_ALGO_MSCCL){
+    // return; // 1.37
     // get the address without causing a global load
     struct mscclAlgorithm* mscclAlgo = &((ncclDevCommAndChannels*)comm)->mscclInfo->mscclAlgos[first.mscclWork.mscclAlgoIndex];
     struct mscclThreadBlock* mscclTB = &mscclAlgo->mscclTBs[bid];
@@ -185,25 +187,26 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     int channelId = mscclTB->channelId;
     channel = &((ncclDevCommAndChannels*)comm)->channels[channelId];
     turn = copyToShmem(&ncclShmem.channel, channel, turn);
+    // return; // 1.56
 
-    turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
-    if (wid == 0)
+    // turn = copyToShmem(&ncclShmem.mscclShmem.mscclTB, mscclTB, turn);
+    // return; // 2.08
+    if (tid == turn+WARP_SIZE)
       ncclShmem.mscclShmem.flags = ((ncclDevCommAndChannels*)comm)->mscclInfo->flags;
-    if (wid == (1 % nWarps))
+    if (tid == turn+2*WARP_SIZE)
       ncclShmem.mscclShmem.scratchBuffer = ((ncclDevCommAndChannels*)comm)->mscclInfo->scratchBuffer;
-    if (wid == (2 % nWarps))
-      ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
-    if (wid == (3 % nWarps))
-      ncclShmem.mscclShmem.workIndex = first.mscclWork.workIndex;
-    if (wid == (4 % nWarps))
-      ncclShmem.mscclShmem.needsFence = *(&((ncclDevCommAndChannels*)comm)->mscclInfo->needsFence);
+    // if (wid == (2 % nWarps))
+    //   ncclShmem.mscclShmem.nchunksPerLoop = mscclAlgo->nchunksPerLoop;
+    // if (wid == (3 % nWarps))
+    //   ncclShmem.mscclShmem.workIndex = first.mscclWork.workIndex;
+    // return; // 2.41
     // MSCCL algorithms always have only one workElement in the queue
-    copyToShmem(&ncclShmem.work, &first, tid, nthreads);
+    // copyToShmem(&ncclShmem.work, &first, tid, nthreads);
     __syncthreads(); // publish ncclShmem
     // we are shortcutting all of the NCCL's normal work element copying since
     // we are sure there is only one MSCCL collective running at a time
-    if (ncclShmem.work.header.funcIndex == FnIndex){
-      RunWorkMSCCL<Fn, T, RedOp>().run(&ncclShmem.work);
+    if (first.header.funcIndex == FnIndex){
+      RunWorkMSCCL<Fn, T, RedOp>().run(&first);
       return;
     }
   } else {
