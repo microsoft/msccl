@@ -129,7 +129,7 @@ struct ncclRing {
 };
 
 
-#define NCCL_MAX_TREE_ARITY 3
+#define NCCL_MAX_TREE_ARITY 8
 struct ncclTree {
   int depth;
   int up;

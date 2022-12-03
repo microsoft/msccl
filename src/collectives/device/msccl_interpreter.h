@@ -86,6 +86,75 @@ namespace {
     }
 
     NPKIT_GPU_SYNC_TIME(bid, tid);
+    int m1 = -1;
+    int others[7*8] = {
+	    1,2,3,4,5,6,7,
+	    0,2,3,4,5,6,7,
+	    0,1,3,4,5,6,7,
+	    0,1,2,4,5,6,7,
+	    0,1,2,3,5,6,7,
+	    0,1,2,3,4,6,7,
+	    0,1,2,3,4,5,7,
+	    0,1,2,3,4,5,6
+    };
+    int* myNghrs = &others[rank*7];
+    
+    const ssize_t size = args->count;
+    const ssize_t sizePerMscclChunk = size/8;
+
+    const int64_t workIndex = args->mscclWork.workIndex;
+    volatile struct mscclFlag* mscclFlags = args->mscclWork.flags; //ncclShmem.mscclShmem.flags;
+
+    ssize_t gridOffset = 0;
+    ssize_t realChunkSize;
+    realChunkSize = min(chunkSize, divUp(sizePerMscclChunk-gridOffset, minChunkSize)*minChunkSize);
+    realChunkSize = int(realChunkSize);
+    int nelem = min(realChunkSize, sizePerMscclChunk-gridOffset);
+
+    RedOp redFn(args->redOpArg);
+    if (bid == rank){
+      Primitives<T, RedOp, FanSymmetric<7>, 0, Proto, 0> prims
+        (tid, nthreads, myNghrs, myNghrs, thisInput, thisOutput, args->redOpArg);
+      prims.setDataPtrs(thisInput, thisInput);
+      prims.recvReduceCopy(rank*nelem, rank*nelem, nelem);
+      prims.send(rank*nelem, nelem);
+    } else {
+      Primitives<T, RedOp, FanSymmetric<1>, 0, Proto, 0> prims
+        (tid, nthreads, &bid, &bid, thisInput, thisOutput, args->redOpArg);
+      prims.setDataPtrs(thisInput, thisInput);
+      prims.send(bid*nelem, nelem);
+      prims.recv(bid*nelem, nelem);
+    }
+  }
+
+  // -----------------------
+  template<typename T, typename RedOp, typename Proto>
+  __device__ __forceinline__ void runInterpreterOld(ncclWorkElem *args, int sizeMultiplier) {
+    const int tid = threadIdx.x;
+    const int nthreads = blockDim.x; //args->header.nWarps*WARP_SIZE;
+    const int bid = blockIdx.x;
+    // struct mscclThreadBlock* mscclTB = &ncclShmem.mscclShmem.mscclTB;
+
+    // User pointers for primitives
+    T* thisInput = (T*)args->sendbuff;
+    T* thisOutput = (T*)args->recvbuff;
+    // int recvPeer = mscclTB->recvpeer;
+    // int sendPeer = mscclTB->sendpeer;
+    int rank = ncclShmem.comm.rank;
+    int peer = -1;
+    if (bid > 0)
+      peer = (rank > bid-1) ? (bid-1) : bid;
+
+    const ssize_t chunkSize = int(Proto::calcBytePerStep()/sizeof(T) * (Proto::Id == NCCL_PROTO_SIMPLE ? MSCCL_CHUNKSTEPS : 1));
+    int minChunkSize;
+    if (Proto::Id == NCCL_PROTO_LL)
+      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T));
+    if (Proto::Id == NCCL_PROTO_LL128) {
+      // We should not need the final /2 but it makes performance much, much smoother. Might be a bug somewhere.
+      minChunkSize = nthreads*(Proto::calcBytePerGrain()/sizeof(T))/2;
+    }
+
+    NPKIT_GPU_SYNC_TIME(bid, tid);
 
     RedOp redFn(args->redOpArg);
     Primitives<T, RedOp, FanSymmetric<1>, 1, Proto, 0> prims
