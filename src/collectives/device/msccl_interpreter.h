@@ -60,7 +60,7 @@ namespace {
   }
 
   template<typename T, typename RedOp, typename Proto>
-  __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
+  __device__ __forceinline__ void runInterpreterOld(ncclWorkElem *args, int sizeMultiplier) {
     const int tid = threadIdx.x;
     const int nthreads = blockDim.x; //args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;
@@ -129,7 +129,7 @@ namespace {
 
   // -----------------------
   template<typename T, typename RedOp, typename Proto>
-  __device__ __forceinline__ void runInterpreterOld(ncclWorkElem *args, int sizeMultiplier) {
+  __device__ __forceinline__ void runInterpreter(ncclWorkElem *args, int sizeMultiplier) {
     const int tid = threadIdx.x;
     const int nthreads = blockDim.x; //args->header.nWarps*WARP_SIZE;
     const int bid = blockIdx.x;

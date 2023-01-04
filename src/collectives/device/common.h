@@ -208,7 +208,6 @@ __device__ void ncclKernel(struct ncclDevComm* comm, ncclWorkElem first)  {
     if (first.header.funcIndex == FnIndex){
       RunWorkMSCCL<Fn, T, RedOp>().run(&first);
       __syncthreads();
-      if (tid == 0) printf("Done! %d workIndex %d\n", bid, (int) first.mscclWork.workIndex);
       return;
     }
   } else {
