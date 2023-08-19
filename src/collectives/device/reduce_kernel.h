@@ -246,7 +246,12 @@ struct FuncSum<half> {
   __device__ FuncSum(uint64_t opArg=0) {}
   __device__ half2 operator()(const half2 x, const half2 y) const {
 #if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
-    return __hadd2(x, y);
+    half2 ret = __hadd2(x, y);
+    half2 minHalf2 = __halves2half2(-65504.0f, -65504.0f);
+    half2 maxHalf2 = __halves2half2(65504.0f, 65504.0f);
+    ret = __hmax2(ret, minHalf2);
+    ret = __hmin2(ret, maxHalf2);
+    return ret;
 #else
     float2 fx, fy, fr;
     fx = __half22float2(x);
@@ -258,7 +263,10 @@ struct FuncSum<half> {
   }
   __device__ half operator()(const half x, const half y) const {
 #if __CUDA_ARCH__ >= 530 && __CUDA_ARCH__ != 610
-    return __hadd(x, y);
+    half ret = __hadd(x, y);
+    ret = __hmax(ret, __half(-65504.0f));
+    ret = __hmin(ret, __half(65504.0f));
+    return ret;
 #else
     return __float2half( __half2float(x) + __half2float(y) );
 #endif
