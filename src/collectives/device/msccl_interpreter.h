@@ -15,6 +15,9 @@
 #define COMPUTE_FLAG(__WORKINDEX__,__GRIDOFFSET_ITER__,__STEP__) \
   MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS*(uint64_t)__WORKINDEX__ + ((uint64_t)__GRIDOFFSET_ITER__ * MSCCL_MAX_NUM_STEPS + (uint64_t)__STEP__)
 
+#define GET_WORKINDEX_FROM_FLAG(__FLAG__) \
+  (__FLAG__) / (MSCCL_MAX_ITER*MSCCL_MAX_NUM_STEPS)
+
 namespace {
   // a copy of the volatile load/store from prims_ll
   template<typename U>
@@ -125,8 +128,10 @@ namespace {
             int8_t dependentBid = mscclTB->dependentBid[dependentPointer+tid];
             int16_t dependentStep = mscclTB->dependentStep[dependentPointer+tid];
             uint64_t goalFlag = COMPUTE_FLAG(workIndex, iter, dependentStep);
-            while ((mscclFlags + dependentBid)->flag < goalFlag){
-            };
+            while (true){
+              uint64_t curFlag = (mscclFlags + dependentBid)->flag;
+              if (curFlag >= goalFlag && GET_WORKINDEX_FROM_FLAG(curFlag) == workIndex) break;
+            }
           }
           step += numDependences-1;
           barrier(nthreads);
