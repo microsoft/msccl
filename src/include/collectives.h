@@ -6,6 +6,7 @@
 
 #ifndef NCCL_COLLECTIVES_H_
 #define NCCL_COLLECTIVES_H_
+#include <cstdint>
 
 enum ncclDevRedOp_t {
   ncclDevSum, ncclDevProd, ncclDevMax, ncclDevMin,
