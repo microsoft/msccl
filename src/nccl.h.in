@@ -379,6 +379,10 @@ ncclResult_t pncclGroupStart();
 ncclResult_t  ncclGroupEnd();
 ncclResult_t pncclGroupEnd();
 
+const char*  ncclGetLastError(ncclComm_t comm);
+const char* pncclGetLastError(ncclComm_t comm);
+
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

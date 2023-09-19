@@ -1248,3 +1248,8 @@ ncclResult_t ncclCommUserRank(const ncclComm_t comm, int* rank) {
   *rank = comm->rank;
   return ncclSuccess;
 }
+
+NCCL_API(const char*, ncclGetLastError, const ncclComm_t comm);
+const char* ncclGetLastError(ncclComm_t comm) {
+  return "";
+}
